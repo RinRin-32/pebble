@@ -116,6 +116,7 @@ class AsyncTurnstoneServer(_BaseClient):
         initial_message: str = "",
         auto_approve_tools: str = "",
         user_id: str = "",
+        acting_user_id: str = "",
         ws_id: str = "",
         client_type: str = "",
         notify_targets: str = "",
@@ -160,6 +161,10 @@ class AsyncTurnstoneServer(_BaseClient):
             body["auto_approve_tools"] = auto_approve_tools
         if user_id:
             body["user_id"] = user_id
+        if acting_user_id:
+            # Enforcement identity (allow-list checks), distinct from the owner
+            # user_id — honored server-side only for service-scoped callers.
+            body["acting_user_id"] = acting_user_id
         if client_type:
             body["client_type"] = client_type
         if notify_targets and notify_targets != "[]":

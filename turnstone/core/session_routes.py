@@ -2548,23 +2548,32 @@ def make_create_handler(
             # only service identities. The deny-by-default keeps a
             # malicious caller from impersonating other users.
             body_uid = body.get("user_id")
-            # Trust the forwarded owner id from a service identity: the direct
-            # console service ("console"), or ANY caller carrying the "service"
-            # scope — the channel gateway re-minted through the console proxy
-            # ("console-proxy") or hitting a node directly ("channel").  A
-            # normal end-user token never has the "service" scope, so this
-            # cannot be used to impersonate.  This is what lets a linked Discord
-            # user own (and be authority-checked as) their own workstreams.
             if (
                 isinstance(body_uid, str)
                 and body_uid
                 and auth is not None
-                and (
-                    getattr(auth, "token_source", "") in {"console"}
-                    or auth.has_scope("service")
-                )
+                and getattr(auth, "token_source", "") in {"console"}
             ):
                 uid = body_uid
+
+        # Authority (allow-list) is checked against the ACTING user, which is
+        # distinct from the workstream OWNER.  Discord workstreams stay owned by
+        # the channel-gateway service identity (so the gateway's own send/SSE
+        # calls keep working), but a service caller may forward the linked
+        # end-user's id in ``acting_user_id`` so their model/persona limits are
+        # enforced.  Only "service"-scoped callers may set it; a normal user
+        # token can't, so this can't be used to dodge or forge limits.  Defaults
+        # to the owner ``uid`` (the console/interactive case, where the acting
+        # user IS the authenticated user).
+        enforcement_uid: str = uid
+        body_acting = body.get("acting_user_id")
+        if (
+            isinstance(body_acting, str)
+            and body_acting
+            and auth is not None
+            and auth.has_scope("service")
+        ):
+            enforcement_uid = body_acting
 
         # --- Per-kind pre-create validation ------------------------------
         # Interactive validates ws_id format, kind, parent ownership,
@@ -2750,9 +2759,10 @@ def make_create_handler(
                     # personas on their allow-list.  The kind's DEFAULT persona
                     # is always permitted (is_default), so /orchestrate's
                     # coordinator persona and the interactive default never get
-                    # blocked out from under a restricted user.  ``uid`` here is
-                    # the effective owner — the linked Discord user for gateway
-                    # creates (see the user_id override above).
+                    # blocked out from under a restricted user.  Checked against
+                    # ``enforcement_uid`` (the acting user), which is the owner
+                    # for console creates and the linked Discord user for gateway
+                    # creates — see the acting_user_id resolution above.
                     from turnstone.core.access import (
                         is_kind_default_persona,
                         persona_allowed,
@@ -2760,11 +2770,11 @@ def make_create_handler(
 
                     _st2 = _get_storage()
                     if (
-                        uid
+                        enforcement_uid
                         and _st2 is not None
                         and not persona_allowed(
                             _st2,
-                            uid,
+                            enforcement_uid,
                             persona_row.get("persona_id", ""),
                             is_kind_default=is_kind_default_persona(persona_row),
                         )
@@ -2785,9 +2795,8 @@ def make_create_handler(
             # existing workstream).  Coerce/validate body["model"] before it
             # flows into the factory: an explicit disallowed alias is a 403; an
             # unspecified model for a restricted user falls back to a permitted
-            # alias.  ``uid`` is the effective owner (linked Discord user for
-            # gateway creates).
-            if uid:
+            # alias.  Checked against ``enforcement_uid`` (the acting user).
+            if enforcement_uid:
                 from turnstone.core.access import resolve_allowed_model
                 from turnstone.core.storage._registry import get_storage as _get_storage
 
@@ -2795,7 +2804,7 @@ def make_create_handler(
                 if _stm is not None:
                     _requested_model = (body.get("model") or "").strip()
                     _eff_model, _model_err = resolve_allowed_model(
-                        _stm, uid, _requested_model, ""
+                        _stm, enforcement_uid, _requested_model, ""
                     )
                     if _model_err:
                         return JSONResponse({"error": _model_err}, status_code=403)
