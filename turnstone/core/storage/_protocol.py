@@ -984,6 +984,33 @@ class StorageBackend(Protocol):
         """Remove a channel user mapping. Returns True if existed."""
         ...
 
+    # -- Per-user access allow-lists & per-guild prefs -------------------------
+
+    def list_user_allowed_models(self, user_id: str) -> list[str]:
+        """Model aliases this user may use. Empty list == unrestricted."""
+        ...
+
+    def set_user_allowed_models(self, user_id: str, aliases: list[str]) -> None:
+        """Replace the user's allowed-model set (empty list clears = unrestricted)."""
+        ...
+
+    def list_user_allowed_personas(self, user_id: str) -> list[str]:
+        """Persona_ids this user may use. Empty list == unrestricted (the kind
+        default persona is always permitted regardless, at enforcement time)."""
+        ...
+
+    def set_user_allowed_personas(self, user_id: str, persona_ids: list[str]) -> None:
+        """Replace the user's allowed-persona set (empty list clears = unrestricted)."""
+        ...
+
+    def get_guild_persona(self, guild_id: str) -> str | None:
+        """Persona name a server chose via /set-persona, or None."""
+        ...
+
+    def set_guild_persona(self, guild_id: str, persona: str | None) -> None:
+        """Upsert a server's chosen default persona (None clears it)."""
+        ...
+
     # -- OIDC identity ---------------------------------------------------------
 
     def create_oidc_user(

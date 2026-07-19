@@ -2548,11 +2548,21 @@ def make_create_handler(
             # only service identities. The deny-by-default keeps a
             # malicious caller from impersonating other users.
             body_uid = body.get("user_id")
+            # Trust the forwarded owner id from a service identity: the direct
+            # console service ("console"), or ANY caller carrying the "service"
+            # scope — the channel gateway re-minted through the console proxy
+            # ("console-proxy") or hitting a node directly ("channel").  A
+            # normal end-user token never has the "service" scope, so this
+            # cannot be used to impersonate.  This is what lets a linked Discord
+            # user own (and be authority-checked as) their own workstreams.
             if (
                 isinstance(body_uid, str)
                 and body_uid
                 and auth is not None
-                and getattr(auth, "token_source", "") in {"console"}
+                and (
+                    getattr(auth, "token_source", "") in {"console"}
+                    or auth.has_scope("service")
+                )
             ):
                 uid = body_uid
 
@@ -2736,7 +2746,61 @@ def make_create_handler(
                                 status_code=503,
                             )
                 if persona_row is not None:
+                    # Per-user persona authority: a restricted user may only use
+                    # personas on their allow-list.  The kind's DEFAULT persona
+                    # is always permitted (is_default), so /orchestrate's
+                    # coordinator persona and the interactive default never get
+                    # blocked out from under a restricted user.  ``uid`` here is
+                    # the effective owner — the linked Discord user for gateway
+                    # creates (see the user_id override above).
+                    from turnstone.core.access import (
+                        is_kind_default_persona,
+                        persona_allowed,
+                    )
+
+                    _st2 = _get_storage()
+                    if (
+                        uid
+                        and _st2 is not None
+                        and not persona_allowed(
+                            _st2,
+                            uid,
+                            persona_row.get("persona_id", ""),
+                            is_kind_default=is_kind_default_persona(persona_row),
+                        )
+                    ):
+                        return JSONResponse(
+                            {
+                                "error": (
+                                    f"persona '{persona_row.get('name', '')}' is not "
+                                    "permitted for this user"
+                                )
+                            },
+                            status_code=403,
+                        )
                     persona_snapshot = snapshot_from_persona(persona_row)
+
+            # Per-user model authority (create-time only — reopen/resume is not
+            # gated here so a later restriction can't lock a user out of an
+            # existing workstream).  Coerce/validate body["model"] before it
+            # flows into the factory: an explicit disallowed alias is a 403; an
+            # unspecified model for a restricted user falls back to a permitted
+            # alias.  ``uid`` is the effective owner (linked Discord user for
+            # gateway creates).
+            if uid:
+                from turnstone.core.access import resolve_allowed_model
+                from turnstone.core.storage._registry import get_storage as _get_storage
+
+                _stm = _get_storage()
+                if _stm is not None:
+                    _requested_model = (body.get("model") or "").strip()
+                    _eff_model, _model_err = resolve_allowed_model(
+                        _stm, uid, _requested_model, ""
+                    )
+                    if _model_err:
+                        return JSONResponse({"error": _model_err}, status_code=403)
+                    if _eff_model:
+                        body["model"] = _eff_model
 
             kwargs = cfg.create_build_kwargs(
                 request, body, uid, skill_data, skill_id_resolved, applied_skill_version

@@ -2728,6 +2728,50 @@
             </footer>
           </dialog>
 
+          <!-- User-access shelf — pane-scoped. Two checklists (models +
+               personas) set which the user may use.  Nothing checked in a
+               group == unrestricted for that group. -->
+          <dialog
+            class="hatch hatch--shelf"
+            id="user-access-shelf"
+            data-kind="edit"
+            aria-labelledby="user-access-shelf-title"
+          >
+            <header class="sh-head">
+              <span class="sh-led" aria-hidden="true"></span>
+              <h2 class="sh-title" id="user-access-shelf-title">
+                Model &amp; persona access
+              </h2>
+              <span class="sh-tag" aria-hidden="true">USR-ACCESS</span>
+              <button class="sh-x" data-close aria-label="Close">✕</button>
+            </header>
+            <div class="sh-body">
+              <div
+                id="user-access-shelf-error"
+                class="sh-alert"
+                role="alert"
+                aria-live="assertive"
+                aria-atomic="true"
+              ></div>
+              <input id="ua-user-id" type="hidden" />
+              <p class="sh-hint">
+                Nothing checked in a group = unrestricted (the user may use any
+                of them). The kind default persona is always available.
+              </p>
+              <h3 class="sh-subhead">Models</h3>
+              <div id="ua-models"></div>
+              <h3 class="sh-subhead">Personas</h3>
+              <div id="ua-personas"></div>
+            </div>
+            <footer class="sh-foot">
+              <div class="sh-foot-meta"></div>
+              <button class="sh-btn" data-close>Cancel</button>
+              <button id="ua-submit" class="sh-btn sh-btn--primary">
+                Save
+              </button>
+            </footer>
+          </dialog>
+
           <!-- Project create/edit shelf — pane-scoped. The hidden project-id
                distinguishes create (empty) from edit (set); visibility "public"
                is the "* all users" read lever. -->

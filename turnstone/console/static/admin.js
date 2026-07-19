@@ -518,6 +518,11 @@ function _renderUsers(users) {
           attrs: { "data-user-roles": u.user_id },
         },
         {
+          label: "access",
+          title: "Model & persona access",
+          attrs: { "data-user-access": u.user_id },
+        },
+        {
           label: "delete",
           kind: "danger",
           title: "Delete user",
@@ -533,6 +538,13 @@ function _renderUsers(users) {
   for (let rj = 0; rj < roleBtns.length; rj++) {
     roleBtns[rj].addEventListener("click", function () {
       showUserRolesModal(this.getAttribute("data-user-roles"));
+    });
+  }
+  // Bind access (model/persona allow-list) buttons
+  const accessBtns = container.querySelectorAll("[data-user-access]");
+  for (let aj = 0; aj < accessBtns.length; aj++) {
+    accessBtns[aj].addEventListener("click", function () {
+      showUserAccessModal(this.getAttribute("data-user-access"));
     });
   }
   // Bind delete buttons via delegation (avoids inline JS injection)

@@ -35,6 +35,7 @@ from turnstone.core.storage._schema import (
     channel_routes,
     channel_users,
     conversations,
+    guild_prefs,
     heuristic_rules,
     intent_verdicts,
     mcp_oauth_pending,
@@ -67,6 +68,8 @@ from turnstone.core.storage._schema import (
     tls_certificates,
     tool_policies,
     usage_events,
+    user_allowed_models,
+    user_allowed_personas,
     user_roles,
     users,
     watches,
@@ -1799,6 +1802,83 @@ class SQLiteBackend:
                     "created": row[3],
                 }
             return None
+
+    # -- Per-user access allow-lists & per-guild prefs -----------------------
+    # Empty list from a list_* getter == unrestricted (enforced in
+    # turnstone/core/access.py); set_* replaces the whole set atomically.
+
+    def list_user_allowed_models(self, user_id: str) -> list[str]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(user_allowed_models.c.alias)
+                .where(user_allowed_models.c.user_id == user_id)
+                .order_by(user_allowed_models.c.alias)
+            ).fetchall()
+            return [r[0] for r in rows]
+
+    def set_user_allowed_models(self, user_id: str, aliases: list[str]) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        # Dedupe while preserving determinism; drop blanks.
+        clean = sorted({a.strip() for a in aliases if a and a.strip()})
+        with self._conn() as conn:
+            conn.execute(
+                sa.delete(user_allowed_models).where(user_allowed_models.c.user_id == user_id)
+            )
+            if clean:
+                conn.execute(
+                    sa.insert(user_allowed_models),
+                    [{"user_id": user_id, "alias": a, "created": now} for a in clean],
+                )
+            conn.commit()
+
+    def list_user_allowed_personas(self, user_id: str) -> list[str]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(user_allowed_personas.c.persona_id)
+                .where(user_allowed_personas.c.user_id == user_id)
+                .order_by(user_allowed_personas.c.persona_id)
+            ).fetchall()
+            return [r[0] for r in rows]
+
+    def set_user_allowed_personas(self, user_id: str, persona_ids: list[str]) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        clean = sorted({p.strip() for p in persona_ids if p and p.strip()})
+        with self._conn() as conn:
+            conn.execute(
+                sa.delete(user_allowed_personas).where(user_allowed_personas.c.user_id == user_id)
+            )
+            if clean:
+                conn.execute(
+                    sa.insert(user_allowed_personas),
+                    [{"user_id": user_id, "persona_id": p, "created": now} for p in clean],
+                )
+            conn.commit()
+
+    def get_guild_persona(self, guild_id: str) -> str | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                sa.select(guild_prefs.c.persona).where(guild_prefs.c.guild_id == guild_id)
+            ).fetchone()
+            return row[0] if row and row[0] else None
+
+    def set_guild_persona(self, guild_id: str, persona: str | None) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            existing = conn.execute(
+                sa.select(guild_prefs.c.guild_id).where(guild_prefs.c.guild_id == guild_id)
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    sa.insert(guild_prefs),
+                    {"guild_id": guild_id, "persona": persona, "updated": now},
+                )
+            else:
+                conn.execute(
+                    sa.update(guild_prefs)
+                    .where(guild_prefs.c.guild_id == guild_id)
+                    .values(persona=persona, updated=now)
+                )
+            conn.commit()
 
     def list_channel_users_by_user(self, user_id: str) -> list[dict[str, str]]:
 

@@ -303,6 +303,7 @@ class ChannelRouter:
         initial_message: str = "",
         client_type: str = "",
         kind: str = "",
+        acting_user_id: str = "",
     ) -> tuple[str, bool]:
         """Look up or create a workstream for a channel.
 
@@ -382,6 +383,10 @@ class ChannelRouter:
                     auto_approve_tools=_tools_csv,
                     client_type=client_type,
                     kind=kind,
+                    # Own the workstream as the linked turnstone user (Discord
+                    # acts as that user); honored server-side only for
+                    # service-scoped callers like the channel gateway.
+                    user_id=acting_user_id,
                 )
                 ws_id = data.get("ws_id", "")
             else:
@@ -396,6 +401,7 @@ class ChannelRouter:
                     auto_approve_tools=_tools_csv,
                     client_type=client_type,
                     kind=kind,
+                    user_id=acting_user_id,
                 )
                 ws_id = resp.ws_id
                 data = {"ws_id": resp.ws_id, "name": resp.name}

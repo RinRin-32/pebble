@@ -212,6 +212,30 @@ class MessageCog:
                 return await cog_self._autocomplete_persona(interaction, current)
 
             @app_commands.command(
+                name="set-persona",
+                description="Set THIS server's default persona for new chats",
+            )
+            @app_commands.describe(
+                persona="Persona name to use by default in this server",
+            )
+            async def set_persona(
+                self_cog: _Cog,  # noqa: N805
+                interaction: discord.Interaction,
+                persona: str,
+            ) -> None:
+                await cog_self._cmd_set_persona(interaction, persona)
+
+            @set_persona.autocomplete("persona")
+            async def _set_persona_autocomplete(
+                self_cog: _Cog,  # noqa: N805
+                interaction: discord.Interaction,
+                current: str,
+            ) -> list[app_commands.Choice[str]]:
+                return await cog_self._autocomplete_persona(
+                    interaction, current, kind="interactive"
+                )
+
+            @app_commands.command(
                 name="help",
                 description="Show available Turnstone commands",
             )
@@ -309,6 +333,7 @@ class MessageCog:
                     name=channel.name or "",
                     initial_message="",
                     client_type="chat",
+                    acting_user_id=user_id,
                 )
             except (TimeoutError, RuntimeError):
                 log.warning("discord.ws_reactivation_failed", thread_id=channel.id)
@@ -374,11 +399,19 @@ class MessageCog:
             if not mention_model:
                 mention_model = self.ts.config.model
 
+            mention_acting_user = await self._resolve_acting_user(
+                message.guild.id if message.guild else None, message.author.id
+            )
+            mention_persona = await self._effective_persona(
+                message.guild.id if message.guild else None, ""
+            )
             mention_text = f"[{message.author.display_name}]: {content}"
             ws_id = await self.ts.start_channel_session(
                 channel,
                 discord_user_id=str(message.author.id),
                 model=mention_model,
+                persona=mention_persona,
+                acting_user_id=mention_acting_user or "",
             )
             attachment_ids = await self._upload_discord_attachments(ws_id, message)
             await self.ts.router.send_message(
@@ -687,19 +720,96 @@ class MessageCog:
         )
         return entry is not None
 
+    async def _resolve_acting_user(
+        self, guild_id: int | None, author_id: int
+    ) -> str | None:
+        """The turnstone user a Discord action acts as: the member's own
+        ``/link`` first, else the server's ``/global-link`` user, else None.
+
+        Threaded into workstream creation so the workstream is owned by — and
+        authority-checked as — the linked user.
+        """
+        uid = await self.ts.router.resolve_user("discord", str(author_id))
+        if uid:
+            return uid
+        if guild_id is not None:
+            entry = await asyncio.to_thread(
+                self.ts.storage.get_channel_user, "guild", str(guild_id)
+            )
+            if entry:
+                return entry.get("user_id")
+        return None
+
+    async def _effective_persona(self, guild_id: int | None, explicit: str) -> str:
+        """Explicit persona wins; otherwise the server's ``/set-persona`` choice
+        (per-guild); otherwise empty (server resolves the global default)."""
+        if explicit:
+            return explicit
+        if guild_id is None:
+            return ""
+        chosen = await asyncio.to_thread(self.ts.storage.get_guild_persona, str(guild_id))
+        return chosen or ""
+
+    async def _precheck_access(
+        self, acting_user_id: str | None, model: str, persona_name: str
+    ) -> str | None:
+        """Friendly pre-flight check of a user's model/persona allow-list.
+
+        Returns an error string to show the user, or None if allowed.  The
+        authoritative gate is server-side at workstream creation; this just
+        avoids creating an orphan thread before that 403.  Only explicit
+        violations are reported here — an unspecified model for a restricted
+        user is coerced server-side, not rejected.
+        """
+        if not acting_user_id:
+            return None
+        from turnstone.core import access
+
+        storage = self.ts.storage
+        if model:
+            _eff, err = await asyncio.to_thread(
+                access.resolve_allowed_model, storage, acting_user_id, model, ""
+            )
+            if err:
+                return f"You don't have access to model '{model}'."
+        if persona_name:
+            prow = await asyncio.to_thread(storage.get_persona_by_name, persona_name)
+            if prow is not None:
+                ok = await asyncio.to_thread(
+                    access.persona_allowed,
+                    storage,
+                    acting_user_id,
+                    prow.get("persona_id", ""),
+                    is_kind_default=bool(prow.get("is_default")),
+                )
+                if not ok:
+                    return f"You don't have access to persona '{persona_name}'."
+        return None
+
     async def _cmd_ask(
         self, interaction: discord.Interaction, message: str, *, model: str = "", persona: str = ""
     ) -> None:
         """Create a new thread and workstream with an initial message."""
         import discord
 
-        user_id = await self.ts.router.resolve_user("discord", str(interaction.user.id))
-        if user_id is None and not await self._check_guild_access(interaction.guild_id):
+        acting_user_id = await self._resolve_acting_user(
+            interaction.guild_id, interaction.user.id
+        )
+        if acting_user_id is None:
             await interaction.response.send_message(
                 "Your Discord account is not linked. Use `/link` first, "
                 "or ask an admin to use `/global-link`.",
                 ephemeral=True,
             )
+            return
+
+        # Per-guild persona choice fills in when none was passed explicitly.
+        persona = await self._effective_persona(interaction.guild_id, persona)
+        # Friendly pre-flight before we create a thread (server-side is
+        # authoritative).
+        access_err = await self._precheck_access(acting_user_id, model, persona)
+        if access_err:
+            await interaction.response.send_message(access_err, ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -744,6 +854,7 @@ class MessageCog:
             persona=persona,
             initial_message="",
             client_type="chat",
+            acting_user_id=acting_user_id,
         )
 
         await self.ts.subscribe_ws(ws_id, thread)
@@ -766,13 +877,22 @@ class MessageCog:
         """Create a thread + workstream for orchestrator-style tasks."""
         import discord
 
-        user_id = await self.ts.router.resolve_user("discord", str(interaction.user.id))
-        if user_id is None and not await self._check_guild_access(interaction.guild_id):
+        acting_user_id = await self._resolve_acting_user(
+            interaction.guild_id, interaction.user.id
+        )
+        if acting_user_id is None:
             await interaction.response.send_message(
                 "Your Discord account is not linked. Use `/link` first, "
                 "or ask an admin to use `/global-link`.",
                 ephemeral=True,
             )
+            return
+
+        # /orchestrate always uses the coordinator (orchestrator) persona
+        # regardless of persona limits — only the model is user-selectable.
+        access_err = await self._precheck_access(acting_user_id, model, "")
+        if access_err:
+            await interaction.response.send_message(access_err, ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -812,6 +932,7 @@ class MessageCog:
             initial_message="",
             client_type="chat",
             kind="coordinator",
+            acting_user_id=acting_user_id,
         )
 
         await self.ts.subscribe_ws(ws_id, thread)
@@ -838,6 +959,12 @@ class MessageCog:
             personas = await self.ts.router.list_personas(cached=True)
         except Exception:
             return []
+        # Show only personas the acting user may use (empty allow-list = all;
+        # the kind default is always usable).
+        acting_user_id = await self._resolve_acting_user(
+            interaction.guild_id, interaction.user.id
+        )
+        allowed = await self._allowed_persona_ids(acting_user_id)
         choices: list[app_commands.Choice[str]] = []
         for p in personas:
             name = p.get("name", "")
@@ -847,12 +974,34 @@ class MessageCog:
                 applies = p.get("applies_to_kinds") or []
                 if kind not in applies:
                     continue
+            if allowed is not None and not (
+                p.get("is_default") or p.get("persona_id", "") in allowed
+            ):
+                continue
             if current and current.lower() not in name.lower():
                 continue
             choices.append(app_commands.Choice(name=name, value=name))
             if len(choices) >= 25:
                 break
         return choices
+
+    async def _allowed_persona_ids(self, acting_user_id: str | None) -> set[str] | None:
+        """The acting user's allowed persona_ids, or None if unrestricted."""
+        if not acting_user_id:
+            return None
+        ids = await asyncio.to_thread(
+            self.ts.storage.list_user_allowed_personas, acting_user_id
+        )
+        return set(ids) if ids else None
+
+    async def _allowed_model_aliases(self, acting_user_id: str | None) -> set[str] | None:
+        """The acting user's allowed model aliases, or None if unrestricted."""
+        if not acting_user_id:
+            return None
+        aliases = await asyncio.to_thread(
+            self.ts.storage.list_user_allowed_models, acting_user_id
+        )
+        return set(aliases) if aliases else None
 
     async def _autocomplete_model(
         self, interaction: discord.Interaction, current: str
@@ -864,10 +1013,16 @@ class MessageCog:
             data = await self.ts.router.list_models(cached=True)
         except Exception:
             return []
+        acting_user_id = await self._resolve_acting_user(
+            interaction.guild_id, interaction.user.id
+        )
+        allowed = await self._allowed_model_aliases(acting_user_id)
         choices: list[app_commands.Choice[str]] = []
         for m in data.get("models", []):
             alias = m.get("alias", "")
             if not alias:
+                continue
+            if allowed is not None and alias not in allowed:
                 continue
             if current and current.lower() not in alias.lower():
                 continue
@@ -977,6 +1132,15 @@ class MessageCog:
             )
             return
 
+        acting_user_id = await self._resolve_acting_user(
+            interaction.guild_id, interaction.user.id
+        )
+        persona = await self._effective_persona(interaction.guild_id, persona)
+        access_err = await self._precheck_access(acting_user_id, model, persona)
+        if access_err:
+            await interaction.response.send_message(access_err, ephemeral=True)
+            return
+
         effective_model = model
         if not effective_model:
             effective_model = await self.ts.router.get_channel_default_alias()
@@ -990,6 +1154,7 @@ class MessageCog:
             discord_user_id=str(interaction.user.id),
             model=effective_model,
             persona=persona,
+            acting_user_id=acting_user_id or "",
         )
         await interaction.followup.send(
             "**Session started!** All messages in this channel will be forwarded to "
@@ -1072,6 +1237,11 @@ class MessageCog:
             inline=False,
         )
         embed.add_field(
+            name="/set-persona <persona>",
+            value="Set this server's default persona for new chats",
+            inline=False,
+        )
+        embed.add_field(
             name="/orchestrate <task> [model] [persona]",
             value="Start an orchestrator workstream in a thread",
             inline=False,
@@ -1141,3 +1311,72 @@ class MessageCog:
                 f"**Default persona changed to {persona}** by {interaction.user.mention}."
             )
         log.info("discord.default_persona_set", persona=persona)
+
+    async def _cmd_set_persona(self, interaction: discord.Interaction, persona: str) -> None:
+        """Set THIS server's default persona (per-guild) for new interactive chats.
+
+        Unlike /set-default-persona (a global admin change), this is scoped to
+        the current Discord server and stored keyed by guild_id — so the same
+        linked user can run different personas in different servers.  It applies
+        to /ask and @mentions when no explicit persona is given; /orchestrate
+        always uses the coordinator persona.
+        """
+        import discord
+
+        channel = interaction.channel
+        if interaction.guild_id is None:
+            await interaction.response.send_message(
+                "This command must be used in a server.", ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True)
+
+        acting_user_id = await self._resolve_acting_user(
+            interaction.guild_id, interaction.user.id
+        )
+        if acting_user_id is None:
+            await interaction.followup.send(
+                "Your Discord account is not linked. Use `/link` first, "
+                "or ask an admin to use `/global-link`.",
+                ephemeral=True,
+            )
+            return
+
+        prow = await asyncio.to_thread(self.ts.storage.get_persona_by_name, persona)
+        if prow is None or not prow.get("enabled", True):
+            await interaction.followup.send(f"Persona '{persona}' not found.", ephemeral=True)
+            return
+        if "interactive" not in (prow.get("applies_to_kinds") or []):
+            await interaction.followup.send(
+                f"Persona '{persona}' can't be used for interactive chats.", ephemeral=True
+            )
+            return
+
+        # You can only pin a server persona you're actually allowed to use.
+        from turnstone.core import access
+
+        ok = await asyncio.to_thread(
+            access.persona_allowed,
+            self.ts.storage,
+            acting_user_id,
+            prow.get("persona_id", ""),
+            is_kind_default=bool(prow.get("is_default")),
+        )
+        if not ok:
+            await interaction.followup.send(
+                f"You don't have access to persona '{persona}'.", ephemeral=True
+            )
+            return
+
+        await asyncio.to_thread(
+            self.ts.storage.set_guild_persona, str(interaction.guild_id), persona
+        )
+        await interaction.followup.send(
+            f"Server persona set to **{persona}** for new chats.", ephemeral=True
+        )
+        if isinstance(channel, discord.TextChannel):
+            await channel.send(
+                f"**Server persona set to {persona}** by {interaction.user.mention} "
+                "(applies to new /ask and mentions in this server)."
+            )
+        log.info("discord.set_persona", persona=persona, guild_id=interaction.guild_id)

@@ -1043,12 +1043,15 @@ class TurnstoneBot:
         *,
         model: str = "",
         persona: str = "",
+        acting_user_id: str = "",
         attachment_ids: list[str] | None = None,
     ) -> str:
         """Route every message in *channel* to a turnstone workstream.
 
         Returns the workstream ID.
         *discord_user_id* is the Discord user who started it (for approval gating).
+        *acting_user_id* is the linked turnstone user the workstream acts as
+        (owner + authority scope); empty falls back to the service identity.
         """
         ws_id, _is_new = await self.router.get_or_create_workstream(
             channel_type="discord_session",
@@ -1058,6 +1061,7 @@ class TurnstoneBot:
             persona=persona,
             initial_message="",
             client_type="chat",
+            acting_user_id=acting_user_id,
         )
         self._channel_sessions[channel.id] = (ws_id, discord_user_id)
         if discord_user_id:

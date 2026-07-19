@@ -503,6 +503,40 @@ role_permission_overrides = sa.Table(
 
 sa.Index("idx_role_permission_overrides_role", role_permission_overrides.c.role_id)
 
+# Per-user access allow-lists.  Semantics: a user with ZERO rows in a table is
+# UNRESTRICTED for that dimension (backward-compatible default); once a user has
+# any rows, they may only use the listed aliases / persona_ids (plus the kind's
+# default persona, which enforcement always permits — see turnstone/core/access.py).
+user_allowed_models = sa.Table(
+    "user_allowed_models",
+    metadata,
+    sa.Column("user_id", sa.Text, nullable=False),
+    sa.Column("alias", sa.Text, nullable=False),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.PrimaryKeyConstraint("user_id", "alias"),
+)
+
+user_allowed_personas = sa.Table(
+    "user_allowed_personas",
+    metadata,
+    sa.Column("user_id", sa.Text, nullable=False),
+    sa.Column("persona_id", sa.Text, nullable=False),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.PrimaryKeyConstraint("user_id", "persona_id"),
+)
+
+# Per-Discord-server (guild) preferences.  Currently just the chosen default
+# persona name used for interactive workstreams when no explicit persona is
+# given; keyed by guild_id so the same linked user can run different personas in
+# different servers.
+guild_prefs = sa.Table(
+    "guild_prefs",
+    metadata,
+    sa.Column("guild_id", sa.Text, primary_key=True),
+    sa.Column("persona", sa.Text, nullable=True),
+    sa.Column("updated", sa.Text, nullable=False),
+)
+
 tool_policies = sa.Table(
     "tool_policies",
     metadata,
