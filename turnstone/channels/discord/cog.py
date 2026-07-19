@@ -942,7 +942,7 @@ class MessageCog:
         acting_user_id = await self._resolve_acting_user(
             interaction.guild_id, interaction.user.id
         )
-        allowed = await self._allowed_persona_ids(acting_user_id)
+        allowed = await self._allowed_persona_names(acting_user_id)
         choices: list[app_commands.Choice[str]] = []
         for p in personas:
             name = p.get("name", "")
@@ -952,9 +952,7 @@ class MessageCog:
                 applies = p.get("applies_to_kinds") or []
                 if kind not in applies:
                     continue
-            if allowed is not None and not (
-                p.get("is_default") or p.get("persona_id", "") in allowed
-            ):
+            if allowed is not None and name not in allowed:
                 continue
             if current and current.lower() not in name.lower():
                 continue
@@ -963,14 +961,27 @@ class MessageCog:
                 break
         return choices
 
-    async def _allowed_persona_ids(self, acting_user_id: str | None) -> set[str] | None:
-        """The acting user's allowed persona_ids, or None if unrestricted."""
+    async def _allowed_persona_names(self, acting_user_id: str | None) -> set[str] | None:
+        """The acting user's allowed persona NAMES, or None if unrestricted.
+
+        The allow-list stores persona_ids, but the public persona feed exposes
+        names only — so map ids→names here.  The kind default personas are
+        always included so a restricted user can never lose their base persona.
+        """
         if not acting_user_id:
             return None
         ids = await asyncio.to_thread(
             self.ts.storage.list_user_allowed_personas, acting_user_id
         )
-        return set(ids) if ids else None
+        if not ids:
+            return None
+        rows = await asyncio.to_thread(self.ts.storage.list_personas, True)
+        id_to_name = {r["persona_id"]: r["name"] for r in rows}
+        names = {id_to_name[i] for i in ids if i in id_to_name}
+        for r in rows:
+            if r.get("is_default"):
+                names.add(r["name"])
+        return names
 
     async def _allowed_model_aliases(self, acting_user_id: str | None) -> set[str] | None:
         """The acting user's allowed model aliases, or None if unrestricted."""
@@ -1236,6 +1247,15 @@ class MessageCog:
         except Exception:
             await interaction.followup.send("Failed to fetch personas.", ephemeral=True)
             return
+
+        # Scope to what the linked user may actually use (empty allow-list =
+        # all; kind defaults always included).
+        acting_user_id = await self._resolve_acting_user(
+            interaction.guild_id, interaction.user.id
+        )
+        allowed = await self._allowed_persona_names(acting_user_id)
+        if allowed is not None:
+            personas = [p for p in personas if p.get("name") in allowed]
 
         if not personas:
             await interaction.followup.send("No personas available.", ephemeral=True)
