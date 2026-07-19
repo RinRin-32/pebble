@@ -16859,15 +16859,27 @@ class ChatSession:
         audio_b64 = base64.b64encode(result.audio_bytes).decode()
         media_type = result.media_type or "audio/mpeg"
         # Truncate to stay within Discord's 8MB file limit — 4MB for b64 text.
+        # Align to a 4-char boundary so the tail still base64-decodes cleanly.
         max_b64 = 4_000_000
         if len(audio_b64) > max_b64:
-            audio_b64 = audio_b64[:max_b64]
-        output = (
+            audio_b64 = audio_b64[: max_b64 - (max_b64 % 4)]
+        # The full base64 blob rides the live channel event ONLY: the Discord
+        # bot decodes it and uploads the clip as a real file attachment. It must
+        # NOT become the model-facing tool result — a multi-megabyte base64
+        # string would flood the context window and derail the agent (it starts
+        # trying to "open_preview" its own audio). So report the payload to the
+        # channel, but return a short confirmation to the model.
+        channel_output = (
             f"TTS_AUDIO:{media_type}:{audio_b64}:END_AUDIO\n"
             f"Text: \"{text[:200]}\""
         )
-        self._report_tool_result(call_id, "tts", output)
-        return call_id, output
+        self._report_tool_result(call_id, "tts", channel_output)
+        model_output = (
+            f"Spoken audio generated and delivered to the channel as a file "
+            f"({len(result.audio_bytes)} bytes, {media_type}). "
+            f"Text: \"{text[:200]}\""
+        )
+        return call_id, model_output
 
     # -- Watch tool ----------------------------------------------------------
 
