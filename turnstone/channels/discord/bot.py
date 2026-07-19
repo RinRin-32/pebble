@@ -701,7 +701,19 @@ class TurnstoneBot:
                     audio_b64 = match.group(2)
                     try:
                         audio_bytes = base64.b64decode(audio_b64)
-                        ext = media_type.split("/")[-1] or "mpeg"
+                        # Discord only renders an inline audio player for known
+                        # extensions — ".mpeg" (from audio/mpeg) is treated as a
+                        # generic download, so map to the extensions it recognises.
+                        ext_map = {
+                            "audio/mpeg": "mp3",
+                            "audio/mp3": "mp3",
+                            "audio/wav": "wav",
+                            "audio/x-wav": "wav",
+                            "audio/ogg": "ogg",
+                            "audio/aac": "aac",
+                            "audio/flac": "flac",
+                        }
+                        ext = ext_map.get(media_type, media_type.split("/")[-1] or "mp3")
                         disc_file = discord.File(io.BytesIO(audio_bytes), filename=f"tts.{ext}")
                         await thread.send(file=disc_file)
                         log.info("discord.tts_audio_sent", ws_id=ws_id, size=len(audio_bytes))
