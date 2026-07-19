@@ -16849,6 +16849,7 @@ class ChatSession:
                 alias=alias,
                 text=text,
                 voice=voice,
+                response_format="wav",
             )
         except Exception as exc:
             msg = f"Error: TTS failed: {exc}"
