@@ -190,28 +190,6 @@ class MessageCog:
                 await cog_self._cmd_list_persona(interaction)
 
             @app_commands.command(
-                name="set-default-persona",
-                description="Set the default persona for new workstreams",
-            )
-            @app_commands.describe(
-                persona="Persona name to set as default",
-            )
-            async def set_default_persona(
-                self_cog: _Cog,  # noqa: N805
-                interaction: discord.Interaction,
-                persona: str,
-            ) -> None:
-                await cog_self._cmd_set_default_persona(interaction, persona)
-
-            @set_default_persona.autocomplete("persona")
-            async def _default_persona_autocomplete(
-                self_cog: _Cog,  # noqa: N805
-                interaction: discord.Interaction,
-                current: str,
-            ) -> list[app_commands.Choice[str]]:
-                return await cog_self._autocomplete_persona(interaction, current)
-
-            @app_commands.command(
                 name="set-persona",
                 description="Set THIS server's default persona for new chats",
             )
@@ -1273,53 +1251,14 @@ class MessageCog:
                 lines.append(f"**{name}**")
         await interaction.followup.send("\n".join(lines[:10]), ephemeral=True)
 
-    async def _cmd_set_default_persona(self, interaction: discord.Interaction, persona: str) -> None:
-        """Set the default persona and broadcast to channel."""
-        import discord
-
-        channel = interaction.channel
-        await interaction.response.defer(ephemeral=True)
-        try:
-            admin_personas = await self.ts.router.admin_list_personas()
-        except Exception:
-            await interaction.followup.send(
-                "Failed to fetch personas (admin access required).", ephemeral=True
-            )
-            return
-
-        target = next((p for p in admin_personas if p.get("name") == persona), None)
-        if target is None:
-            await interaction.followup.send(f"Persona '{persona}' not found.", ephemeral=True)
-            return
-
-        pid = target.get("id") or target.get("persona_id")
-        if not pid:
-            await interaction.followup.send("Cannot determine persona ID.", ephemeral=True)
-            return
-
-        try:
-            await self.ts.router.patch_persona(pid, is_default=True)
-        except Exception as exc:
-            await interaction.followup.send(f"Failed to set default: {exc}", ephemeral=True)
-            return
-
-        await interaction.followup.send(
-            f"Default persona set to **{persona}**.", ephemeral=True
-        )
-        if isinstance(channel, discord.TextChannel):
-            await channel.send(
-                f"**Default persona changed to {persona}** by {interaction.user.mention}."
-            )
-        log.info("discord.default_persona_set", persona=persona)
-
     async def _cmd_set_persona(self, interaction: discord.Interaction, persona: str) -> None:
         """Set THIS server's default persona (per-guild) for new interactive chats.
 
-        Unlike /set-default-persona (a global admin change), this is scoped to
-        the current Discord server and stored keyed by guild_id — so the same
-        linked user can run different personas in different servers.  It applies
-        to /ask and @mentions when no explicit persona is given; /orchestrate
-        always uses the coordinator persona.
+        Scoped to the current Discord server and stored keyed by guild_id — so
+        the same linked user can run different personas in different servers.
+        Applies to /ask and @mentions when no explicit persona is given;
+        /orchestrate always uses the coordinator persona.  Falls back to the
+        stock interactive default when a server hasn't set one.
         """
         import discord
 
