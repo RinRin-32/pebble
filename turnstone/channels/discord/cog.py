@@ -286,22 +286,33 @@ class MessageCog:
             if existing_ws_id is None:
                 return
 
-            # Owner check: only the thread creator (who initiated the
-            # workstream) can inject messages.
-            effective_owner_id = self.ts.get_thread_invoker(channel.id)
-            if effective_owner_id is None:
-                effective_owner_id = channel.owner_id
-            if effective_owner_id is None or message.author.id != effective_owner_id:
-                log.debug(
-                    "discord.thread_message_rejected_non_owner",
-                    thread_id=channel.id,
-                    author_id=message.author.id,
-                    owner_id=effective_owner_id,
-                )
-                return
-
-            user_id = await self.ts.router.resolve_user("discord", str(message.author.id))
-            if user_id is None:
+            # Who may inject into this thread?  In a global-linked server every
+            # member participates communally (like a channel session) until
+            # /close; otherwise only the thread's own invoker may.  Resolving
+            # the acting user (member link, else guild link) also survives a
+            # gateway restart that clears the in-memory invoker map — which
+            # would otherwise drop even the invoker's follow-ups (the map miss
+            # falls back to channel.owner_id, i.e. the bot itself).
+            guild_id = message.guild.id if message.guild else None
+            acting_user_id = await self._resolve_acting_user(guild_id, message.author.id)
+            communal = await self._check_guild_access(guild_id)
+            if not communal:
+                # Not global-linked: only the individually-linked invoker.
+                effective_owner_id = self.ts.get_thread_invoker(channel.id)
+                if effective_owner_id is None:
+                    effective_owner_id = channel.owner_id
+                if effective_owner_id is None or message.author.id != effective_owner_id:
+                    log.debug(
+                        "discord.thread_message_rejected_non_owner",
+                        thread_id=channel.id,
+                        author_id=message.author.id,
+                        owner_id=effective_owner_id,
+                    )
+                    return
+                if acting_user_id is None:
+                    return
+            elif acting_user_id is None:
+                # Global-linked guild but no resolvable user (shouldn't happen).
                 return
 
             try:
@@ -311,7 +322,7 @@ class MessageCog:
                     name=channel.name or "",
                     initial_message="",
                     client_type="chat",
-                    acting_user_id=user_id,
+                    acting_user_id=acting_user_id,
                 )
             except (TimeoutError, RuntimeError):
                 log.warning("discord.ws_reactivation_failed", thread_id=channel.id)
@@ -331,6 +342,10 @@ class MessageCog:
                     text = f"[Sent: {', '.join(names[:3])}]" if names else "[Sent attachment]"
                 else:
                     return
+            # In a communal (global-linked) thread multiple people speak, so
+            # attribute each message the way channel-wide sessions do.
+            if communal:
+                text = f"[{message.author.display_name}]: {text}"
             await self.ts.router.send_message(ws_id, text, attachment_ids=attachment_ids)
             log.debug(
                 "discord.message_routed",
