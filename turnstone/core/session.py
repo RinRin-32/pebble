@@ -9835,6 +9835,8 @@ class ChatSession:
             "recall": self._prepare_recall,
             "notify": self._prepare_notify,
             "tts": self._prepare_tts,
+            "bind_repo": self._prepare_bind_repo,
+            "dispatch_agent": self._prepare_dispatch_agent,
             "watch": self._prepare_watch,
             "read_resource": self._prepare_read_resource,
             "use_prompt": self._prepare_use_prompt,
@@ -16917,6 +16919,226 @@ class ChatSession:
             f"Text: \"{text[:200]}\""
         )
         return call_id, model_output
+
+    # -- Coding-agent dispatch ------------------------------------------------
+
+    def _bound_repo_id(self) -> str:
+        """Repo this workstream is bound to, from its persisted config."""
+        try:
+            return (load_workstream_config(self._ws_id) or {}).get("repo_id", "") or ""
+        except Exception:
+            log.debug("dispatch.repo_lookup_failed", exc_info=True)
+            return ""
+
+    def _prepare_bind_repo(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        repo = (args.get("repo") or "").strip()
+        return {
+            "call_id": call_id,
+            "func_name": "bind_repo",
+            "header": f"\U0001f4c1 bind_repo: {repo or '(status)'}",
+            "preview": "",
+            # Checking out a repo writes to the shared workspace volume, so it
+            # rides the same approval gate as any other side effect.
+            "needs_approval": bool(repo) and not self.skip_permissions,
+            "execute": self._exec_bind_repo,
+            "repo": repo,
+            "base_ref": (args.get("base_ref") or "").strip(),
+        }
+
+    def _exec_bind_repo(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Bind the workstream to a repo and check out its worktree."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        repo_name = item["repo"]
+        from turnstone.core.storage._registry import get_storage
+
+        storage = get_storage()
+        if storage is None:
+            msg = "Error: storage unavailable"
+            self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+            return call_id, msg
+
+        if not repo_name:
+            # Status form: what am I bound to, and what could I bind to?
+            current = self._bound_repo_id()
+            rows = storage.list_repos()
+            names = ", ".join(r["name"] for r in rows) or "(none registered)"
+            cur_name = ""
+            if current:
+                row = storage.get_repo(current)
+                cur_name = row["name"] if row else current
+            out = f"Bound repo: {cur_name or '(none)'}\nAvailable repos: {names}"
+            self._report_tool_result(call_id, "bind_repo", out)
+            return call_id, out
+
+        row = storage.get_repo_by_name(repo_name)
+        if row is None:
+            msg = f"Error: no repo named '{repo_name}'. Register it in the console first."
+            self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+            return call_id, msg
+
+        try:
+            from turnstone.core.workspace import create_worktree, ensure_mirror
+
+            ensure_mirror(row["repo_id"], row["git_url"])
+            info = create_worktree(
+                row["repo_id"],
+                self._ws_id,
+                base_ref=item["base_ref"] or row.get("default_branch") or "HEAD",
+            )
+        except Exception as exc:
+            msg = f"Error: could not prepare worktree: {exc}"
+            self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+            return call_id, msg
+
+        # Persist the binding so shell/file tools resolve to this worktree on
+        # every later turn, including after a rehydrate on another node.
+        try:
+            cfg = load_workstream_config(self._ws_id) or {}
+            cfg["repo_id"] = row["repo_id"]
+            save_workstream_config(self._ws_id, cfg)
+        except Exception:
+            log.warning("dispatch.bind_persist_failed", ws_id=self._ws_id, exc_info=True)
+
+        out = (
+            f"Bound to repo '{row['name']}' on branch {info.branch}.\n"
+            f"Working directory is now {info.path} — shell and file tools run there."
+        )
+        self._report_tool_result(call_id, "bind_repo", out)
+        return call_id, out
+
+    def _prepare_dispatch_agent(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        task = (args.get("task") or "").strip()
+        if not task:
+            return {
+                "call_id": call_id,
+                "func_name": "dispatch_agent",
+                "header": "✗ dispatch_agent: empty task",
+                "preview": "",
+                "needs_approval": False,
+                "error": "Error: task is required",
+            }
+        agent = (args.get("agent") or "").strip().lower()
+        preview = task if len(task) <= 200 else task[:200] + "..."
+        return {
+            "call_id": call_id,
+            "func_name": "dispatch_agent",
+            "header": f"\U0001f916 dispatch_agent{f' ({agent})' if agent else ''}",
+            "preview": f"    {DIM}{preview}{RESET}",
+            # A dispatched agent writes code and runs commands; that is exactly
+            # the class of effect the approval gate exists for.
+            "needs_approval": not self.skip_permissions,
+            "execute": self._exec_dispatch_agent,
+            "task": task,
+            "agent": agent,
+            "model": (args.get("model") or "").strip(),
+            "continue_session": bool(args.get("continue_session")),
+            "timeout": args.get("timeout"),
+        }
+
+    def _exec_dispatch_agent(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Run an external coding agent inside this workstream's worktree."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        from turnstone.core.agents import DEFAULT_TIMEOUT, available_agents, get_adapter, run_agent
+        from turnstone.core.workspace import WorkspaceError, worktree_diff, worktree_stat
+
+        cwd = self._workspace_cwd()
+        if not cwd:
+            msg = (
+                "Error: this workstream has no repo bound. Call bind_repo first "
+                "so the agent has an isolated checkout to work in."
+            )
+            self._report_tool_result(call_id, "dispatch_agent", msg, is_error=True)
+            return call_id, msg
+
+        installed = available_agents()
+        name = item["agent"] or (self._config_store.get("agents.default") or "")
+        if not name:
+            # Prefer whatever this node actually has, in a stable order.
+            name = next((n for n in ("claude", "opencode", "codex") if n in installed), "")
+        adapter = get_adapter(name) if name else None
+        if adapter is None:
+            msg = (
+                f"Error: no coding agent available. Installed on this node: "
+                f"{', '.join(installed) or 'none'}."
+            )
+            self._report_tool_result(call_id, "dispatch_agent", msg, is_error=True)
+            return call_id, msg
+
+        # Resume the prior run so a follow-up keeps the agent's own context.
+        session_id = ""
+        cfg_key = f"agent_session_{adapter.name}"
+        if item["continue_session"]:
+            session_id = (load_workstream_config(self._ws_id) or {}).get(cfg_key, "") or ""
+
+        timeout = item.get("timeout") or DEFAULT_TIMEOUT
+        try:
+            timeout = max(30, min(int(timeout), 7200))
+        except (TypeError, ValueError):
+            timeout = DEFAULT_TIMEOUT
+
+        def _on_event(ev: Any) -> None:
+            # Stream tool activity to the live surface (Discord thread / web UI)
+            # so a long dispatch shows progress instead of going quiet.
+            line = ev.summary()
+            if not line:
+                return
+            try:
+                self.ui.on_tool_output_chunk(call_id, line + "\n")
+            except Exception:
+                log.debug("dispatch.stream_failed", exc_info=True)
+
+        result = run_agent(
+            adapter,
+            item["task"],
+            cwd=cwd,
+            model=item["model"],
+            session_id=session_id,
+            timeout=timeout,
+            on_event=_on_event,
+        )
+
+        if result.session_id:
+            try:
+                cfg = load_workstream_config(self._ws_id) or {}
+                cfg[cfg_key] = result.session_id
+                save_workstream_config(self._ws_id, cfg)
+            except Exception:
+                log.debug("dispatch.session_persist_failed", exc_info=True)
+
+        # The diff is the deliverable — report it even on failure, because a
+        # timed-out or errored run usually still left useful work behind.
+        diff = ""
+        stat = ""
+        try:
+            stat = worktree_stat(self._ws_id)
+            diff = worktree_diff(self._ws_id, max_bytes=60_000)
+        except WorkspaceError as exc:
+            log.debug("dispatch.diff_failed", error=str(exc))
+
+        parts = [
+            f"Agent: {adapter.name}"
+            + (f" (model {item['model']})" if item["model"] else "")
+            + f" | tools: {result.tool_calls} | cost: ${result.cost_usd:.4f}"
+        ]
+        if result.error:
+            parts.append(f"Status: FAILED — {result.error}")
+        elif result.timed_out:
+            parts.append("Status: TIMED OUT")
+        else:
+            parts.append("Status: ok")
+        if result.final_text:
+            parts.append(f"\n{result.final_text}")
+        parts.append(f"\nChanges:\n{stat or '(no file changes)'}")
+        if diff.strip():
+            parts.append(f"\n```diff\n{diff}\n```")
+        output = "\n".join(parts)
+
+        self._report_tool_result(
+            call_id, "dispatch_agent", output, is_error=bool(result.error)
+        )
+        return call_id, output
 
     # -- Watch tool ----------------------------------------------------------
 

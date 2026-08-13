@@ -1,0 +1,23 @@
+{
+  "name": "bind_repo",
+  "description": "Bind this workstream to a git repository and check out an isolated worktree for it. Every shell command and file tool in this workstream then runs inside that checkout. Call this before dispatch_agent. With no arguments it reports the current binding and lists the repos available on this server.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "repo": {
+        "type": "string",
+        "description": "Name of a repo registered on this server. Omit to show the current binding and the available repos.",
+        "default": ""
+      },
+      "base_ref": {
+        "type": "string",
+        "description": "Branch, tag or commit to check out from. Defaults to the repo's default branch.",
+        "default": ""
+      }
+    },
+    "required": []
+  },
+  "interactive": true,
+  "coordinator": true,
+  "primary_key": "repo"
+}
