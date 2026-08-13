@@ -9,9 +9,18 @@ Flags per the Agent SDK headless docs:
 - ``--permission-mode acceptEdits`` lets it write inside the worktree without a
   prompt; the worktree *is* the sandbox, and turnstone's own approval gate
   guards anything leaving it (push/PR).
-- ``--bare`` skips auto-discovery of the host's hooks, plugins, MCP servers and
-  CLAUDE.md so a dispatch is reproducible across nodes.  It also means no OAuth
-  or keychain read, so credentials must arrive as ``ANTHROPIC_API_KEY``.
+- ``--bare`` skips auto-discovery of hooks, plugins, MCP servers and CLAUDE.md.
+  It is NOT the default here: bare mode never reads OAuth credentials, which
+  would force an API key and lock out the Agent SDK credit that Claude Pro/Max
+  subscriptions include for ``claude -p``.  A dispatch already runs in a clean
+  container (no operator dotfiles to leak in), so bare buys little and costs
+  subscription auth.  Set ``TURNSTONE_CLAUDE_BARE=1`` to opt in where strict
+  reproducibility matters more than subscription billing.
+
+Auth therefore works two ways: mount the operator's ``~/.claude`` to use a
+subscription, or set ``ANTHROPIC_API_KEY`` for pay-as-you-go.  Anthropic
+recommends an API key for shared production automation, since subscription
+credits are per-account and cannot be pooled across a team.
 
 Message shape: ``{"type":"assistant","message":{"content":[{"type":"text"|
 "tool_use",...}]}}``, ``{"type":"user",...}`` for tool results, and a final
@@ -24,6 +33,7 @@ other so nested work still surfaces.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from turnstone.core.agents.base import COST_TOTAL, AgentAdapter, AgentEvent
@@ -43,10 +53,12 @@ class ClaudeCodeAdapter(AgentAdapter):
         session_id: str = "",
         agent: str = "",
     ) -> list[str]:
-        cmd = [
-            "claude",
-            "-p",
-            "--bare",
+        cmd = ["claude", "-p"]
+        # Opt-in only: bare mode cannot read the OAuth login a Claude
+        # subscription authenticates with.  See the module docstring.
+        if os.environ.get("TURNSTONE_CLAUDE_BARE", "").strip() not in ("", "0", "false"):
+            cmd.append("--bare")
+        cmd += [
             "--output-format",
             "stream-json",
             "--verbose",

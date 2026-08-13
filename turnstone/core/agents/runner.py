@@ -30,9 +30,28 @@ from turnstone.core.log import get_logger
 log = get_logger(__name__)
 
 DEFAULT_TIMEOUT = 1800
+
+# Standard system paths an agent CLI needs for the helpers it shells out to.
+# The server's own PATH is "/app/.venv/bin:..." and does NOT include /usr/bin or
+# /bin, which made Claude Code fail with a misleading "Not logged in · Please run
+# /login" — its auth path spawns helpers that were simply unreachable.  A child
+# agent must not inherit that truncation.
+_SYSTEM_PATHS = ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin")
 # Text events are joined for the final answer; cap so a runaway agent can't
 # balloon the tool result that goes back into the model's context.
 _MAX_FINAL_TEXT = 20_000
+
+
+def _normalized_path(path: str) -> str:
+    """Append any missing standard system directories to *path*.
+
+    Existing entries keep their precedence (the venv stays first); this only
+    guarantees the child can find ordinary system binaries.
+    """
+    entries = [p for p in path.split(os.pathsep) if p]
+    seen = set(entries)
+    entries.extend(p for p in _SYSTEM_PATHS if p not in seen)
+    return os.pathsep.join(entries)
 
 
 def run_agent(
@@ -63,6 +82,11 @@ def run_agent(
         prompt, cwd=cwd, model=model, session_id=session_id, agent=agent
     )
     child_env = {**(env or os.environ.copy()), **adapter.env_overrides()}
+    child_env["PATH"] = _normalized_path(child_env.get("PATH", ""))
+    # An empty ANTHROPIC_API_KEY is worse than an absent one: it can be read as
+    # "use key auth" and shadow the OAuth login a subscription relies on.
+    if not (child_env.get("ANTHROPIC_API_KEY") or "").strip():
+        child_env.pop("ANTHROPIC_API_KEY", None)
 
     texts: list[str] = []
     total_cost = 0.0

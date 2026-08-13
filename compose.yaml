@@ -292,6 +292,11 @@ services:
     volumes:
       - turnstone-data:/data
       - ${WORKSPACE_MOUNT:-workspace}:/workspace
+      # Agent credentials are NOT mounted here: the path is machine-specific and
+      # a missing bind source makes Docker silently create a root-owned
+      # directory, which breaks the login it was meant to supply.  Put them in
+      # compose.override.yaml (gitignored, auto-merged) instead — see
+      # docs/coding-dispatch.md, "Authentication".
     environment: &node-env
       TURNSTONE_JWT_SECRET: *jwt-secret
       TURNSTONE_DB_BACKEND: *db-backend

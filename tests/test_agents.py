@@ -148,11 +148,23 @@ class TestClaudeCodeParsing:
 
     def test_command_uses_headless_flags(self) -> None:
         cmd = self.a.build_command("go", cwd="/w", session_id="abc")
-        for flag in ("-p", "--bare", "--verbose"):
+        for flag in ("-p", "--verbose"):
             assert flag in cmd
         assert cmd[cmd.index("--output-format") + 1] == "stream-json"
         assert cmd[cmd.index("--resume") + 1] == "abc"
         assert cmd[-1] == "go"
+
+    def test_bare_is_opt_in_so_subscriptions_work(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # --bare cannot read the OAuth login a Claude subscription uses, so it
+        # must not be on by default or subscription auth is impossible.
+        monkeypatch.delenv("TURNSTONE_CLAUDE_BARE", raising=False)
+        assert "--bare" not in self.a.build_command("go", cwd="/w")
+        monkeypatch.setenv("TURNSTONE_CLAUDE_BARE", "1")
+        assert "--bare" in self.a.build_command("go", cwd="/w")
+        monkeypatch.setenv("TURNSTONE_CLAUDE_BARE", "0")
+        assert "--bare" not in self.a.build_command("go", cwd="/w")
 
 
 class TestCodexParsing:
@@ -271,3 +283,57 @@ class TestRegistry:
 
     def test_name_is_normalized(self) -> None:
         assert get_adapter("  OpenCode  ") is not None
+
+
+class TestChildEnvironment:
+    """Regression: a truncated PATH made Claude Code report 'Not logged in'.
+
+    The server runs with PATH=/app/.venv/bin:... which omits /usr/bin and /bin,
+    so an agent CLI could not spawn the helpers its auth flow depends on. The
+    symptom looked like an auth problem and was not.
+    """
+
+    def test_normalized_path_adds_system_dirs(self) -> None:
+        from turnstone.core.agents.runner import _normalized_path
+
+        out = _normalized_path("/app/.venv/bin:/usr/local/bin")
+        parts = out.split(":")
+        for needed in ("/usr/bin", "/bin"):
+            assert needed in parts
+        # Existing entries keep precedence.
+        assert parts[0] == "/app/.venv/bin"
+
+    def test_normalized_path_no_duplicates(self) -> None:
+        from turnstone.core.agents.runner import _normalized_path
+
+        parts = _normalized_path("/usr/bin:/bin").split(":")
+        assert parts.count("/usr/bin") == 1 and parts.count("/bin") == 1
+
+    def test_empty_path(self) -> None:
+        from turnstone.core.agents.runner import _normalized_path
+
+        assert "/usr/bin" in _normalized_path("").split(":")
+
+    def test_child_gets_system_path(self, tmp_path) -> None:
+        class _EnvProbe(_FakeAgent):
+            def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
+                # Emit the PATH the child actually received, as a text event.
+                return ["sh", "-c", 'printf "{\\"type\\":\\"text\\",\\"part\\":{\\"text\\":\\"$PATH\\"}}\\n"']
+
+        res = run_agent(_EnvProbe([]), "go", cwd=str(tmp_path), env={"PATH": "/app/.venv/bin"})
+        assert "/usr/bin" in res.final_text and "/bin" in res.final_text
+
+    def test_blank_api_key_is_dropped(self, tmp_path) -> None:
+        # An empty key must not shadow a subscription's OAuth login.
+        class _KeyProbe(_FakeAgent):
+            def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
+                return [
+                    "sh",
+                    "-c",
+                    'printf "{\\"type\\":\\"text\\",\\"part\\":{\\"text\\":\\"[${ANTHROPIC_API_KEY-unset}]\\"}}\\n"',
+                ]
+
+        res = run_agent(
+            _KeyProbe([]), "go", cwd=str(tmp_path), env={"PATH": "/bin", "ANTHROPIC_API_KEY": "  "}
+        )
+        assert res.final_text == "[unset]"
