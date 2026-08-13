@@ -161,8 +161,44 @@ def create_worktree(
         str(wt),
         base_ref,
     )
+    _write_local_excludes(mirror)
     log.info("workspace.worktree_created", ws_id=ws_id, repo_id=repo_id, branch=target_branch)
     return WorktreeInfo(ws_id=ws_id, repo_id=repo_id, path=wt, branch=target_branch)
+
+
+# Build/venv droppings a dispatched agent creates by merely RUNNING the code it
+# just wrote (a verification step is normal and desirable).  Without this a
+# review diff is polluted with .pyc blobs and node_modules — observed on the
+# first live dispatch.  These go in the worktree's private exclude file rather
+# than .gitignore so the repo's own tracked config is never modified.
+_LOCAL_EXCLUDES = (
+    "__pycache__/",
+    "*.py[cod]",
+    ".pytest_cache/",
+    ".ruff_cache/",
+    ".mypy_cache/",
+    "node_modules/",
+    ".venv/",
+    "venv/",
+    ".DS_Store",
+)
+
+
+def _write_local_excludes(mirror: Path) -> None:
+    """Install build-artifact excludes for every worktree of this mirror.
+
+    Written to the mirror's ``info/exclude`` — the COMMON git dir — because git
+    resolves ``info/exclude`` there, not in a linked worktree's private admin
+    directory.  It is turnstone-owned infrastructure, so the checked-out repo's
+    tracked ``.gitignore`` is never touched.
+    """
+    try:
+        target = mirror / "info"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "exclude").write_text("\n".join(_LOCAL_EXCLUDES) + "\n", encoding="utf-8")
+    except OSError:
+        # Cosmetic only — a noisier diff must never fail a dispatch.
+        log.debug("workspace.excludes_failed", path=str(mirror), exc_info=True)
 
 
 def remove_worktree(repo_id: str, ws_id: str) -> bool:

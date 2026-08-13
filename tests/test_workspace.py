@@ -142,3 +142,26 @@ class TestResolveCwdAndRemoval:
         assert workspace.remove_worktree("repo1", "wsrm") is True
         assert not info.path.exists()
         assert workspace.remove_worktree("repo1", "wsrm") is False
+
+
+class TestLocalExcludes:
+    """A dispatched agent that RUNS the code it wrote must not pollute the diff."""
+
+    def test_build_artifacts_excluded(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsexcl")
+        (info.path / "__pycache__").mkdir()
+        (info.path / "__pycache__" / "calc.cpython-312.pyc").write_bytes(b"\x00fake")
+        (info.path / "node_modules").mkdir()
+        (info.path / "node_modules" / "x.js").write_text("1")
+        (info.path / "real_change.py").write_text("x = 1\n")
+        diff = workspace.worktree_diff("wsexcl")
+        assert "real_change.py" in diff
+        assert "__pycache__" not in diff
+        assert "node_modules" not in diff
+
+    def test_repo_gitignore_untouched(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsgi")
+        # Excludes live in the worktree's private admin dir, not tracked files.
+        assert not (info.path / ".gitignore").exists()
