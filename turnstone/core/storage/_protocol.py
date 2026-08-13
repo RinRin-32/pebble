@@ -984,6 +984,29 @@ class StorageBackend(Protocol):
         """Remove a channel user mapping. Returns True if existed."""
         ...
 
+    # -- Repos (coding-agent dispatch) ----------------------------------------
+
+    def list_repos(self, enabled_only: bool = True) -> list[dict[str, Any]]:
+        """Repos ordered by name; enabled-only unless asked."""
+        ...
+
+    def get_repo(self, repo_id: str) -> dict[str, Any] | None:
+        """Return repo dict or None."""
+        ...
+
+    def get_repo_by_name(self, name: str) -> dict[str, Any] | None:
+        """Return repo dict by unique name or None."""
+        ...
+
+    def create_repo(self, repo: dict[str, Any]) -> None:
+        """Create a repo. Requires ``repo_id``, ``name`` and ``git_url``.
+        Raises ValueError on a duplicate name."""
+        ...
+
+    def delete_repo(self, repo_id: str) -> bool:
+        """Remove a repo row. Returns True if one existed."""
+        ...
+
     # -- Per-user access allow-lists & per-guild prefs -------------------------
 
     def list_user_allowed_models(self, user_id: str) -> list[str]:

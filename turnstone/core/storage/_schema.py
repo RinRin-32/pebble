@@ -525,6 +525,26 @@ user_allowed_personas = sa.Table(
     sa.PrimaryKeyConstraint("user_id", "persona_id"),
 )
 
+# Git repositories a workstream can be bound to.  The mirror lives on the shared
+# /workspace volume at repos/<repo_id>.git; each workstream gets a worktree under
+# ws/<ws_id> (see turnstone/core/workspace.py).  The binding itself is stored as
+# a ``repo_id`` key in workstream_config, alongside model_alias and the persona
+# stamp — no extra join table.
+repos = sa.Table(
+    "repos",
+    metadata,
+    sa.Column("repo_id", sa.Text, primary_key=True),
+    sa.Column("name", sa.Text, nullable=False, unique=True),
+    sa.Column("git_url", sa.Text, nullable=False),
+    sa.Column("default_branch", sa.Text, nullable=False, server_default="main"),
+    # Optional association with a project (projects are an org/memory concept).
+    sa.Column("project_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("enabled", sa.Integer, nullable=False, server_default="1"),
+    sa.Column("created_by", sa.Text, nullable=False, server_default=""),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.Column("updated", sa.Text, nullable=False),
+)
+
 # Per-Discord-server (guild) preferences.  Currently just the chosen default
 # persona name used for interactive workstreams when no explicit persona is
 # given; keyed by guild_id so the same linked user can run different personas in

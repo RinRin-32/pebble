@@ -54,6 +54,7 @@ from turnstone.core.storage._schema import (
     project_members,
     projects,
     prompt_templates,
+    repos,
     role_permission_overrides,
     roles,
     scheduled_task_runs,
@@ -80,6 +81,12 @@ from turnstone.core.storage._schema import (
 )
 from turnstone.core.storage._schema import (
     prompt_policies as prompt_policies_t,
+)
+from turnstone.core.storage._utils import (
+    repo_insert_values as _repo_insert_values,
+)
+from turnstone.core.storage._utils import (
+    repo_row_to_dict as _repo_row_to_dict,
 )
 from turnstone.core.storage._utils import (
     COMPACTION_SOURCE as _COMPACTION_SOURCE,
@@ -1727,6 +1734,42 @@ class PostgreSQLBackend:
                 )
             )
             conn.commit()
+
+    # -- Repos (coding-agent dispatch) ---------------------------------------
+
+    def list_repos(self, enabled_only: bool = True) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            q = sa.select(repos).order_by(repos.c.name)
+            if enabled_only:
+                q = q.where(repos.c.enabled == 1)
+            return [_repo_row_to_dict(r) for r in conn.execute(q).fetchall()]
+
+    def get_repo(self, repo_id: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute(sa.select(repos).where(repos.c.repo_id == repo_id)).fetchone()
+            return _repo_row_to_dict(row) if row is not None else None
+
+    def get_repo_by_name(self, name: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute(sa.select(repos).where(repos.c.name == name)).fetchone()
+            return _repo_row_to_dict(row) if row is not None else None
+
+    def create_repo(self, repo: dict[str, Any]) -> None:
+        if not repo.get("repo_id") or not repo.get("name") or not repo.get("git_url"):
+            raise ValueError("repo requires repo_id, name and git_url")
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            try:
+                conn.execute(sa.insert(repos), _repo_insert_values(repo, now))
+            except sa.exc.IntegrityError as exc:
+                raise ValueError(f"repo name already exists: {repo['name']}") from exc
+            conn.commit()
+
+    def delete_repo(self, repo_id: str) -> bool:
+        with self._conn() as conn:
+            result = conn.execute(sa.delete(repos).where(repos.c.repo_id == repo_id))
+            conn.commit()
+            return bool(result.rowcount)
 
     def list_channel_users_by_user(self, user_id: str) -> list[dict[str, str]]:
 

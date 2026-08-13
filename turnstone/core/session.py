@@ -10050,8 +10050,25 @@ class ChatSession:
         active = _active_read_files.get()
         return active if active is not None else self._read_files
 
+    def _ws_path(self, path: str) -> str:
+        """Resolve a tool path argument against this workstream's worktree.
+
+        Absolute paths (and ``~``) are left alone; a RELATIVE path resolves
+        against the bound worktree so ``read_file("calc.py")`` and
+        ``bash: cat calc.py`` refer to the same file.  Without a bound worktree
+        the path comes back unchanged, preserving legacy behavior for every
+        ordinary chat session.
+        """
+        if not path:
+            return path
+        expanded = os.path.expanduser(path)
+        if os.path.isabs(expanded):
+            return expanded
+        base = self._workspace_cwd()
+        return os.path.join(base, expanded) if base else expanded
+
     def _prepare_read_file(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        path = args.get("path", "")
+        path = self._ws_path(args.get("path", ""))
         if not path:
             return {
                 "call_id": call_id,
@@ -10135,7 +10152,7 @@ class ChatSession:
                 "needs_approval": False,
                 "error": "Error: missing query",
             }
-        path = os.path.expanduser(args.get("path", "") or ".")
+        path = self._ws_path(args.get("path", "") or ".")
         preview = f"    {DIM}/{pattern}/ in {path}{RESET}"
         return {
             "call_id": call_id,
@@ -10205,7 +10222,7 @@ class ChatSession:
         }
 
     def _prepare_write_file(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        path = args.get("path", "")
+        path = self._ws_path(args.get("path", ""))
         content = args.get("content", "")
         if not path:
             return {
@@ -10301,7 +10318,7 @@ class ChatSession:
         }
 
     def _prepare_edit_file(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        path = args.get("path", "")
+        path = self._ws_path(args.get("path", ""))
         if not path:
             return {
                 "call_id": call_id,
@@ -14765,6 +14782,24 @@ class ChatSession:
 
     # -- Execute methods (do the work, report output via UI) -------------------
 
+    def _workspace_cwd(self) -> str | None:
+        """Directory the shell tools run in: this workstream's git worktree.
+
+        ``None`` for every workstream without a bound repo, which keeps the
+        legacy behavior (inherit the server's directory) for ordinary chat
+        sessions.  A coding workstream gets an isolated checkout so two
+        concurrent dispatches can't edit the same tree — see
+        :mod:`turnstone.core.workspace`.
+        """
+        try:
+            from turnstone.core.workspace import resolve_cwd
+
+            return resolve_cwd(self._ws_id)
+        except Exception:
+            # Workspace resolution must never be able to break the bash tool.
+            log.debug("workspace.cwd_resolve_failed", exc_info=True)
+            return None
+
     def _exec_bash(self, item: dict[str, Any]) -> tuple[str, str]:
         """Execute a bash command via temp script, streaming stdout."""
         self._check_cancelled()
@@ -14788,6 +14823,7 @@ class ChatSession:
                     command,
                     stop_on_error=item.get("stop_on_error") is True,
                     env=scrubbed_env(extra=self._skill_resource_env()),
+                    cwd=self._workspace_cwd(),
                 )
                 with self._procs_lock:
                     self._active_procs.add(proc)
@@ -14965,6 +15001,7 @@ class ChatSession:
                 env=scrubbed_env(extra=self._skill_resource_env()),
                 owner=_active_shell_owner.get(),
                 stop_on_error=item.get("stop_on_error") is True,
+                cwd=self._workspace_cwd(),
             )
         except (RuntimeError, OSError) as e:
             # TooManyShellsError / registry-closed / spawn failure — all

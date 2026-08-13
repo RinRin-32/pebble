@@ -1357,3 +1357,27 @@ def senders_from_user_meta(metas: Iterable[str | None]) -> list[str]:
         if isinstance(sender, str) and sender.strip():
             senders.add(sender.strip())
     return sorted(senders)
+
+
+def repo_row_to_dict(row: Any) -> dict[str, Any]:
+    """Convert a ``repos`` row to its Python-typed dict shape (``enabled`` bool)."""
+    return row_to_dict(row, "enabled")
+
+
+def repo_insert_values(repo: dict[str, Any], now: str) -> dict[str, Any]:
+    """Normalize a caller-supplied repo dict into INSERT values.
+
+    Shared by both backends so the column defaults (branch, enabled, timestamps)
+    can't drift between SQLite and PostgreSQL.
+    """
+    return {
+        "repo_id": repo["repo_id"],
+        "name": repo["name"],
+        "git_url": repo["git_url"],
+        "default_branch": repo.get("default_branch") or "main",
+        "project_id": repo.get("project_id", "") or "",
+        "enabled": 1 if repo.get("enabled", True) else 0,
+        "created_by": repo.get("created_by", "") or "",
+        "created": now,
+        "updated": now,
+    }
