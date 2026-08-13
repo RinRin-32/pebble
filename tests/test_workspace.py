@@ -165,3 +165,50 @@ class TestLocalExcludes:
         info = workspace.create_worktree("repo1", "wsgi")
         # Excludes live in the worktree's private admin dir, not tracked files.
         assert not (info.path / ".gitignore").exists()
+
+
+class TestConcurrency:
+    """Two Discord users dispatching on the same repo at the same moment.
+
+    Regression: concurrent ``git worktree add`` raced on the mirror's
+    config.lock ("could not lock config file"), found by an 8-way stress run.
+    """
+
+    def test_concurrent_worktree_creation(self, origin: Path) -> None:
+        import concurrent.futures as cf
+
+        workspace.ensure_mirror("repo1", str(origin))
+
+        def mk(i: int) -> str:
+            info = workspace.create_worktree("repo1", f"wsrace{i:03d}")
+            (info.path / f"marker_{i}.txt").write_text(str(i))
+            return str(info.path)
+
+        with cf.ThreadPoolExecutor(max_workers=8) as ex:
+            paths = list(ex.map(mk, range(8)))
+        assert len(set(paths)) == 8
+
+    def test_concurrent_same_ws_id_is_safe(self, origin: Path) -> None:
+        import concurrent.futures as cf
+
+        workspace.ensure_mirror("repo1", str(origin))
+        with cf.ThreadPoolExecutor(max_workers=4) as ex:
+            infos = list(ex.map(lambda _: workspace.create_worktree("repo1", "wsdupe"), range(4)))
+        # All four callers converge on one worktree rather than clobbering.
+        assert len({str(i.path) for i in infos}) == 1
+
+    def test_no_cross_contamination(self, origin: Path) -> None:
+        import concurrent.futures as cf
+
+        workspace.ensure_mirror("repo1", str(origin))
+
+        def mk(i: int) -> set[str]:
+            info = workspace.create_worktree("repo1", f"wsiso{i:03d}")
+            (info.path / f"only_{i}.txt").write_text("x")
+            return {f.name for f in info.path.iterdir() if f.is_file()}
+
+        with cf.ThreadPoolExecutor(max_workers=6) as ex:
+            listings = list(ex.map(mk, range(6)))
+        for i, files in enumerate(listings):
+            assert f"only_{i}.txt" in files
+            assert not files & {f"only_{j}.txt" for j in range(6) if j != i}

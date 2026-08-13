@@ -22,10 +22,14 @@ so a hostile repo name cannot escape the workspace root.
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import os
 import re
 import shutil
 import subprocess
+import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -100,6 +104,45 @@ def _git(*args: str, cwd: Path | None = None, timeout: int = _GIT_TIMEOUT) -> st
     return proc.stdout
 
 
+@contextlib.contextmanager
+def _mirror_lock(mirror: Path, *, timeout: int = 120) -> Iterator[None]:
+    """Serialize mutating git operations against one mirror.
+
+    ``git worktree add`` writes upstream tracking config into the mirror, so two
+    concurrent adds race on ``config.lock`` and one fails with "could not lock
+    config file" — observed under an 8-way concurrent stress run, i.e. two
+    Discord users dispatching on the same repo at the same moment.
+
+    ``flock`` (not an in-process lock) because the racers are separate
+    processes: several nodes share the ``/workspace`` volume on one Docker host.
+    On a single kernel that is exactly the right primitive; a multi-host
+    deployment with a network filesystem would need a real distributed lock.
+    """
+    mirror.mkdir(parents=True, exist_ok=True)
+    lock_path = mirror / "turnstone-worktree.lock"
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise WorkspaceError(
+                        f"timed out waiting {timeout}s for the worktree lock on {mirror.name}"
+                    ) from None
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            with contextlib.suppress(OSError):
+                fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+
+
 def ensure_mirror(repo_id: str, git_url: str) -> Path:
     """Create (or refresh) the bare mirror for *repo_id*.
 
@@ -144,23 +187,31 @@ def create_worktree(
     if wt.exists():
         return WorktreeInfo(ws_id=ws_id, repo_id=repo_id, path=wt, branch=target_branch)
     wt.parent.mkdir(parents=True, exist_ok=True)
-    # Prune first: a worktree dir deleted out from under git leaves a stale
-    # admin entry that makes `worktree add` fail with "already registered".
-    try:
-        _git("--git-dir", str(mirror), "worktree", "prune")
-    except WorkspaceError:
-        log.debug("workspace.prune_failed", repo_id=repo_id, exc_info=True)
-    _git(
-        "--git-dir",
-        str(mirror),
-        "worktree",
-        "add",
-        "--force",
-        "-B",
-        target_branch,
-        str(wt),
-        base_ref,
-    )
+    with _mirror_lock(mirror):
+        # Re-check inside the lock: a concurrent caller for the SAME ws_id may
+        # have created it while we waited.
+        if wt.exists():
+            return WorktreeInfo(ws_id=ws_id, repo_id=repo_id, path=wt, branch=target_branch)
+        # Prune first: a worktree dir deleted out from under git leaves a stale
+        # admin entry that makes `worktree add` fail with "already registered".
+        try:
+            _git("--git-dir", str(mirror), "worktree", "prune")
+        except WorkspaceError:
+            log.debug("workspace.prune_failed", repo_id=repo_id, exc_info=True)
+        _git(
+            "--git-dir",
+            str(mirror),
+            "worktree",
+            "add",
+            "--force",
+            # --no-track avoids writing upstream config into the shared mirror,
+            # which is what made concurrent adds contend on config.lock at all.
+            "--no-track",
+            "-B",
+            target_branch,
+            str(wt),
+            base_ref,
+        )
     _write_local_excludes(mirror)
     log.info("workspace.worktree_created", ws_id=ws_id, repo_id=repo_id, branch=target_branch)
     return WorktreeInfo(ws_id=ws_id, repo_id=repo_id, path=wt, branch=target_branch)
@@ -208,7 +259,8 @@ def remove_worktree(repo_id: str, ws_id: str) -> bool:
         return False
     mirror = mirror_path(repo_id)
     try:
-        _git("--git-dir", str(mirror), "worktree", "remove", "--force", str(wt))
+        with _mirror_lock(mirror):
+            _git("--git-dir", str(mirror), "worktree", "remove", "--force", str(wt))
     except WorkspaceError:
         # Fall back to rm -rf + prune: a corrupt admin entry must not strand
         # the directory forever.
