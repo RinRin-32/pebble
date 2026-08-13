@@ -545,6 +545,36 @@ repos = sa.Table(
     sa.Column("updated", sa.Text, nullable=False),
 )
 
+# Graph knowledge base.  Source of truth is markdown on the /workspace volume
+# (Obsidian dialect: frontmatter + [[wikilinks]]); these tables are a derived
+# index so the link graph can be traversed without re-parsing the vault.
+kb_notes = sa.Table(
+    "kb_notes",
+    metadata,
+    sa.Column("note_id", sa.Text, primary_key=True),
+    sa.Column("title", sa.Text, nullable=False, unique=True),
+    sa.Column("path", sa.Text, nullable=False),
+    sa.Column("kind", sa.Text, nullable=False, server_default="note"),
+    sa.Column("summary", sa.Text, nullable=False, server_default=""),
+    sa.Column("tags", sa.Text, nullable=False, server_default="[]"),
+    sa.Column("ws_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("repo_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.Column("updated", sa.Text, nullable=False),
+)
+
+# to_title is the raw wikilink target, NOT a foreign key: a link may point at a
+# note that doesn't exist yet, and those dangling edges mark where research
+# should go next.
+kb_links = sa.Table(
+    "kb_links",
+    metadata,
+    sa.Column("from_note", sa.Text, nullable=False),
+    sa.Column("to_title", sa.Text, nullable=False),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.PrimaryKeyConstraint("from_note", "to_title"),
+)
+
 # Per-Discord-server (guild) preferences.  Currently just the chosen default
 # persona name used for interactive workstreams when no explicit persona is
 # given; keyed by guild_id so the same linked user can run different personas in

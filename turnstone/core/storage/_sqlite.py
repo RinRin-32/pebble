@@ -38,6 +38,8 @@ from turnstone.core.storage._schema import (
     guild_prefs,
     heuristic_rules,
     intent_verdicts,
+    kb_links,
+    kb_notes,
     mcp_oauth_pending,
     mcp_pending_consent,
     mcp_servers,
@@ -1886,6 +1888,38 @@ class SQLiteBackend:
                     .values(persona=persona, updated=now)
                 )
             conn.commit()
+
+
+    # -- Knowledge-base graph index (derived from the markdown vault) --------
+
+    def replace_kb_index(
+        self, notes: list[dict[str, Any]], links: list[dict[str, Any]]
+    ) -> None:
+        """Atomically rebuild the note/link index.
+
+        The vault files are authoritative; this index is derived, so a full
+        replace is both simplest and self-healing after edits made outside
+        turnstone (e.g. by hand in Obsidian).
+        """
+        with self._conn() as conn:
+            conn.execute(sa.delete(kb_links))
+            conn.execute(sa.delete(kb_notes))
+            if notes:
+                conn.execute(sa.insert(kb_notes), notes)
+            if links:
+                conn.execute(sa.insert(kb_links), links)
+            conn.commit()
+
+    def kb_backlinks(self, title: str) -> list[str]:
+        """Note titles linking TO *title* (uses the indexed edges)."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(kb_notes.c.title)
+                .select_from(kb_links.join(kb_notes, kb_links.c.from_note == kb_notes.c.note_id))
+                .where(kb_links.c.to_title == title)
+                .order_by(kb_notes.c.title)
+            ).fetchall()
+            return [r[0] for r in rows]
 
     # -- Repos (coding-agent dispatch) ---------------------------------------
 

@@ -9837,6 +9837,7 @@ class ChatSession:
             "tts": self._prepare_tts,
             "bind_repo": self._prepare_bind_repo,
             "dispatch_agent": self._prepare_dispatch_agent,
+            "kb": self._prepare_kb,
             "watch": self._prepare_watch,
             "read_resource": self._prepare_read_resource,
             "use_prompt": self._prepare_use_prompt,
@@ -16919,6 +16920,140 @@ class ChatSession:
             f"Text: \"{text[:200]}\""
         )
         return call_id, model_output
+
+    # -- Knowledge base -------------------------------------------------------
+
+    def _prepare_kb(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        action = (args.get("action") or "").strip().lower()
+        valid = {"search", "read", "write", "append", "links", "graph"}
+        if action not in valid:
+            return {
+                "call_id": call_id,
+                "func_name": "kb",
+                "header": f"✗ kb: unknown action {action!r}",
+                "preview": "",
+                "needs_approval": False,
+                "error": f"Error: action must be one of {', '.join(sorted(valid))}",
+            }
+        title = (args.get("title") or "").strip()
+        query = (args.get("query") or "").strip()
+        label = title or query or "(vault)"
+        tags = args.get("tags")
+        return {
+            "call_id": call_id,
+            "func_name": "kb",
+            "header": f"\U0001f4d3 kb {action}: {label}"[:120],
+            "preview": "",
+            # Notes are turnstone-owned data on its own volume, not the user's
+            # repo — recording knowledge shouldn't interrupt with a prompt.
+            "needs_approval": False,
+            "execute": self._exec_kb,
+            "action": action,
+            "title": title,
+            "query": query,
+            "content": args.get("content") or "",
+            "kind": (args.get("kind") or "note").strip() or "note",
+            "summary": (args.get("summary") or "").strip(),
+            "tags": [str(t) for t in tags] if isinstance(tags, list) else [],
+        }
+
+    def _exec_kb(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Read/write the linked markdown knowledge vault."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        action = item["action"]
+        from turnstone.core import knowledge as kb
+
+        def _fail(msg: str) -> tuple[str, str]:
+            self._report_tool_result(call_id, "kb", msg, is_error=True)
+            return call_id, msg
+
+        try:
+            if action == "graph":
+                g = kb.graph_summary()
+                hubs = ", ".join(f"{t} ({n})" for t, n in g["hubs"]) or "(none)"  # type: ignore[union-attr]
+                frontier = ", ".join(f"{t} ({n})" for t, n in g["frontier"]) or "(none)"  # type: ignore[union-attr]
+                orphans = ", ".join(g["orphans"]) or "(none)"  # type: ignore[arg-type]
+                out = (
+                    f"Vault: {g['notes']} notes, {g['links']} links\n"
+                    f"Most-linked: {hubs}\n"
+                    # Dangling targets are the useful frontier: named but unwritten.
+                    f"Frontier (linked but not yet written): {frontier}\n"
+                    f"Orphans (no links either way): {orphans}"
+                )
+            elif action == "search":
+                if not item["query"]:
+                    return _fail("Error: query is required for search")
+                hits = kb.search_notes(item["query"])
+                if not hits:
+                    out = f"No notes match {item['query']!r}. The vault may not cover this yet."
+                else:
+                    lines = [f"{len(hits)} match(es) for {item['query']!r}:"]
+                    for note, score in hits:
+                        detail = note.summary or note.body.strip().split("\n")[0][:100]
+                        lines.append(f"  [[{note.title}]] ({note.kind}, score {score}) — {detail}")
+                    out = "\n".join(lines)
+            elif action == "read":
+                if not item["title"]:
+                    return _fail("Error: title is required for read")
+                note = kb.read_note(item["title"])
+                if note is None:
+                    out = f"No note titled {item['title']!r}."
+                else:
+                    out = (
+                        f"# {note.title}\nkind: {note.kind}"
+                        f"{f' | tags: {', '.join(note.tags)}' if note.tags else ''}\n\n"
+                        f"{note.body.strip()}"
+                    )
+            elif action == "links":
+                if not item["title"]:
+                    return _fail("Error: title is required for links")
+                n = kb.neighbours(item["title"])
+                out = (
+                    f"[[{item['title']}]]\n"
+                    f"  links to: {', '.join(n['outgoing']) or '(none)'}\n"
+                    f"  linked from: {', '.join(n['backlinks']) or '(none)'}\n"
+                    f"  dangling (not yet written): {', '.join(n['dangling']) or '(none)'}"
+                )
+            else:  # write / append
+                if not item["title"]:
+                    return _fail(f"Error: title is required for {action}")
+                if not item["content"].strip():
+                    return _fail(f"Error: content is required for {action}")
+                note = kb.Note(
+                    title=item["title"],
+                    body=item["content"],
+                    kind=item["kind"],
+                    summary=item["summary"],
+                    tags=item["tags"],
+                    ws_id=self._ws_id,
+                    repo_id=self._bound_repo_id(),
+                )
+                path = kb.write_note(note, append=(action == "append"))
+                links = kb.extract_links(item["content"])
+                # Keep the DB graph index in step with the files it mirrors.
+                try:
+                    from turnstone.core.storage._registry import get_storage
+
+                    storage = get_storage()
+                    if storage is not None:
+                        kb.sync_index(storage)
+                except Exception:
+                    log.debug("kb.index_sync_failed", exc_info=True)
+                out = (
+                    f"{'Appended to' if action == 'append' else 'Wrote'} [[{item['title']}]] "
+                    f"({path.name})"
+                    + (f"\nLinks: {', '.join(links)}" if links else "\nNo outgoing links yet.")
+                )
+        except kb.KnowledgeError as exc:
+            return _fail(f"Error: {exc}")
+        except Exception as exc:
+            log.warning("kb.failed", action=action, exc_info=True)
+            return _fail(f"Error: knowledge base {action} failed: {exc}")
+
+        out = self._truncate_output(out)
+        self._report_tool_result(call_id, "kb", out)
+        return call_id, out
 
     # -- Coding-agent dispatch ------------------------------------------------
 

@@ -1,0 +1,50 @@
+{
+  "name": "kb",
+  "description": "Read and write the persistent graph knowledge base — a growing set of linked notes that survives across sessions. Use it to record research findings, architecture decisions, and what you learn about a codebase, then link notes together with [[Wikilinks]] so related knowledge connects up over time. Search it BEFORE researching something from scratch: a prior session may have already answered it. Actions: 'search' (find notes), 'read' (one note), 'write' (create/replace), 'append' (add to an existing note — preferred for iterative research), 'links' (a note's outgoing links, backlinks and dangling targets), 'graph' (whole-vault shape: hubs, orphans, and the frontier of not-yet-written notes).",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "What to do.",
+        "enum": ["search", "read", "write", "append", "links", "graph"]
+      },
+      "title": {
+        "type": "string",
+        "description": "Note title — the wikilink identity. Required for read/write/append/links.",
+        "default": ""
+      },
+      "content": {
+        "type": "string",
+        "description": "Markdown body for write/append. Link to other notes with [[Their Title]]; linking generously is the point.",
+        "default": ""
+      },
+      "query": {
+        "type": "string",
+        "description": "Search text for action='search'.",
+        "default": ""
+      },
+      "kind": {
+        "type": "string",
+        "description": "Classification for a written note, e.g. research, decision, codebase, howto.",
+        "default": "note"
+      },
+      "summary": {
+        "type": "string",
+        "description": "One-line summary stored in frontmatter, shown in search results.",
+        "default": ""
+      },
+      "tags": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Optional tags for grouping.",
+        "default": []
+      }
+    },
+    "required": ["action"]
+  },
+  "interactive": true,
+  "coordinator": true,
+  "task_agent": true,
+  "primary_key": "action"
+}
