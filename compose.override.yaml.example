@@ -1,0 +1,49 @@
+# Local overrides for coding-agent dispatch.  Copy to compose.override.yaml
+# (which is gitignored, because it contains paths specific to your machine):
+#
+#     cp compose.override.yaml.example compose.override.yaml
+#
+# Docker Compose merges compose.override.yaml automatically, so no extra flags.
+# Everything here is OPTIONAL — the stack starts without it, and dispatch simply
+# falls back to API keys from .env instead of your host logins.
+services:
+  # Reuse the operator's HOST agent logins inside the containers, so dispatch
+  # can bill a Claude subscription instead of an API key.
+  #
+  # Three things that will otherwise cost you an hour:
+  #
+  #  * ~/.claude is mounted READ-WRITE on purpose: Claude Code refreshes its
+  #    OAuth token in place, so a read-only mount works right up until the token
+  #    expires and then fails.
+  #  * The container runs as uid 1000. On a single-user Linux host that matches;
+  #    if your uid differs the mount will be unreadable.
+  #  * Mount the opencode auth FILE, not its directory. Docker creates a missing
+  #    bind-mount parent as root, and opencode then cannot create its own state
+  #    beside the credential file — it dies with EACCES on startup.
+  #
+  # Every node needs these: a workstream can be served by any of them.
+  node-1:
+    volumes: &agent-volumes
+      - turnstone-data:/data
+      - ${WORKSPACE_MOUNT:-workspace}:/workspace
+      - nix-store:/nix
+      - ${HOME}/.claude:/home/turnstone/.claude
+      - ${HOME}/.claude.json:/home/turnstone/.claude.json
+      - ${HOME}/.local/share/opencode/auth.json:/home/turnstone/.local/share/opencode/auth.json:ro
+  node-2:
+    volumes: *agent-volumes
+  node-3:
+    volumes: *agent-volumes
+  node-4:
+    volumes: *agent-volumes
+  node-5:
+    volumes: *agent-volumes
+  node-6:
+    volumes: *agent-volumes
+
+  # Keep `docker compose up -d` at 6 nodes; the rest stay behind a profile:
+  #   docker compose --profile extra up -d
+  node-7: { profiles: ["extra"] }
+  node-8: { profiles: ["extra"] }
+  node-9: { profiles: ["extra"] }
+  node-10: { profiles: ["extra"] }
