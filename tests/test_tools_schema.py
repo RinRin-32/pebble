@@ -60,16 +60,17 @@ class TestToolsMetadata:
     """Validate the metadata extracted from JSON files."""
 
     def test_tool_count(self):
-        # 19 interactive tools + 12 coordinator-only tools.
-        assert len(TOOLS) == 31
+        # Grew with the coding-dispatch tools (bind_repo, setup_env,
+        # dispatch_agent), the knowledge base (kb) and tts.
+        assert len(TOOLS) == 36
 
     def test_task_agent_tools_count(self):
-        assert len(TASK_AGENT_TOOLS) == 13
+        assert len(TASK_AGENT_TOOLS) == 15
 
     def test_coordinator_tools_count(self):
         from turnstone.core.tools import COORDINATOR_TOOLS
 
-        assert len(COORDINATOR_TOOLS) == 15
+        assert len(COORDINATOR_TOOLS) == 16
         assert {t["function"]["name"] for t in COORDINATOR_TOOLS} == {
             "spawn_workstream",
             "spawn_batch",
@@ -99,6 +100,7 @@ class TestToolsMetadata:
             # failed, phase done) without spawning a child purely to
             # ship a message.  Routing logic is session-kind-agnostic.
             "notify",
+                    "kb",
         }
 
     def test_auto_approve_sets_match(self):
@@ -154,6 +156,12 @@ class TestToolsMetadata:
             "cancel_workstream": "ws_id",
             "delete_workstream": "ws_id",
             "tasks": "action",
+            "tts": "text",
+            # Knowledge base + coding dispatch:
+            "kb": "action",
+            "bind_repo": "repo",
+            "setup_env": "action",
+            "dispatch_agent": "task",
         }
         assert expected == PRIMARY_KEY_MAP
 
