@@ -1,12 +1,12 @@
 {
   "name": "bind_repo",
-  "description": "Bind this workstream to a git repository and check out an isolated worktree for it. Every shell command and file tool in this workstream then runs inside that checkout. Call this before dispatch_agent. With no arguments it reports the current binding and lists the repos available on this server.",
+  "description": "Bind this workstream to a git repository and check out an isolated worktree for it. Every shell command and file tool in this workstream then runs inside that checkout. Call this before setup_env and dispatch_agent. ALWAYS pass the 'repo' argument \u2014 omitting it does NOT bind anything, it only reports the current binding and lists available repos.",
   "parameters": {
     "type": "object",
     "properties": {
       "repo": {
         "type": "string",
-        "description": "Name of a repo registered on this server. Omit to show the current binding and the available repos.",
+        "description": "Name of a repo registered on this server. Pass this to actually bind. Omit ONLY when you want a read-only status report of the current binding and the available repos.",
         "default": ""
       },
       "base_ref": {

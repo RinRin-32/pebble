@@ -1,6 +1,6 @@
 {
   "name": "spawn_batch",
-  "description": "Create up to 10 child workstreams in one call. Serialised in input order so sibling ordering (by `created_at`) is deterministic. Returns `{results: {idx: {child_ws_id, name, node_id}}, denied: [{idx, reason}]}` — `results` keyed by stringified input-array index, `denied` collects per-item validation / spawn failures. Collect the `child_ws_id` values and pass them as a list to `wait_for_workstream(ws_ids=[...], mode='all')` to synthesise the N outputs once every child has finished. For >10 children make multiple calls (the batch hard-errors rather than truncating). Lifecycle state at spawn isn't returned — call inspect_workstream if you need it.",
+  "description": "Create up to 10 child workstreams in one call. Serialised in input order so sibling ordering (by `created_at`) is deterministic. Returns `{results: {idx: {child_ws_id, name, node_id}}, denied: [{idx, reason}]}` \u2014 `results` keyed by stringified input-array index, `denied` collects per-item validation / spawn failures. Collect the `child_ws_id` values and pass them as a list to `wait_for_workstream(ws_ids=[...], mode='all')` to synthesise the N outputs once every child has finished. For >10 children make multiple calls (the batch hard-errors rather than truncating). Lifecycle state at spawn isn't returned \u2014 call inspect_workstream if you need it.",
   "parameters": {
     "type": "object",
     "properties": {
@@ -12,7 +12,7 @@
           "properties": {
             "initial_message": {
               "type": "string",
-              "description": "First user message to dispatch. Empty → idle child."
+              "description": "First user message to dispatch. Empty \u2192 idle child."
             },
             "skill": {
               "type": "string",
@@ -28,11 +28,11 @@
             },
             "target_node": {
               "type": "string",
-              "description": "Optional node_id hint. Pinning is hard — if the named node has dropped the 120s registry heartbeat between list_nodes and this spawn, the item lands in denied[] with a `No available node for routing` reason. Omit unless the workload truly requires that node."
+              "description": "Optional node_id hint. Pinning is hard \u2014 if the named node has dropped the 120s registry heartbeat between list_nodes and this spawn, the item lands in denied[] with a `No available node for routing` reason. Omit unless the workload truly requires that node."
             },
             "persona": {
               "type": "string",
-              "description": "Optional persona name for the child (must apply to interactive workstreams). Snapshotted at spawn; invalid names land in denied[]. Omit for the interactive default — children never inherit this coordinator's persona."
+              "description": "Persona for the child. Use 'dispatcher' for CODING work: it can bind a repo, provision a toolchain, brief and review a dispatched agent, but structurally cannot edit files itself \u2014 which keeps the work on the dispatch path instead of being done invisibly in the child. Leave blank for research or analysis children."
             }
           },
           "required": []
@@ -41,7 +41,9 @@
         "maxItems": 10
       }
     },
-    "required": ["children"]
+    "required": [
+      "children"
+    ]
   },
   "coordinator": true,
   "primary_key": "children"

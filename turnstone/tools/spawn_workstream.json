@@ -1,6 +1,6 @@
 {
   "name": "spawn_workstream",
-  "description": "Create a new child workstream, optionally dispatching an initial message. Kick off a focused sub-task on a different skill / model / node while the coordinator stays in charge. The child runs independently — drive it with send_to_workstream / inspect_workstream / close_workstream. Returns `{child_ws_id, name, node_id, routing_strategy}` — pass `child_ws_id` into `wait_for_workstream(ws_ids=[...])` and the other `ws_id`-taking tools. `routing_strategy` is `rendezvous` (default placement on the live-node set), `target_node` (your hint was honored), or `resume` (rebound to a still-alive prior owner on rehydrate). The returned `node_id` is the spawn-time binding; subsequent ops re-route via rendezvous over the live-node set, so a node join or drop after spawn can shift the active owner. Conversation state lives in storage (the new owner rehydrates lazily). Don't cache `node_id` for long-running callbacks — re-read with inspect_workstream. Lifecycle state (idle / running / etc.) is not in this response — read it via inspect_workstream.",
+  "description": "Create a new child workstream, optionally dispatching an initial message. Kick off a focused sub-task on a different skill / model / node while the coordinator stays in charge. The child runs independently \u2014 drive it with send_to_workstream / inspect_workstream / close_workstream. Returns `{child_ws_id, name, node_id, routing_strategy}` \u2014 pass `child_ws_id` into `wait_for_workstream(ws_ids=[...])` and the other `ws_id`-taking tools. `routing_strategy` is `rendezvous` (default placement on the live-node set), `target_node` (your hint was honored), or `resume` (rebound to a still-alive prior owner on rehydrate). The returned `node_id` is the spawn-time binding; subsequent ops re-route via rendezvous over the live-node set, so a node join or drop after spawn can shift the active owner. Conversation state lives in storage (the new owner rehydrates lazily). Don't cache `node_id` for long-running callbacks \u2014 re-read with inspect_workstream. Lifecycle state (idle / running / etc.) is not in this response \u2014 read it via inspect_workstream.",
   "parameters": {
     "type": "object",
     "properties": {
@@ -22,7 +22,7 @@
       },
       "target_node": {
         "type": "string",
-        "description": "Optional node_id hint. When provided, the routing proxy pins the workstream to that node by generating a ws_id that rendezvous-hashes onto it. Otherwise rendezvous picks deterministically from the live-node set. CAVEAT: pinning is a hard constraint — if the named node has dropped out of the 120s service-registry heartbeat window between your `list_nodes` call and this spawn, the spawn fails with \"No available node for routing\" rather than falling back. Omit `target_node` if you can tolerate landing on any node; pin only when the workload truly requires that specific node's capabilities/region/tenancy."
+        "description": "Optional node_id hint. When provided, the routing proxy pins the workstream to that node by generating a ws_id that rendezvous-hashes onto it. Otherwise rendezvous picks deterministically from the live-node set. CAVEAT: pinning is a hard constraint \u2014 if the named node has dropped out of the 120s service-registry heartbeat window between your `list_nodes` call and this spawn, the spawn fails with \"No available node for routing\" rather than falling back. Omit `target_node` if you can tolerate landing on any node; pin only when the workload truly requires that specific node's capabilities/region/tenancy."
       },
       "project": {
         "type": "string",
@@ -30,7 +30,7 @@
       },
       "persona": {
         "type": "string",
-        "description": "Optional persona name for the child (children are always interactive-kind, so the persona must apply to interactive workstreams). The persona is resolved and snapshotted at spawn time. Omit for the interactive default persona — the child never inherits this coordinator's persona."
+        "description": "Persona for the child. Use 'dispatcher' for CODING work: it can bind a repo, provision a toolchain, brief and review a dispatched agent, but structurally cannot edit files itself \u2014 which keeps the work on the dispatch path instead of being done invisibly in the child. Leave blank for research or analysis children."
       }
     },
     "required": []
