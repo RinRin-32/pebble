@@ -90,8 +90,9 @@ RUN mkdir -p /workspace && chown turnstone:turnstone /workspace
 RUN npm install -g --no-fund --no-audit \
         @anthropic-ai/claude-code \
         opencode-ai \
+        @colbymchenry/codegraph \
     && npm cache clean --force \
-    && claude --version && opencode --version
+    && claude --version && opencode --version && codegraph --version
 
 USER turnstone
 
