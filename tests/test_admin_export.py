@@ -23,8 +23,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from turnstone.admin import _cmd_export
-from turnstone.core.storage import init_storage, reset_storage
+from pebble.admin import _cmd_export
+from pebble.core.storage import init_storage, reset_storage
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -45,7 +45,7 @@ def _export_args(db_path: str, ws_id: str, *, children: bool, output: str) -> ar
     ``_get_storage`` reads each DB field with ``getattr(args, name, None)``
     and only falls back to the env var when the attribute ``is None``.
     Pinning the string fields to ``""`` therefore short-circuits any
-    ``TURNSTONE_DB_*`` env leakage; ``db_backend``/``db_path`` point the
+    ``PEBBLE_DB_*`` env leakage; ``db_backend``/``db_path`` point the
     backend at the tmp sqlite file.
     """
     return argparse.Namespace(

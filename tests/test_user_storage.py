@@ -130,7 +130,7 @@ class TestWorkstreamUserId:
         db.register_workstream("ws1", user_id="u1")
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import workstreams
+        from pebble.core.storage._schema import workstreams
 
         with db._engine.connect() as conn:
             row = conn.execute(
@@ -143,7 +143,7 @@ class TestWorkstreamUserId:
         db.register_workstream("ws1")
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import workstreams
+        from pebble.core.storage._schema import workstreams
 
         with db._engine.connect() as conn:
             row = conn.execute(

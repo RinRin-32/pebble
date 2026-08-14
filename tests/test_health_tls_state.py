@@ -18,7 +18,7 @@ import pytest
 def make_client():
     from starlette.testclient import TestClient
 
-    from turnstone.server import create_app
+    from pebble.server import create_app
 
     clients = []
 

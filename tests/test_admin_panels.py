@@ -12,10 +12,16 @@ from typing import Any
 
 def _note(backend: Any, note_id: str, title: str, **over: Any) -> dict[str, Any]:
     row = {
-        "note_id": note_id, "title": title, "path": f"/kb/{note_id}.md",
-        "kind": "experiment", "summary": "ok", "tags": "[]",
-        "ws_id": "", "repo_id": over.pop("repo_id", "r1"),
-        "created": "2026-08-14T00:00:00", "updated": "2026-08-14T00:00:00",
+        "note_id": note_id,
+        "title": title,
+        "path": f"/kb/{note_id}.md",
+        "kind": "experiment",
+        "summary": "ok",
+        "tags": "[]",
+        "ws_id": "",
+        "repo_id": over.pop("repo_id", "r1"),
+        "created": "2026-08-14T00:00:00",
+        "updated": "2026-08-14T00:00:00",
     }
     row.update(over)
     return row
@@ -71,8 +77,11 @@ class TestCodingJobs:
 
     def test_carries_repo_env_and_model(self, backend: Any) -> None:
         self._ws(
-            backend, "wsfull",
-            repo_id="kokoro-go", nix_env="go-dev", model_alias="deepseek-v4-or",
+            backend,
+            "wsfull",
+            repo_id="kokoro-go",
+            nix_env="go-dev",
+            model_alias="deepseek-v4-or",
         )
         job = next(j for j in backend.coding_jobs() if j["ws_id"] == "wsfull")
         assert job["repo"] == "kokoro-go"

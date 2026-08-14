@@ -1,14 +1,14 @@
-"""Tests for turnstone.core.memory — database operations."""
+"""Tests for pebble.core.memory — database operations."""
 
 import sqlalchemy as sa
 
-from turnstone.core.memory import (
+from pebble.core.memory import (
     normalize_key,
     save_message,
     search_history,
     search_history_recent,
 )
-from turnstone.core.storage import get_storage
+from pebble.core.storage import get_storage
 
 
 class TestSchemaCreation:

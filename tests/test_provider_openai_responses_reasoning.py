@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.providers._openai_responses import (
+from pebble.core.providers._openai_responses import (
     OpenAIResponsesProvider,
     _reasoning_item_for_input,
 )
-from turnstone.core.providers._protocol import (
+from pebble.core.providers._protocol import (
     MAX_REASONING_DISPLAY_CHARS as _MAX_REASONING_DISPLAY_CHARS,
 )
-from turnstone.core.providers._protocol import ModelCapabilities
+from pebble.core.providers._protocol import ModelCapabilities
 
 
 @pytest.fixture

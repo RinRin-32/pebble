@@ -31,31 +31,31 @@ are set.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `TURNSTONE_OIDC_ISSUER` | Yes | — | Issuer URL (e.g. `https://accounts.google.com`). Must serve `/.well-known/openid-configuration`. |
-| `TURNSTONE_OIDC_CLIENT_ID` | Yes | — | OAuth 2.0 client ID from your provider |
-| `TURNSTONE_OIDC_CLIENT_SECRET` | Yes | — | OAuth 2.0 client secret (confidential client) |
-| `TURNSTONE_OIDC_SCOPES` | No | `openid email profile` | Space-separated OAuth scopes to request |
-| `TURNSTONE_OIDC_PROVIDER_NAME` | No | `SSO` | Display name for the login button (e.g. "Google", "Okta") |
-| `TURNSTONE_OIDC_ROLE_CLAIM` | No | — | ID token claim containing role/group values (see [Role Mapping](#role-mapping)) |
-| `TURNSTONE_OIDC_ROLE_MAP` | No | — | Mapping from claim values to Turnstone role IDs (see [Role Mapping](#role-mapping)) |
-| `TURNSTONE_OIDC_PASSWORD_ENABLED` | No | `true` | Set to `false` to hide the password form and block all username/password logins (including admin). API tokens continue to work. |
-| `TURNSTONE_OIDC_REDIRECT_BASE` | Yes | — | Externally-reachable origin for the OIDC redirect URI (e.g. `https://app.example.com`). Without this, OIDC will refuse to start. The previous Host-header fallback was unsafe under permissive reverse proxies. |
-| `TURNSTONE_OIDC_TRUSTED_ENDPOINT_HOSTS` | No | — | Comma-separated list of additional hostnames whose endpoints the IdP discovery document is allowed to reference. See [Cross-host endpoints](#cross-host-endpoints). |
-| `TURNSTONE_OIDC_ALLOW_PRIVATE_NETWORK` | No | `false` | Allow the issuer (and its discovered endpoints) to resolve to private/internal addresses — needed for a self-hosted IdP on an internal network. See [Self-hosted and internal IdPs](#self-hosted-and-internal-idps). |
+| `PEBBLE_OIDC_ISSUER` | Yes | — | Issuer URL (e.g. `https://accounts.google.com`). Must serve `/.well-known/openid-configuration`. |
+| `PEBBLE_OIDC_CLIENT_ID` | Yes | — | OAuth 2.0 client ID from your provider |
+| `PEBBLE_OIDC_CLIENT_SECRET` | Yes | — | OAuth 2.0 client secret (confidential client) |
+| `PEBBLE_OIDC_SCOPES` | No | `openid email profile` | Space-separated OAuth scopes to request |
+| `PEBBLE_OIDC_PROVIDER_NAME` | No | `SSO` | Display name for the login button (e.g. "Google", "Okta") |
+| `PEBBLE_OIDC_ROLE_CLAIM` | No | — | ID token claim containing role/group values (see [Role Mapping](#role-mapping)) |
+| `PEBBLE_OIDC_ROLE_MAP` | No | — | Mapping from claim values to Turnstone role IDs (see [Role Mapping](#role-mapping)) |
+| `PEBBLE_OIDC_PASSWORD_ENABLED` | No | `true` | Set to `false` to hide the password form and block all username/password logins (including admin). API tokens continue to work. |
+| `PEBBLE_OIDC_REDIRECT_BASE` | Yes | — | Externally-reachable origin for the OIDC redirect URI (e.g. `https://app.example.com`). Without this, OIDC will refuse to start. The previous Host-header fallback was unsafe under permissive reverse proxies. |
+| `PEBBLE_OIDC_TRUSTED_ENDPOINT_HOSTS` | No | — | Comma-separated list of additional hostnames whose endpoints the IdP discovery document is allowed to reference. See [Cross-host endpoints](#cross-host-endpoints). |
+| `PEBBLE_OIDC_ALLOW_PRIVATE_NETWORK` | No | `false` | Allow the issuer (and its discovered endpoints) to resolve to private/internal addresses — needed for a self-hosted IdP on an internal network. See [Self-hosted and internal IdPs](#self-hosted-and-internal-idps). |
 
 All four required fields — issuer, client ID, client secret, and
-`TURNSTONE_OIDC_REDIRECT_BASE` — must be set. If any are missing OIDC
+`PEBBLE_OIDC_REDIRECT_BASE` — must be set. If any are missing OIDC
 is disabled at startup (an error is logged when only `redirect_base`
 is missing) and the login screen shows only the password form.
 
 ### Redirect base (required)
 
-`TURNSTONE_OIDC_REDIRECT_BASE` pins the redirect URI sent to the identity
+`PEBBLE_OIDC_REDIRECT_BASE` pins the redirect URI sent to the identity
 provider to a known externally-visible origin. Set it to the public origin
 of your Turnstone deployment:
 
 ```bash
-TURNSTONE_OIDC_REDIRECT_BASE=https://app.example.com
+PEBBLE_OIDC_REDIRECT_BASE=https://app.example.com
 ```
 
 The resulting callback URL will be
@@ -93,7 +93,7 @@ For other IdPs whose discovery document references a non-issuer host,
 extend the allow-list explicitly:
 
 ```bash
-TURNSTONE_OIDC_TRUSTED_ENDPOINT_HOSTS=token.example.com,keys.example.com
+PEBBLE_OIDC_TRUSTED_ENDPOINT_HOSTS=token.example.com,keys.example.com
 ```
 
 The same scheme / no-userinfo / SSRF rules apply to allow-listed hosts —
@@ -121,7 +121,7 @@ opt in explicitly in `config.toml`:
 allow_private_network = true
 ```
 
-or via `TURNSTONE_OIDC_ALLOW_PRIVATE_NETWORK=true` (the env var wins
+or via `PEBBLE_OIDC_ALLOW_PRIVATE_NETWORK=true` (the env var wins
 when both are set).
 
 The opt-in admits private-range (RFC 1918), unique-local, CGNAT
@@ -169,10 +169,10 @@ engineering = "builtin-operator"
 5. Copy the **Client ID** and **Client secret**
 
 ```bash
-TURNSTONE_OIDC_ISSUER=https://accounts.google.com
-TURNSTONE_OIDC_CLIENT_ID=123456789.apps.googleusercontent.com
-TURNSTONE_OIDC_CLIENT_SECRET=GOCSPX-...
-TURNSTONE_OIDC_PROVIDER_NAME=Google
+PEBBLE_OIDC_ISSUER=https://accounts.google.com
+PEBBLE_OIDC_CLIENT_ID=123456789.apps.googleusercontent.com
+PEBBLE_OIDC_CLIENT_SECRET=GOCSPX-...
+PEBBLE_OIDC_PROVIDER_NAME=Google
 ```
 
 ### Okta
@@ -187,12 +187,12 @@ TURNSTONE_OIDC_PROVIDER_NAME=Google
    `https://dev-123456.okta.com`)
 
 ```bash
-TURNSTONE_OIDC_ISSUER=https://dev-123456.okta.com
-TURNSTONE_OIDC_CLIENT_ID=0oaXXXXXXXXXXXXX
-TURNSTONE_OIDC_CLIENT_SECRET=...
-TURNSTONE_OIDC_PROVIDER_NAME=Okta
-TURNSTONE_OIDC_ROLE_CLAIM=groups
-TURNSTONE_OIDC_ROLE_MAP="admin:builtin-admin,everyone:builtin-operator"
+PEBBLE_OIDC_ISSUER=https://dev-123456.okta.com
+PEBBLE_OIDC_CLIENT_ID=0oaXXXXXXXXXXXXX
+PEBBLE_OIDC_CLIENT_SECRET=...
+PEBBLE_OIDC_PROVIDER_NAME=Okta
+PEBBLE_OIDC_ROLE_CLAIM=groups
+PEBBLE_OIDC_ROLE_MAP="admin:builtin-admin,everyone:builtin-operator"
 ```
 
 ### Azure AD (Entra ID)
@@ -206,12 +206,12 @@ TURNSTONE_OIDC_ROLE_MAP="admin:builtin-admin,everyone:builtin-operator"
    `https://login.microsoftonline.com/{tenant-id}/v2.0`
 
 ```bash
-TURNSTONE_OIDC_ISSUER=https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0
-TURNSTONE_OIDC_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-TURNSTONE_OIDC_CLIENT_SECRET=...
-TURNSTONE_OIDC_PROVIDER_NAME="Azure AD"
-TURNSTONE_OIDC_ROLE_CLAIM=roles
-TURNSTONE_OIDC_ROLE_MAP="Admin:builtin-admin,User:builtin-operator"
+PEBBLE_OIDC_ISSUER=https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0
+PEBBLE_OIDC_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+PEBBLE_OIDC_CLIENT_SECRET=...
+PEBBLE_OIDC_PROVIDER_NAME="Azure AD"
+PEBBLE_OIDC_ROLE_CLAIM=roles
+PEBBLE_OIDC_ROLE_MAP="Admin:builtin-admin,User:builtin-operator"
 ```
 
 ### Keycloak
@@ -226,12 +226,12 @@ TURNSTONE_OIDC_ROLE_MAP="Admin:builtin-admin,User:builtin-operator"
    `https://keycloak.example.com/realms/your-realm`
 
 ```bash
-TURNSTONE_OIDC_ISSUER=https://keycloak.example.com/realms/your-realm
-TURNSTONE_OIDC_CLIENT_ID=turnstone
-TURNSTONE_OIDC_CLIENT_SECRET=...
-TURNSTONE_OIDC_PROVIDER_NAME=Keycloak
-TURNSTONE_OIDC_ROLE_CLAIM=realm_access.roles
-TURNSTONE_OIDC_ROLE_MAP="admin:builtin-admin,operator:builtin-operator"
+PEBBLE_OIDC_ISSUER=https://keycloak.example.com/realms/your-realm
+PEBBLE_OIDC_CLIENT_ID=turnstone
+PEBBLE_OIDC_CLIENT_SECRET=...
+PEBBLE_OIDC_PROVIDER_NAME=Keycloak
+PEBBLE_OIDC_ROLE_CLAIM=realm_access.roles
+PEBBLE_OIDC_ROLE_MAP="admin:builtin-admin,operator:builtin-operator"
 ```
 
 ---
@@ -244,16 +244,16 @@ the `builtin-viewer` role (read-only access) by default.
 
 ### Configuration
 
-Set `TURNSTONE_OIDC_ROLE_CLAIM` to the name of the claim in the ID token
+Set `PEBBLE_OIDC_ROLE_CLAIM` to the name of the claim in the ID token
 that contains the user's group or role memberships. Then set
-`TURNSTONE_OIDC_ROLE_MAP` to map claim values to Turnstone role IDs.
+`PEBBLE_OIDC_ROLE_MAP` to map claim values to Turnstone role IDs.
 
 The role map is a comma-separated list of `claim_value:turnstone_role`
 pairs:
 
 ```bash
-TURNSTONE_OIDC_ROLE_CLAIM=groups
-TURNSTONE_OIDC_ROLE_MAP="admin:builtin-admin,engineering:builtin-operator,viewer:builtin-viewer"
+PEBBLE_OIDC_ROLE_CLAIM=groups
+PEBBLE_OIDC_ROLE_MAP="admin:builtin-admin,engineering:builtin-operator,viewer:builtin-viewer"
 ```
 
 ### Behavior
@@ -322,7 +322,7 @@ every login.
 To enforce OIDC for all logins and hide the password form, set:
 
 ```bash
-TURNSTONE_OIDC_PASSWORD_ENABLED=false
+PEBBLE_OIDC_PASSWORD_ENABLED=false
 ```
 
 In this mode the login screen shows only the "Continue with SSO" button.
@@ -465,14 +465,14 @@ callback validation. Entries are automatically cleaned up after 5 minutes.
 ### "OIDC not configured"
 
 All four required environment variables must be set:
-`TURNSTONE_OIDC_ISSUER`, `TURNSTONE_OIDC_CLIENT_ID`,
-`TURNSTONE_OIDC_CLIENT_SECRET`, and `TURNSTONE_OIDC_REDIRECT_BASE`.
+`PEBBLE_OIDC_ISSUER`, `PEBBLE_OIDC_CLIENT_ID`,
+`PEBBLE_OIDC_CLIENT_SECRET`, and `PEBBLE_OIDC_REDIRECT_BASE`.
 Check that none are empty or whitespace-only.
 
-### "OIDC enabled but TURNSTONE_OIDC_REDIRECT_BASE is unset"
+### "OIDC enabled but PEBBLE_OIDC_REDIRECT_BASE is unset"
 
 This error is logged when the three credential variables are set but
-`TURNSTONE_OIDC_REDIRECT_BASE` is missing. OIDC is disabled at startup
+`PEBBLE_OIDC_REDIRECT_BASE` is missing. OIDC is disabled at startup
 to prevent Host-header-derived redirect URI spoofing. Set the variable
 to your service's externally-visible origin (e.g.
 `https://app.example.com`) and restart the server. See
@@ -483,7 +483,7 @@ to your service's externally-visible origin (e.g.
 The IdP discovery document points `token_endpoint`, `jwks_uri`, or
 `userinfo_endpoint` at a hostname that doesn't share the issuer's
 origin. If the IdP is legitimate, add the additional hostname(s) to
-`TURNSTONE_OIDC_TRUSTED_ENDPOINT_HOSTS`. Google is allow-listed
+`PEBBLE_OIDC_TRUSTED_ENDPOINT_HOSTS`. Google is allow-listed
 automatically; see [Cross-host endpoints](#cross-host-endpoints).
 
 ### "Login session expired"
@@ -525,9 +525,9 @@ The redirect URI configured at the identity provider must exactly match
 
 Check that:
 
-1. `TURNSTONE_OIDC_ROLE_CLAIM` matches the exact claim name in the ID
+1. `PEBBLE_OIDC_ROLE_CLAIM` matches the exact claim name in the ID
    token (case-sensitive)
-2. `TURNSTONE_OIDC_ROLE_MAP` maps the correct claim values to valid
+2. `PEBBLE_OIDC_ROLE_MAP` maps the correct claim values to valid
    Turnstone role IDs
 3. The roles referenced in the map exist in the database (check the
    admin panel > Roles tab)

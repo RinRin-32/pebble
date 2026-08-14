@@ -26,8 +26,8 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.lowering import repair_wire_messages
-from turnstone.core.providers._anthropic import (
+from pebble.core.lowering import repair_wire_messages
+from pebble.core.providers._anthropic import (
     ANTHROPIC_REASONING_BLOCK_TYPES,
     ANTHROPIC_VALID_BLOCK_TYPES,
     AnthropicProvider,

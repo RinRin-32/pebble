@@ -13,8 +13,8 @@ import threading
 from typing import Any
 from unittest.mock import MagicMock
 
-from turnstone.console.coordinator_adapter import CoordinatorAdapter
-from turnstone.core.workstream import Workstream, WorkstreamKind, WorkstreamState
+from pebble.console.coordinator_adapter import CoordinatorAdapter
+from pebble.core.workstream import Workstream, WorkstreamKind, WorkstreamState
 
 
 class _StubCoordUI:
@@ -97,7 +97,7 @@ def test_emit_created_seeds_resolved_display_name(tmp_path: Any) -> None:
     ``ws-xxxx``.  Regression guard for the adapter half of the
     coordinator-title-persistence fix — the server-side ``_coordinator_rows``
     half is pinned in test_coordinator_endpoints.py."""
-    from turnstone.core.storage import init_storage, reset_storage
+    from pebble.core.storage import init_storage, reset_storage
 
     reset_storage()
     backend = init_storage("sqlite", path=str(tmp_path / "adapter.db"), run_migrations=False)
@@ -132,8 +132,8 @@ def test_coord_display_name_skips_uninitialized_storage() -> None:
     get_storage()'s SQLite auto-init (a stray .turnstone.db in the CWD) when
     storage isn't initialized — it falls back to the placeholder ws.name and
     leaves storage untouched."""
-    from turnstone.console.coordinator_adapter import _coord_display_name
-    from turnstone.core.storage import is_storage_initialized, reset_storage
+    from pebble.console.coordinator_adapter import _coord_display_name
+    from pebble.core.storage import is_storage_initialized, reset_storage
 
     reset_storage()
     assert not is_storage_initialized()
@@ -514,7 +514,7 @@ class TestCoordinatorAdapterChildrenRegistry:
     def test_prime_children_from_snapshot_merges_without_overwriting(self) -> None:
         # Snapshot priming now lives on ClusterChildSource (production
         # path). The adapter no longer carries its own duplicate copy.
-        from turnstone.core.child_source import ClusterChildSource
+        from pebble.core.child_source import ClusterChildSource
 
         adapter, _ = _make_adapter()
         adapter._registry.merge_children("coord-a", ["child-a1"])

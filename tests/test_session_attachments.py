@@ -6,20 +6,20 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests._session_helpers import as_stream, mock_completion_result
-from turnstone.core import perception
-from turnstone.core.attachments import Attachment
-from turnstone.core.memory import (
+from pebble.core import perception
+from pebble.core.attachments import Attachment
+from pebble.core.memory import (
     get_attachment,
     register_workstream,
 )
-from turnstone.core.providers._protocol import ModelCapabilities
-from turnstone.core.session import ChatSession
-from turnstone.core.trajectory import (
+from pebble.core.providers._protocol import ModelCapabilities
+from pebble.core.session import ChatSession
+from pebble.core.trajectory import (
     dicts_from_turns,
     materialize_attachments,
     turn_to_dict,
 )
+from tests._session_helpers import as_stream, mock_completion_result
 
 PNG_1x1 = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -171,8 +171,8 @@ class TestPersistenceAndConsumption:
 
         import sqlalchemy as sa
 
-        from turnstone.core.storage._registry import get_storage
-        from turnstone.core.storage._schema import conversations
+        from pebble.core.storage._registry import get_storage
+        from pebble.core.storage._schema import conversations
 
         with get_storage()._conn() as conn:
             rows = conn.execute(
@@ -194,7 +194,7 @@ class TestPersistenceAndConsumption:
     def test_send_drains_the_upload_buffer(self, tmp_db, mock_openai_client):
         # Bytes staged in the per-node buffer are drained (discarded) once the
         # send commits them content-addressed — they don't linger as pending.
-        from turnstone.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachment_buffer import get_attachment_buffer
 
         s = _make_session(mock_openai_client)
         buf = get_attachment_buffer()
@@ -215,7 +215,7 @@ class TestPersistenceAndConsumption:
     def test_reload_reconstructs_multipart(self, tmp_db, mock_openai_client):
         import hashlib
 
-        from turnstone.core.memory import load_messages
+        from pebble.core.memory import load_messages
 
         s = _make_session(mock_openai_client)
         content = b"# doc\n"
@@ -242,7 +242,7 @@ class TestProviderIntegration:
     """
 
     def test_anthropic_receives_native_document_block(self, tmp_db, mock_openai_client):
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         s = _make_session(mock_openai_client)
         atts = [
@@ -292,7 +292,7 @@ class TestProviderIntegration:
     def test_attachments_meta_stripped_before_openai_wire(self, tmp_db, mock_openai_client):
         # OpenAI-compat APIs don't know `_attachments_meta`; sanitize
         # must strip it before the wire call.
-        from turnstone.core.providers._openai_common import sanitize_messages
+        from pebble.core.providers._openai_common import sanitize_messages
 
         s = _make_session(mock_openai_client)
         atts = [Attachment("a1", "x.md", "text/markdown", "text", b"x")]
@@ -302,7 +302,7 @@ class TestProviderIntegration:
             assert not k.startswith("_"), f"{k!r} leaked to wire"
 
     def test_openai_chat_completions_receives_inlined_document(self, tmp_db, mock_openai_client):
-        from turnstone.core.providers._openai_common import sanitize_messages
+        from pebble.core.providers._openai_common import sanitize_messages
 
         s = _make_session(mock_openai_client)
         atts = [
@@ -331,7 +331,7 @@ class TestQueuedAttachmentsRejected:
     ``assistant(tool_calls)`` and ``tool``)."""
 
     def test_queue_message_rejects_attachments(self, tmp_db, mock_openai_client):
-        from turnstone.core.session import AttachmentsNotQueueableError
+        from pebble.core.session import AttachmentsNotQueueableError
 
         s = _make_session(mock_openai_client)
         # Rejection is on the ``attachment_ids`` argument alone — no row need
@@ -444,7 +444,7 @@ class TestCapabilityGatedFallback:
 
     def test_pdf_text_fallback_when_unsupported(self, tmp_db, mock_openai_client, monkeypatch):
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.pdf.extract_pdf_text", lambda data: "EXTRACTED")
+        monkeypatch.setattr("pebble.core.pdf.extract_pdf_text", lambda data: "EXTRACTED")
         part = s._wire_content_part(
             self._att("pdf", b"%PDF", "r.pdf", "application/pdf"),
             ModelCapabilities(supports_pdf=False),
@@ -456,7 +456,7 @@ class TestCapabilityGatedFallback:
 
     def test_pdf_empty_extract_is_placeholder(self, tmp_db, mock_openai_client, monkeypatch):
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.pdf.extract_pdf_text", lambda data: "")
+        monkeypatch.setattr("pebble.core.pdf.extract_pdf_text", lambda data: "")
         part = s._wire_content_part(
             self._att("pdf", b"%PDF", "scan.pdf", "application/pdf"),
             ModelCapabilities(supports_pdf=False),
@@ -496,7 +496,7 @@ class TestCapabilityGatedFallback:
     def test_pdf_rasterize_when_vision(self, tmp_db, mock_openai_client, monkeypatch):
         # Vision-capable but no native PDF → render pages to images (1 -> N).
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.pdf.rasterize_pdf", lambda data: [b"png-a", b"png-b"])
+        monkeypatch.setattr("pebble.core.pdf.rasterize_pdf", lambda data: [b"png-a", b"png-b"])
         parts = s._wire_content_part(
             self._att("pdf", b"%PDF", "r.pdf", "application/pdf"),
             ModelCapabilities(supports_pdf=False, supports_vision=True),
@@ -508,8 +508,8 @@ class TestCapabilityGatedFallback:
 
     def test_pdf_rasterize_empty_falls_back_to_text(self, tmp_db, mock_openai_client, monkeypatch):
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.pdf.rasterize_pdf", lambda data: [])
-        monkeypatch.setattr("turnstone.core.pdf.extract_pdf_text", lambda data: "TXT")
+        monkeypatch.setattr("pebble.core.pdf.rasterize_pdf", lambda data: [])
+        monkeypatch.setattr("pebble.core.pdf.extract_pdf_text", lambda data: "TXT")
         part = s._wire_content_part(
             self._att("pdf", b"%PDF", "r.pdf", "application/pdf"),
             ModelCapabilities(supports_pdf=False, supports_vision=True),
@@ -595,7 +595,7 @@ class TestPerceptionFallback:
 
     def test_pdf_perception_renders_pages(self, tmp_db, mock_openai_client, monkeypatch):
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.pdf.rasterize_pdf", lambda data: [b"pg1", b"pg2"])
+        monkeypatch.setattr("pebble.core.pdf.rasterize_pdf", lambda data: [b"pg1", b"pg2"])
         prov = self._with_perception(s, perc_caps=ModelCapabilities(supports_vision=True))
         part = s._wire_content_part(
             self._att("pdf", b"%PDF", "r.pdf", "application/pdf"),
@@ -652,8 +652,8 @@ class TestResolveAttachmentsCapsThreading:
 
     def test_resolver_uses_passed_caps(self, tmp_db, mock_openai_client, monkeypatch):
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.session.get_attachments", lambda ids: [self._att()])
-        monkeypatch.setattr("turnstone.core.pdf.rasterize_pdf", lambda data: [b"pg"])
+        monkeypatch.setattr("pebble.core.session.get_attachments", lambda ids: [self._att()])
+        monkeypatch.setattr("pebble.core.pdf.rasterize_pdf", lambda data: [b"pg"])
         # Passed caps (vision, no native PDF) drive rasterize-to-images — not
         # whatever the primary 'test-model' happens to support.
         out = s._resolve_attachments(
@@ -665,7 +665,7 @@ class TestResolveAttachmentsCapsThreading:
 
     def test_resolver_native_with_pdf_caps(self, tmp_db, mock_openai_client, monkeypatch):
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.session.get_attachments", lambda ids: [self._att()])
+        monkeypatch.setattr("pebble.core.session.get_attachments", lambda ids: [self._att()])
         out = s._resolve_attachments(["aT"], ModelCapabilities(supports_pdf=True))
         assert out["aT"]["type"] == "document"
         assert out["aT"]["document"]["media_type"] == "application/pdf"
@@ -693,9 +693,9 @@ class TestResolveAttachmentsPerSendCache:
             fetches["n"] += 1
             return [self._att()] if ids else []
 
-        monkeypatch.setattr("turnstone.core.session.get_attachments", _fetch)
+        monkeypatch.setattr("pebble.core.session.get_attachments", _fetch)
         monkeypatch.setattr(
-            "turnstone.core.pdf.rasterize_pdf",
+            "pebble.core.pdf.rasterize_pdf",
             lambda data: rasters.__setitem__("n", rasters["n"] + 1) or [b"pg"],
         )
         caps = ModelCapabilities(supports_pdf=False, supports_vision=True)
@@ -716,8 +716,8 @@ class TestResolveAttachmentsPerSendCache:
             fetches["n"] += 1
             return [self._att()]
 
-        monkeypatch.setattr("turnstone.core.session.get_attachments", _fetch)
-        monkeypatch.setattr("turnstone.core.pdf.rasterize_pdf", lambda data: [b"pg"])
+        monkeypatch.setattr("pebble.core.session.get_attachments", _fetch)
+        monkeypatch.setattr("pebble.core.pdf.rasterize_pdf", lambda data: [b"pg"])
         caps = ModelCapabilities(supports_pdf=False, supports_vision=True)
         assert s._wire_part_cache is None  # default outside a send → no caching
         s._resolve_attachments(["aT"], caps)
@@ -726,8 +726,8 @@ class TestResolveAttachmentsPerSendCache:
 
     def test_cache_keyed_by_caps(self, tmp_db, mock_openai_client, monkeypatch):
         s = _make_session(mock_openai_client)
-        monkeypatch.setattr("turnstone.core.session.get_attachments", lambda ids: [self._att()])
-        monkeypatch.setattr("turnstone.core.pdf.rasterize_pdf", lambda data: [b"pg"])
+        monkeypatch.setattr("pebble.core.session.get_attachments", lambda ids: [self._att()])
+        monkeypatch.setattr("pebble.core.pdf.rasterize_pdf", lambda data: [b"pg"])
         s._wire_part_cache = {}
         native = s._resolve_attachments(["aT"], ModelCapabilities(supports_pdf=True))
         rasterized = s._resolve_attachments(

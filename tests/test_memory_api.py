@@ -15,15 +15,15 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_delete_memory,
     admin_get_memory,
     admin_list_memories,
     admin_search_memories,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
-from turnstone.server import (
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
+from pebble.server import (
     delete_memory_endpoint,
     list_memories,
     save_memory,
@@ -66,7 +66,7 @@ def storage(tmp_path):
 @pytest.fixture
 def server_client(storage):
     """TestClient wired to server memory endpoints."""
-    import turnstone.core.storage._registry as reg
+    import pebble.core.storage._registry as reg
 
     old = reg._storage
     reg._storage = storage

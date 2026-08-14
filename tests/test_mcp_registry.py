@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from turnstone.core.mcp_registry import (
+from pebble.core.mcp_registry import (
     MCPRegistryClient,
     MCPRegistryError,
     RegistryPackage,
@@ -513,7 +513,7 @@ class TestResolveInstallConfig:
         assert config["args"] == ["mcp-server-example==1.5.0"]
 
     def test_package_with_env_vars(self) -> None:
-        from turnstone.core.mcp_registry import RegistryEnvVar
+        from pebble.core.mcp_registry import RegistryEnvVar
 
         server = RegistryServer(
             name="io.example/test",

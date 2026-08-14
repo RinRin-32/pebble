@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.storage import get_storage, init_storage, reset_storage
+from pebble.core.storage import get_storage, init_storage, reset_storage
 
 lacme = pytest.importorskip("lacme")
 
@@ -22,7 +22,7 @@ def _storage(tmp_path):
 @pytest.fixture
 def tls_manager():
     """Create a TLSManager backed by test storage."""
-    from turnstone.console.tls import TLSManager
+    from pebble.console.tls import TLSManager
 
     return TLSManager(get_storage())
 
@@ -45,7 +45,7 @@ async def test_init_ca_persists(tls_manager):
     pem1 = tls_manager.get_root_cert_pem()
 
     # Create a new manager on the same storage
-    from turnstone.console.tls import TLSManager
+    from pebble.console.tls import TLSManager
 
     mgr2 = TLSManager(get_storage())
     await mgr2.init_ca()
@@ -91,7 +91,7 @@ async def test_issue_console_certs_persists(tls_manager):
     bundle1 = tls_manager.internal_bundle
 
     # New manager, same storage
-    from turnstone.console.tls import TLSManager
+    from pebble.console.tls import TLSManager
 
     mgr2 = TLSManager(get_storage())
     await mgr2.init_ca()
@@ -138,10 +138,10 @@ async def test_tls_ca_cert_endpoint(tls_manager):
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.console.server import tls_ca_cert, tls_ca_status
+    from pebble.console.server import tls_ca_cert, tls_ca_status
 
     # Middleware that grants full access (config-token style: no user_id)
-    from turnstone.core.auth import AuthResult
+    from pebble.core.auth import AuthResult
 
     async def _grant_access(request, call_next):  # type: ignore[no-untyped-def]
         request.state.auth_result = AuthResult(
@@ -185,8 +185,8 @@ async def test_tls_endpoints_disabled():
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.console.server import tls_ca_cert, tls_ca_status
-    from turnstone.core.auth import AuthResult
+    from pebble.console.server import tls_ca_cert, tls_ca_status
+    from pebble.core.auth import AuthResult
 
     async def _grant_access(request, call_next):  # type: ignore[no-untyped-def]
         request.state.auth_result = AuthResult(

@@ -27,13 +27,13 @@ class TestCreateWorkstreamResumeField:
 
     def test_pydantic_schema_has_resume_ws(self) -> None:
         """CreateWorkstreamRequest schema includes resume_ws."""
-        from turnstone.api.server_schemas import CreateWorkstreamRequest
+        from pebble.api.server_schemas import CreateWorkstreamRequest
 
         req = CreateWorkstreamRequest(name="test", resume_ws="ws-123")
         assert req.resume_ws == "ws-123"
 
     def test_pydantic_schema_default_empty(self) -> None:
-        from turnstone.api.server_schemas import CreateWorkstreamRequest
+        from pebble.api.server_schemas import CreateWorkstreamRequest
 
         req = CreateWorkstreamRequest(name="test")
         assert req.resume_ws == ""

@@ -18,7 +18,7 @@
 # It works out of the box with INSECURE dev defaults (see the secret/password
 # values below) so there's nothing to configure first. A .env file still
 # overrides any value. For a real deployment use the bundled production stack
-# at turnstone/deploy/compose.yaml — it pulls released images from ghcr.io and
+# at pebble/deploy/compose.yaml — it pulls released images from ghcr.io and
 # requires you to set real secrets.
 #
 # Bring your own LLM: nodes boot without one and show up in the console
@@ -29,10 +29,10 @@
 # Fewer nodes (lighter machines):
 #     docker compose up postgres console caddy channel node-1 node-2 node-3
 #
-# Join a bare-metal host: a turnstone-server running OUTSIDE compose (e.g. to use
+# Join a bare-metal host: a pebble-server running OUTSIDE compose (e.g. to use
 # a local GPU) can join this cluster. Postgres, the console's ACME endpoint, and
 # SearxNG are published on 127.0.0.1 so a node on THIS machine reaches them via
-# localhost. Keep secrets in ~/.config/turnstone/config.toml (chmod 0600 — the
+# localhost. Keep secrets in ~/.config/pebble/config.toml (chmod 0600 — the
 # loader warns otherwise):
 #     [auth]
 #     jwt_secret = "dev-only-insecure-jwt-secret-change-me-for-real-deployments"
@@ -45,18 +45,22 @@
 #     [tls]              # only if the cluster runs mTLS
 #     enabled = true
 # then run (node identity isn't a secret, so it stays on the command line):
-#     TURNSTONE_NODE_ID=host-1 \
-#       TURNSTONE_ADVERTISE_URL=http://host.docker.internal:8080 \
-#       TURNSTONE_CONSOLE_URL=http://localhost:8090 \
-#       TURNSTONE_SEARXNG_URL=http://localhost:8081 \
-#       turnstone-server --host 0.0.0.0 --port 8080
+#     PEBBLE_NODE_ID=host-1 \
+#       PEBBLE_ADVERTISE_URL=http://host.docker.internal:8080 \
+#       PEBBLE_CONSOLE_URL=http://localhost:8090 \
+#       PEBBLE_SEARXNG_URL=http://localhost:8081 \
+#       pebble-server --host 0.0.0.0 --port 8080
 # The node registers in Postgres, auto-enrolls its mTLS cert from the console's
 # ACME endpoint (when the cluster runs mTLS), and the console collector reaches
 # it back via host.docker.internal. To join from ANOTHER machine, set
-# TURNSTONE_HOST_IP to this host's LAN IP and use it in the URLs above (and the
-# node's TURNSTONE_ADVERTISE_URL = the NODE host's IP) — see docs/docker.md.
+# PEBBLE_HOST_IP to this host's LAN IP and use it in the URLs above (and the
+# node's PEBBLE_ADVERTISE_URL = the NODE host's IP) — see docs/docker.md.
 # =============================================================================
 
+# NOTE: the project name prefixes every container and volume
+# (turnstone_postgres-data, pebble-console-1).  It is deliberately
+# NOT renamed to pebble: doing so orphans the existing volumes, which
+# means losing the database for a purely cosmetic change.
 name: turnstone
 
 networks:
@@ -78,13 +82,13 @@ volumes:
 x-shared:
   # INSECURE dev default. Every service MUST share ONE secret — the console
   # mints its own service token (signed with this) to reach the nodes. Override
-  # TURNSTONE_JWT_SECRET in .env for anything that isn't a local sandbox.
-  jwt-secret: &jwt-secret "${TURNSTONE_JWT_SECRET:-dev-only-insecure-jwt-secret-change-me-for-real-deployments}"
-  db-backend: &db-backend "${TURNSTONE_DB_BACKEND:-postgresql}"
+  # PEBBLE_JWT_SECRET in .env for anything that isn't a local sandbox.
+  jwt-secret: &jwt-secret "${PEBBLE_JWT_SECRET:-${TURNSTONE_JWT_SECRET:-dev-only-insecure-jwt-secret-change-me-for-real-deployments}}"
+  db-backend: &db-backend "${PEBBLE_DB_BACKEND:-${TURNSTONE_DB_BACKEND:-postgresql}}"
   # All services point at the same Postgres. Node discovery REQUIRES a shared
   # DB: each server registers + heartbeats into a `services` table that the
   # console polls. (SQLite-per-container can't see other containers.)
-  db-url: &db-url "${TURNSTONE_DB_URL:-postgresql+psycopg://${POSTGRES_USER:-turnstone}:${POSTGRES_PASSWORD:-turnstone}@postgres:5432/turnstone}"
+  db-url: &db-url "${PEBBLE_DB_URL:-${TURNSTONE_DB_URL:-postgresql+psycopg://${POSTGRES_USER:-turnstone}:${POSTGRES_PASSWORD:-turnstone}@postgres:5432/turnstone}}"
 
 services:
   # -------------------------------------------------------------------
@@ -104,14 +108,14 @@ services:
       # INSECURE dev default — override POSTGRES_PASSWORD in .env for real use.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-turnstone}
       PGDATA: /var/lib/postgresql/data
-    # Published so a bare-metal turnstone-server can join the cluster (see "Join
+    # Published so a bare-metal pebble-server can join the cluster (see "Join
     # a bare-metal host" in the header). Bound to 127.0.0.1 by default (same-host
-    # nodes only); set TURNSTONE_HOST_IP to this host's LAN IP to let another
+    # nodes only); set PEBBLE_HOST_IP to this host's LAN IP to let another
     # machine connect — but set a real POSTGRES_PASSWORD first, or you'll expose a
     # database with the insecure default password to your network. (The legacy
-    # POSTGRES_BIND is still honored as a fallback when TURNSTONE_HOST_IP is unset.)
+    # POSTGRES_BIND is still honored as a fallback when PEBBLE_HOST_IP is unset.)
     ports:
-      - "${TURNSTONE_HOST_IP:-${POSTGRES_BIND:-127.0.0.1}}:${POSTGRES_PORT:-5432}:5432"
+      - "${PEBBLE_HOST_IP:-${TURNSTONE_HOST_IP:-${POSTGRES_BIND:-127.0.0.1}}}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -154,7 +158,7 @@ services:
     restart: "no"
 
   # -------------------------------------------------------------------
-  # turnstone-console — cluster dashboard. Reach it ONLY through Caddy at
+  # pebble-console — cluster dashboard. Reach it ONLY through Caddy at
   # https://localhost:8443 (see the caddy service below).
   #
   # Browsers must reach the dashboard through Caddy (https://localhost:8443): a
@@ -164,32 +168,32 @@ services:
   # below ONLY so bare-metal nodes can reach the plain-HTTP ACME enrollment
   # endpoint — don't point a browser at it.
   #
-  # The single `build:` here produces the turnstone:local image every other
+  # The single `build:` here produces the pebble:local image every other
   # service reuses. extra_hosts lets the console reach a bare-metal server
   # advertising http://host.docker.internal:8080 (see "Join a host" below).
   # -------------------------------------------------------------------
   console:
-    image: turnstone:local
+    image: pebble:local
     build:
       context: .
       dockerfile: Dockerfile
     command:
-      - turnstone-console
+      - pebble-console
       - --host=0.0.0.0
       - --port=8090
     # Publishes the console's plain-HTTP listener so a bare-metal node can reach
     # the ACME endpoint, fetch the CA, and enroll its cert (the console serves
     # HTTP here even under mTLS). Bound to 127.0.0.1 by default; setting
-    # TURNSTONE_HOST_IP exposes the WHOLE console HTTP API — including the
+    # PEBBLE_HOST_IP exposes the WHOLE console HTTP API — including the
     # cert-issuing ACME endpoint — on that interface, so the JWT secret's
     # strength is the only gate. Browsers use Caddy :8443, never this port.
     ports:
-      - "${TURNSTONE_HOST_IP:-127.0.0.1}:8090:8090"
+      - "${PEBBLE_HOST_IP:-${TURNSTONE_HOST_IP:-127.0.0.1}}:8090:8090"
     environment:
-      TURNSTONE_JWT_SECRET: *jwt-secret
-      TURNSTONE_DB_BACKEND: *db-backend
-      TURNSTONE_DB_URL: *db-url
-      TURNSTONE_CONSOLE_URL: http://console:8090
+      PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_DB_BACKEND: *db-backend
+      PEBBLE_DB_URL: *db-url
+      PEBBLE_CONSOLE_URL: http://console:8090
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -207,7 +211,7 @@ services:
 
   # -------------------------------------------------------------------
   # caddy — browser TLS for the console dashboard.
-  # Terminates HTTPS (Caddy's own local CA, see turnstone/deploy/Caddyfile) → console:8090.
+  # Terminates HTTPS (Caddy's own local CA, see pebble/deploy/Caddyfile) → console:8090.
   # Dashboard over TLS: https://localhost:${CONSOLE_HTTPS_PORT:-8443}
   # -------------------------------------------------------------------
   caddy:
@@ -221,7 +225,7 @@ services:
       # SearxNG web UI — localhost-only (it has no auth). Browse https://localhost:8444.
       - "127.0.0.1:${SEARXNG_HTTPS_PORT:-8444}:8444"
     volumes:
-      - ./turnstone/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./pebble/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data # persist Caddy's local CA across restarts
       - caddy-config:/config
     networks:
@@ -229,28 +233,28 @@ services:
     restart: unless-stopped
 
   # -------------------------------------------------------------------
-  # turnstone-channel — channel gateway (Discord and/or Slack).
+  # pebble-channel — channel gateway (Discord and/or Slack).
   # Runs HTTP-only with no adapters until you set a token, so it's safe
   # to leave running. See docs/channels.md.
   # -------------------------------------------------------------------
   channel:
-    image: turnstone:local
+    image: pebble:local
     command:
       - sh
       - -c
       - >-
-        turnstone-channel
+        pebble-channel
         --http-host=0.0.0.0
-        $${TURNSTONE_DISCORD_GUILD:+--discord-guild $$TURNSTONE_DISCORD_GUILD}
+        $${PEBBLE_DISCORD_GUILD:+--discord-guild $$PEBBLE_DISCORD_GUILD}
     environment:
-      TURNSTONE_JWT_SECRET: *jwt-secret
-      TURNSTONE_DB_BACKEND: *db-backend
-      TURNSTONE_DB_URL: *db-url
-      TURNSTONE_DISCORD_TOKEN: ${TURNSTONE_DISCORD_TOKEN:-}
-      TURNSTONE_DISCORD_GUILD: ${TURNSTONE_DISCORD_GUILD:-0}
-      TURNSTONE_SLACK_TOKEN: ${TURNSTONE_SLACK_TOKEN:-}
-      TURNSTONE_SLACK_APP_TOKEN: ${TURNSTONE_SLACK_APP_TOKEN:-}
-      TURNSTONE_CHANNEL_ADVERTISE_URL: http://channel:8091
+      PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_DB_BACKEND: *db-backend
+      PEBBLE_DB_URL: *db-url
+      PEBBLE_DISCORD_TOKEN: ${PEBBLE_DISCORD_TOKEN:-${TURNSTONE_DISCORD_TOKEN:-}}
+      PEBBLE_DISCORD_GUILD: ${PEBBLE_DISCORD_GUILD:-${TURNSTONE_DISCORD_GUILD:-0}}
+      PEBBLE_SLACK_TOKEN: ${PEBBLE_SLACK_TOKEN:-${TURNSTONE_SLACK_TOKEN:-}}
+      PEBBLE_SLACK_APP_TOKEN: ${PEBBLE_SLACK_APP_TOKEN:-${TURNSTONE_SLACK_APP_TOKEN:-}}
+      PEBBLE_CHANNEL_ADVERTISE_URL: http://channel:8091
     networks:
       - turnstone-net
     depends_on:
@@ -262,21 +266,21 @@ services:
   # searxng — self-hosted metasearch backing the web_search tool.
   # Internal-network only (no published port): nodes reach it at
   # http://searxng:8080. Config (JSON output on, limiter off) lives in
-  # turnstone/deploy/searxng/settings.yml, mounted read-only. Commercial
+  # pebble/deploy/searxng/settings.yml, mounted read-only. Commercial
   # models use native provider search and never hit this; it serves
   # local/vLLM models. Override the tag with SEARXNG_IMAGE_TAG in .env.
   # -------------------------------------------------------------------
   searxng:
     image: searxng/searxng:${SEARXNG_IMAGE_TAG:-latest}
     # Published so a bare-metal node's web_search can reach it. SearxNG has NO
-    # auth, so it is bound to 127.0.0.1 by default; setting TURNSTONE_HOST_IP
+    # auth, so it is bound to 127.0.0.1 by default; setting PEBBLE_HOST_IP
     # exposes it on that interface — an open search proxy on your LAN, which also
     # triggers the SearxNG AGPL-3.0 §13 source-offer obligation (see docs/docker.md).
     # In-compose nodes always use the internal http://searxng:8080 and ignore this.
     ports:
-      - "${TURNSTONE_HOST_IP:-127.0.0.1}:${SEARXNG_API_PORT:-8081}:8080"
+      - "${PEBBLE_HOST_IP:-${TURNSTONE_HOST_IP:-127.0.0.1}}:${SEARXNG_API_PORT:-8081}:8080"
     volumes:
-      - ./turnstone/deploy/searxng:/etc/searxng:ro
+      - ./pebble/deploy/searxng:/etc/searxng:ro
       - searxng-cache:/var/cache/searxng # favicon + internal SQLite cache (survives restarts)
     networks:
       - turnstone-net
@@ -292,14 +296,14 @@ services:
   # Server fleet — node-1 … node-10
   #
   # Each node registers itself in Postgres on boot (unique
-  # TURNSTONE_NODE_ID + TURNSTONE_ADVERTISE_URL) and the console
+  # PEBBLE_NODE_ID + PEBBLE_ADVERTISE_URL) and the console
   # discovers it automatically — no static node list anywhere.
   #
   # node-1 carries the shared definition (&node / &node-env); node-2…10
   # inherit it and override only their identity.
   # ===================================================================
   node-1: &node
-    image: turnstone:local
+    image: pebble:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -307,7 +311,7 @@ services:
       - sh
       - -c
       - >-
-        turnstone-server
+        pebble-server
         --host 0.0.0.0
         --port 8080
         --base-url "$${LLM_BASE_URL}"
@@ -326,15 +330,15 @@ services:
       # compose.override.yaml (gitignored, auto-merged) instead — see
       # docs/coding-dispatch.md, "Authentication".
     environment: &node-env
-      TURNSTONE_JWT_SECRET: *jwt-secret
-      TURNSTONE_DB_BACKEND: *db-backend
-      TURNSTONE_DB_URL: *db-url
+      PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_DB_BACKEND: *db-backend
+      PEBBLE_DB_URL: *db-url
       # Bootstrap LLM defaults — real backends are configured in the console UI.
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-dummy}
       # web_search backend. Defaults to the bundled searxng service; point at an
-      # external SearxNG by setting TURNSTONE_SEARXNG_URL in .env (empty disables).
-      TURNSTONE_SEARXNG_URL: ${TURNSTONE_SEARXNG_URL:-http://searxng:8080}
+      # external SearxNG by setting PEBBLE_SEARXNG_URL in .env (empty disables).
+      PEBBLE_SEARXNG_URL: ${PEBBLE_SEARXNG_URL:-${TURNSTONE_SEARXNG_URL:-http://searxng:8080}}
       MODEL: ${MODEL:-}
       MCP_CONFIG: ${MCP_CONFIG:-}
       SKIP_PERMISSIONS: ${SKIP_PERMISSIONS:-}
@@ -350,9 +354,9 @@ services:
       # already exist, or Docker will helpfully create a DIRECTORY there):
       #   - ${HOME}/.local/share/opencode/auth.json:/home/turnstone/.local/share/opencode/auth.json:ro
       # Which agent dispatch_agent picks when the caller doesn't say:
-      TURNSTONE_DEFAULT_AGENT: ${TURNSTONE_DEFAULT_AGENT:-}
-      TURNSTONE_NODE_ID: node-1
-      TURNSTONE_ADVERTISE_URL: http://node-1:8080
+      PEBBLE_DEFAULT_AGENT: ${PEBBLE_DEFAULT_AGENT:-${TURNSTONE_DEFAULT_AGENT:-}}
+      PEBBLE_NODE_ID: node-1
+      PEBBLE_ADVERTISE_URL: http://node-1:8080
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -379,28 +383,28 @@ services:
 
   node-2:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-2, TURNSTONE_ADVERTISE_URL: "http://node-2:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-2, PEBBLE_ADVERTISE_URL: "http://node-2:8080" }
   node-3:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-3, TURNSTONE_ADVERTISE_URL: "http://node-3:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-3, PEBBLE_ADVERTISE_URL: "http://node-3:8080" }
   node-4:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-4, TURNSTONE_ADVERTISE_URL: "http://node-4:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-4, PEBBLE_ADVERTISE_URL: "http://node-4:8080" }
   node-5:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-5, TURNSTONE_ADVERTISE_URL: "http://node-5:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-5, PEBBLE_ADVERTISE_URL: "http://node-5:8080" }
   node-6:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-6, TURNSTONE_ADVERTISE_URL: "http://node-6:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-6, PEBBLE_ADVERTISE_URL: "http://node-6:8080" }
   node-7:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-7, TURNSTONE_ADVERTISE_URL: "http://node-7:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-7, PEBBLE_ADVERTISE_URL: "http://node-7:8080" }
   node-8:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-8, TURNSTONE_ADVERTISE_URL: "http://node-8:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-8, PEBBLE_ADVERTISE_URL: "http://node-8:8080" }
   node-9:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-9, TURNSTONE_ADVERTISE_URL: "http://node-9:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-9, PEBBLE_ADVERTISE_URL: "http://node-9:8080" }
   node-10:
     <<: *node
-    environment: { <<: *node-env, TURNSTONE_NODE_ID: node-10, TURNSTONE_ADVERTISE_URL: "http://node-10:8080" }
+    environment: { <<: *node-env, PEBBLE_NODE_ID: node-10, PEBBLE_ADVERTISE_URL: "http://node-10:8080" }

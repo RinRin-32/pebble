@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone import __version__
-from turnstone.doctor import (
+from pebble import __version__
+from pebble.doctor import (
     SYSTEM_PROMPT,
     TOOLS,
     BackendVerdict,
@@ -198,7 +198,7 @@ class TestReadFile:
 
     def test_secrets_masked_via_execute_tool(self, tmp_path: Path) -> None:
         # Masking is centralized at the execute_tool chokepoint.
-        (tmp_path / ".env").write_text("TURNSTONE_JWT_SECRET=abcdef0123456789\n")
+        (tmp_path / ".env").write_text("PEBBLE_JWT_SECRET=abcdef0123456789\n")
         out = execute_tool("read_file", {"path": ".env"}, tmp_path)
         assert "abcdef0123456789" not in out
 
@@ -276,7 +276,7 @@ class TestDiagnosticToolsReadOnly:
             captured["cmd"] = cmd
             return MagicMock(returncode=0, stdout="ok", stderr="")
 
-        with patch("turnstone.doctor.subprocess.run", side_effect=fake_run):
+        with patch("pebble.doctor.subprocess.run", side_effect=fake_run):
             fn(*call_args)
         return captured["cmd"]
 
@@ -349,10 +349,10 @@ class TestHttpGetJsonSafety:
 
 class TestHttpHealthTool:
     def test_ok(self) -> None:
-        from turnstone.doctor import _tool_http_health
+        from pebble.doctor import _tool_http_health
 
         with patch(
-            "turnstone.doctor._http_get_json", return_value={"status": "ok", "version": "1.7.0a2"}
+            "pebble.doctor._http_get_json", return_value={"status": "ok", "version": "1.7.0a2"}
         ):
             out = _tool_http_health({"url": "http://localhost:8080"})
         assert "ok" in out and "1.7.0a2" in out
@@ -360,28 +360,28 @@ class TestHttpHealthTool:
     def test_unreachable(self) -> None:
         import urllib.error
 
-        from turnstone.doctor import _tool_http_health
+        from pebble.doctor import _tool_http_health
 
-        with patch("turnstone.doctor._http_get_json", side_effect=urllib.error.URLError("refused")):
+        with patch("pebble.doctor._http_get_json", side_effect=urllib.error.URLError("refused")):
             out = _tool_http_health({"url": "http://localhost:8080"})
         assert "unreachable" in out
 
 
 class TestCheckLlmBackendTool:
     def test_probe_summarized(self) -> None:
-        from turnstone.doctor import _tool_check_llm_backend
+        from pebble.doctor import _tool_check_llm_backend
 
         fake = {"reachable": True, "available_models": ["m"], "error": None}
-        with patch("turnstone.core.model_registry.probe_model_endpoint", return_value=fake):
+        with patch("pebble.core.model_registry.probe_model_endpoint", return_value=fake):
             out = _tool_check_llm_backend({"provider": "openai", "base_url": "http://x/v1"})
         assert "reachable" in out
 
     def test_rejects_metadata_base_url(self) -> None:
         # base_url is model-supplied, so it gets the same guard as http_health:
         # the cloud metadata endpoint is refused before any probe is attempted.
-        from turnstone.doctor import _tool_check_llm_backend
+        from pebble.doctor import _tool_check_llm_backend
 
-        with patch("turnstone.core.model_registry.probe_model_endpoint") as probe:
+        with patch("pebble.core.model_registry.probe_model_endpoint") as probe:
             out = _tool_check_llm_backend(
                 {"provider": "openai", "base_url": "http://169.254.169.254/v1"}
             )
@@ -389,9 +389,9 @@ class TestCheckLlmBackendTool:
         probe.assert_not_called()
 
     def test_rejects_non_http_base_url(self) -> None:
-        from turnstone.doctor import _tool_check_llm_backend
+        from pebble.doctor import _tool_check_llm_backend
 
-        with patch("turnstone.core.model_registry.probe_model_endpoint") as probe:
+        with patch("pebble.core.model_registry.probe_model_endpoint") as probe:
             out = _tool_check_llm_backend({"provider": "openai", "base_url": "file:///etc/passwd"})
         assert "Refused" in out
         probe.assert_not_called()
@@ -405,7 +405,7 @@ class TestNodeHealth:
             captured["cmd"] = cmd
             return MagicMock(returncode=0, stdout='{"status": "ok"}', stderr="")
 
-        with patch("turnstone.doctor.subprocess.run", side_effect=fake_run):
+        with patch("pebble.doctor.subprocess.run", side_effect=fake_run):
             _tool_node_health(tmp_path, kind, args)
         return captured["cmd"]
 
@@ -428,7 +428,7 @@ class TestNodeHealth:
             captured["url"] = url
             return {"status": "ok", "version": "1.7.0a2"}
 
-        monkeypatch.setattr("turnstone.doctor._http_get_json", fake_get)
+        monkeypatch.setattr("pebble.doctor._http_get_json", fake_get)
         # primary_kind is compose, but the per-node override forces the http path
         out = _tool_node_health(
             tmp_path, "docker-compose", {"node": "10.0.0.5", "install_type": "systemd"}
@@ -447,7 +447,7 @@ class TestNodeHealth:
             captured["url"] = url
             return {"status": "ok"}
 
-        monkeypatch.setattr("turnstone.doctor._http_get_json", fake_get)
+        monkeypatch.setattr("pebble.doctor._http_get_json", fake_get)
         _tool_node_health(tmp_path, "systemd", {"node": "10.0.0.5:8081"})
         assert "10.0.0.5:8081/health" in captured["url"]
         assert ":8080" not in captured["url"]
@@ -462,7 +462,7 @@ class TestNodeHealth:
             captured["cmd"] = cmd
             return MagicMock(returncode=0, stdout="{}", stderr="")
 
-        with patch("turnstone.doctor.subprocess.run", side_effect=fake_run):
+        with patch("pebble.doctor.subprocess.run", side_effect=fake_run):
             execute_tool("node_health", {"node": "node-2"}, tmp_path, primary_kind="docker-compose")
         assert "exec" in captured["cmd"] and "node-2" in captured["cmd"]
 
@@ -548,8 +548,8 @@ class TestFamilyOf:
 class TestPreflightHelpers:
     def test_find_repo_root(self, tmp_path: Path) -> None:
         (tmp_path / ".git").mkdir()
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "turnstone"\n')
-        sub = tmp_path / "turnstone" / "core"
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pebble"\n')
+        sub = tmp_path / "pebble" / "core"
         sub.mkdir(parents=True)
         assert _find_repo_root(sub) == tmp_path
 
@@ -558,7 +558,7 @@ class TestPreflightHelpers:
 
     def test_find_compose_files(self, tmp_path: Path) -> None:
         (tmp_path / "compose.yaml").write_text("services: {}\n")
-        found = _find_compose_files(tmp_path, {"TURNSTONE_DIR": str(tmp_path / "none")}, None)
+        found = _find_compose_files(tmp_path, {"PEBBLE_DIR": str(tmp_path / "none")}, None)
         assert (tmp_path / "compose.yaml").resolve() in found
 
     def test_parse_config_sections(self, tmp_path: Path) -> None:
@@ -587,13 +587,11 @@ class TestPreflightHelpers:
         cf = ConfigFileInfo(
             path=Path("/x"), sections=["database"], db={"backend": "postgresql", "url": "u"}, api={}
         )
-        out = _resolve_db_config([cf], {"TURNSTONE_DB_BACKEND": "sqlite"})
+        out = _resolve_db_config([cf], {"PEBBLE_DB_BACKEND": "sqlite"})
         assert out["backend"] == "postgresql"
 
     def test_resolve_db_config_env_fallback(self) -> None:
-        out = _resolve_db_config(
-            [], {"TURNSTONE_DB_BACKEND": "postgresql", "TURNSTONE_DB_URL": "u"}
-        )
+        out = _resolve_db_config([], {"PEBBLE_DB_BACKEND": "postgresql", "PEBBLE_DB_URL": "u"})
         assert out["backend"] == "postgresql" and out["url"] == "u"
 
     def test_parse_config_extracts_db_ssl(self, tmp_path: Path) -> None:
@@ -613,21 +611,19 @@ class TestPreflightHelpers:
             db={"backend": "postgresql", "url": "u", "sslmode": "verify-full"},
             api={},
         )
-        out = _resolve_db_config([cf], {"TURNSTONE_DB_SSLCERT": "/env/client.crt"})
+        out = _resolve_db_config([cf], {"PEBBLE_DB_SSLCERT": "/env/client.crt"})
         assert out["sslmode"] == "verify-full"  # config
         assert out["sslcert"] == "/env/client.crt"  # env fallback
 
     def test_relevant_env_redacts_secrets(self) -> None:
-        out = _relevant_env(
-            {"TURNSTONE_JWT_SECRET": "supersecret", "TURNSTONE_HOST_IP": "10.0.0.1"}
-        )
-        assert out["TURNSTONE_JWT_SECRET"] == "set (hidden)"
-        assert out["TURNSTONE_HOST_IP"] == "10.0.0.1"
+        out = _relevant_env({"PEBBLE_JWT_SECRET": "supersecret", "PEBBLE_HOST_IP": "10.0.0.1"})
+        assert out["PEBBLE_JWT_SECRET"] == "set (hidden)"
+        assert out["PEBBLE_HOST_IP"] == "10.0.0.1"
 
     def test_relevant_env_redacts_db_url_creds(self) -> None:
-        out = _relevant_env({"TURNSTONE_DB_URL": "postgresql://u:pw@h/db"})
-        # TURNSTONE_DB_URL is in the explicit scrub set → fully hidden
-        assert out["TURNSTONE_DB_URL"] == "set (hidden)"
+        out = _relevant_env({"PEBBLE_DB_URL": "postgresql://u:pw@h/db"})
+        # PEBBLE_DB_URL is in the explicit scrub set → fully hidden
+        assert out["PEBBLE_DB_URL"] == "set (hidden)"
 
     def test_primary_kind_prefers_running_compose(self) -> None:
         kinds = ["git-source", "docker-compose"]
@@ -690,9 +686,9 @@ class TestPreflightHelpers:
     ) -> None:
         # Direct classification: a compose file present, nothing else probing true.
         (tmp_path / "compose.yaml").write_text("services: {}\n")
-        monkeypatch.setattr("turnstone.doctor._docker_available", lambda: False)
-        monkeypatch.setattr("turnstone.doctor._systemd_units", lambda: [])
-        monkeypatch.setattr("turnstone.doctor._find_repo_root", lambda p: None)
+        monkeypatch.setattr("pebble.doctor._docker_available", lambda: False)
+        monkeypatch.setattr("pebble.doctor._systemd_units", lambda: [])
+        monkeypatch.setattr("pebble.doctor._find_repo_root", lambda p: None)
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "nohome")
         profile = detect_install_profile(tmp_path, {})
         assert "docker-compose" in profile.kinds
@@ -709,7 +705,7 @@ class TestReportNoSecretLeak:
         profile = _make_profile(
             tmp_path,
             db_config={"backend": "postgresql", "url": "postgresql://u:TOPSECRET@h/db", "path": ""},
-            env_present={"TURNSTONE_JWT_SECRET": "set (hidden)"},
+            env_present={"PEBBLE_JWT_SECRET": "set (hidden)"},
         )
         report = render_profile_report(profile)
         assert "TOPSECRET" not in report
@@ -750,7 +746,7 @@ class TestOpenStorage:
             db_config={"backend": "postgresql", "url": "postgresql://u:p@h/db", "path": ""},
         )
         fake_init = MagicMock(return_value=MagicMock())
-        with patch("turnstone.core.storage.init_storage", fake_init):
+        with patch("pebble.core.storage.init_storage", fake_init):
             open_storage(profile)
         assert fake_init.call_args.kwargs["run_migrations"] is False
         assert fake_init.call_args.kwargs["create_tables"] is False
@@ -770,7 +766,7 @@ class TestOpenStorage:
             },
         )
         fake_init = MagicMock(return_value=MagicMock())
-        with patch("turnstone.core.storage.init_storage", fake_init):
+        with patch("pebble.core.storage.init_storage", fake_init):
             open_storage(profile)
         kwargs = fake_init.call_args.kwargs
         assert kwargs["sslmode"] == "verify-full"
@@ -792,7 +788,7 @@ class TestResolveDoctorBrain:
         assert "boom" in verdict.detail
 
     def _patch_resolution(self, monkeypatch: pytest.MonkeyPatch, provider: str) -> None:
-        from turnstone.core.model_registry import ModelConfig
+        from pebble.core.model_registry import ModelConfig
 
         cfg = ModelConfig(
             alias="default",
@@ -805,16 +801,14 @@ class TestResolveDoctorBrain:
         registry = MagicMock()
         registry.resolve.return_value = (MagicMock(), "test-model", cfg)
         monkeypatch.setattr(
-            "turnstone.core.config_store.ConfigStore",
+            "pebble.core.config_store.ConfigStore",
             lambda **kw: MagicMock(get=lambda *a, **k: ""),
         )
-        monkeypatch.setattr(
-            "turnstone.core.model_registry.load_model_registry", lambda **kw: registry
-        )
+        monkeypatch.setattr("pebble.core.model_registry.load_model_registry", lambda **kw: registry)
 
     def test_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         self._patch_resolution(monkeypatch, "openai-compatible")
-        monkeypatch.setattr("turnstone.doctor._validate_connection", lambda llm: (True, ""))
+        monkeypatch.setattr("pebble.doctor._validate_connection", lambda llm: (True, ""))
         brain, verdict = resolve_doctor_brain(_make_profile(tmp_path), MagicMock(), "")
         assert brain is not None
         assert brain.model == "test-model"
@@ -833,7 +827,7 @@ class TestResolveDoctorBrain:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_resolution(monkeypatch, "openai")
-        monkeypatch.setattr("turnstone.doctor._validate_connection", lambda llm: (False, "refused"))
+        monkeypatch.setattr("pebble.doctor._validate_connection", lambda llm: (False, "refused"))
         brain, verdict = resolve_doctor_brain(_make_profile(tmp_path), MagicMock(), "")
         assert brain is None
         assert "refused" in verdict.detail
@@ -842,14 +836,14 @@ class TestResolveDoctorBrain:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "turnstone.core.config_store.ConfigStore",
+            "pebble.core.config_store.ConfigStore",
             lambda **kw: MagicMock(get=lambda *a, **k: ""),
         )
 
         def boom(**kw: object) -> object:
             raise RuntimeError("no models")
 
-        monkeypatch.setattr("turnstone.core.model_registry.load_model_registry", boom)
+        monkeypatch.setattr("pebble.core.model_registry.load_model_registry", boom)
         brain, verdict = resolve_doctor_brain(_make_profile(tmp_path), MagicMock(), "")
         assert brain is None
         assert "no usable model" in verdict.detail
@@ -859,7 +853,7 @@ class TestResolveBrainIntegration:
     """End-to-end against an ephemeral SQLite DB seeded with one model."""
 
     def test_resolves_seeded_model(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from turnstone.core.storage import init_storage, reset_storage
+        from pebble.core.storage import init_storage, reset_storage
 
         db_path = str(tmp_path / "doctor.db")
         reset_storage()
@@ -875,7 +869,7 @@ class TestResolveBrainIntegration:
                 context_window=8192,
                 enabled=True,
             )
-            monkeypatch.setattr("turnstone.doctor._validate_connection", lambda llm: (True, ""))
+            monkeypatch.setattr("pebble.doctor._validate_connection", lambda llm: (True, ""))
             profile = _make_profile(
                 tmp_path, db_config={"backend": "sqlite", "url": "", "path": db_path}
             )
@@ -907,7 +901,7 @@ class TestCheckVersions:
         )
         versions = {"http://a": "1.6.9", "http://b": "1.7.0a2"}
         monkeypatch.setattr(
-            "turnstone.doctor._fetch_health_version", lambda url: versions.get(url, "")
+            "pebble.doctor._fetch_health_version", lambda url: versions.get(url, "")
         )
         vr = check_versions(_make_profile(tmp_path), storage, offline=True)
         assert vr.drift is True
@@ -918,7 +912,7 @@ class TestCheckVersions:
         storage.list_services.side_effect = lambda t, **k: (
             [{"service_id": "n1", "url": "http://a"}] if t == "server" else []
         )
-        monkeypatch.setattr("turnstone.doctor._fetch_health_version", lambda url: "1.7.0a2")
+        monkeypatch.setattr("pebble.doctor._fetch_health_version", lambda url: "1.7.0a2")
         vr = check_versions(_make_profile(tmp_path), storage, offline=True)
         assert vr.drift is False
 
@@ -929,8 +923,8 @@ class TestCheckVersions:
         storage.list_services.side_effect = lambda t, **k: (
             [{"service_id": "down", "url": "http://x"}] if t == "server" else []
         )
-        monkeypatch.setattr("turnstone.doctor._fetch_health_version", lambda url: "")
-        monkeypatch.setattr("turnstone.doctor._tls_cert_dir_present", lambda: False)
+        monkeypatch.setattr("pebble.doctor._fetch_health_version", lambda url: "")
+        monkeypatch.setattr("pebble.doctor._tls_cert_dir_present", lambda: False)
         vr = check_versions(_make_profile(tmp_path), storage, offline=True)
         assert "down" in vr.unreachable_nodes
         assert vr.mtls is False
@@ -943,8 +937,8 @@ class TestCheckVersions:
         storage.list_services.side_effect = lambda t, **k: (
             [{"service_id": "node-1", "url": "https://node-1:8080"}] if t == "server" else []
         )
-        monkeypatch.setattr("turnstone.doctor._fetch_health_version", lambda url: "")
-        monkeypatch.setattr("turnstone.doctor._tls_cert_dir_present", lambda: False)
+        monkeypatch.setattr("pebble.doctor._fetch_health_version", lambda url: "")
+        monkeypatch.setattr("pebble.doctor._tls_cert_dir_present", lambda: False)
         vr = check_versions(_make_profile(tmp_path), storage, offline=True)
         assert vr.mtls is True
         assert "node-1" in vr.unreachable_nodes
@@ -960,8 +954,8 @@ class TestCheckVersions:
         storage.list_services.side_effect = lambda t, **k: (
             [{"service_id": "n1", "url": "http://a"}] if t == "server" else []
         )
-        monkeypatch.setattr("turnstone.doctor._fetch_health_version", lambda url: "1.7.0a2")
-        monkeypatch.setattr("turnstone.doctor._tls_cert_dir_present", lambda: True)
+        monkeypatch.setattr("pebble.doctor._fetch_health_version", lambda url: "1.7.0a2")
+        monkeypatch.setattr("pebble.doctor._tls_cert_dir_present", lambda: True)
         vr = check_versions(_make_profile(tmp_path), storage, offline=True)
         assert vr.mtls is False  # http URLs are authoritative; cert dir ignored
         # but with storage unreachable, the cert dir is the fallback signal
@@ -977,9 +971,9 @@ class TestCheckVersions:
         storage.list_services.side_effect = lambda t, **k: (
             [{"service_id": "node-1", "url": "http://internal:8080"}] if t == "server" else []
         )
-        monkeypatch.setattr("turnstone.doctor._fetch_health_version", lambda url: "")
+        monkeypatch.setattr("pebble.doctor._fetch_health_version", lambda url: "")
         monkeypatch.setattr(
-            "turnstone.doctor._probe_health",
+            "pebble.doctor._probe_health",
             lambda url: {"versions": ["1.6.9", "1.7.0a2"], "version_drift": True},
         )
         profile = _make_profile(tmp_path, health_urls=["http://localhost:8090"])
@@ -990,7 +984,7 @@ class TestCheckVersions:
 
     def test_upstream_parse(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         tags = [{"name": "v1.6.8"}, {"name": "v1.7.0a2"}, {"name": "v1.6.9"}]
-        monkeypatch.setattr("turnstone.doctor._http_get_json", lambda url, timeout=6.0: tags)
+        monkeypatch.setattr("pebble.doctor._http_get_json", lambda url, timeout=6.0: tags)
         vr = check_versions(_make_profile(tmp_path), None, offline=False)
         assert vr.upstream_stable == "1.6.9"
         assert vr.upstream_experimental == "1.7.0a2"
@@ -1003,21 +997,21 @@ class TestCheckVersions:
         def boom(url: str, timeout: float = 6.0) -> object:
             raise urllib.error.URLError("no net")
 
-        monkeypatch.setattr("turnstone.doctor._http_get_json", boom)
+        monkeypatch.setattr("pebble.doctor._http_get_json", boom)
         vr = check_versions(_make_profile(tmp_path), None, offline=False)
         assert vr.upstream_error  # non-empty, but no exception raised
 
 
 class TestComposeImageTag:
     def test_from_env_present(self, tmp_path: Path) -> None:
-        profile = _make_profile(tmp_path, env_present={"TURNSTONE_IMAGE_TAG": "v1.7.0a2"})
+        profile = _make_profile(tmp_path, env_present={"PEBBLE_IMAGE_TAG": "v1.7.0a2"})
         assert _compose_image_tag(profile) == "v1.7.0a2"
 
     def test_falls_back_to_dotenv_file(self, tmp_path: Path) -> None:
-        # No env_present override → read TURNSTONE_IMAGE_TAG from the .env next to
+        # No env_present override → read PEBBLE_IMAGE_TAG from the .env next to
         # the compose file.
         (tmp_path / "compose.yaml").write_text("services: {}\n")
-        (tmp_path / ".env").write_text("TURNSTONE_IMAGE_TAG=v1.6.9\n")
+        (tmp_path / ".env").write_text("PEBBLE_IMAGE_TAG=v1.6.9\n")
         profile = _make_profile(tmp_path, compose_files=[tmp_path / "compose.yaml"])
         assert _compose_image_tag(profile) == "v1.6.9"
 
@@ -1073,7 +1067,7 @@ class TestVersionBehind:
 class TestUpstreamFetchParsing:
     def test_classifies_stable_vs_prerelease(self, monkeypatch: pytest.MonkeyPatch) -> None:
         tags = [{"name": "v1.5.18"}, {"name": "v1.6.9"}, {"name": "v1.7.0a1"}, {"name": "v1.7.0a2"}]
-        monkeypatch.setattr("turnstone.doctor._http_get_json", lambda url, timeout=6.0: tags)
+        monkeypatch.setattr("pebble.doctor._http_get_json", lambda url, timeout=6.0: tags)
         stable, experimental, err = _fetch_upstream_versions()
         assert stable == "1.6.9"
         assert experimental == "1.7.0a2"
@@ -1275,7 +1269,7 @@ class TestReportCLI:
     def test_report_prints_sections(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        from turnstone import doctor
+        from pebble import doctor
 
         # Keep the smoke hermetic: no DB, no docker/systemd probing.
         monkeypatch.setattr(doctor, "open_storage", lambda profile: (None, "no db (test)"))
@@ -1310,7 +1304,7 @@ class TestConstants:
             assert fn["parameters"]["type"] == "object"
 
     def test_all_tools_have_implementations(self) -> None:
-        from turnstone.doctor import TOOL_FUNCTIONS
+        from pebble.doctor import TOOL_FUNCTIONS
 
         for tool in TOOLS:
             assert tool["function"]["name"] in TOOL_FUNCTIONS

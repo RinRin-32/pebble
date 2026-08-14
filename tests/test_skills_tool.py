@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from turnstone.core.nudge_queue import TOOL_DRAIN
-from turnstone.core.tools import BUILTIN_TOOL_NAMES, PRIMARY_KEY_MAP
+from pebble.core.nudge_queue import TOOL_DRAIN
+from pebble.core.tools import BUILTIN_TOOL_NAMES, PRIMARY_KEY_MAP
 
 
 class TestToolRegistration:
@@ -32,13 +32,13 @@ class TestToolRegistration:
         assert PRIMARY_KEY_MAP.get("skills") == "action"
 
     def test_not_task_agent_tool(self) -> None:
-        from turnstone.core.tools import TASK_AGENT_TOOLS
+        from pebble.core.tools import TASK_AGENT_TOOLS
 
         names = {t["function"]["name"] for t in TASK_AGENT_TOOLS}
         assert "skills" not in names
 
     def test_dual_kind_visible_to_both_sessions(self) -> None:
-        from turnstone.core.tools import COORDINATOR_TOOLS, INTERACTIVE_TOOL_NAMES
+        from pebble.core.tools import COORDINATOR_TOOLS, INTERACTIVE_TOOL_NAMES
 
         coord_names = {t["function"]["name"] for t in COORDINATOR_TOOLS}
         assert "skills" in coord_names
@@ -55,8 +55,8 @@ def _make_session(*, kind: str = "interactive", user_id: str = "test-user") -> A
     the skills-tool prepare/exec paths.  ``kind`` sets ``self._kind`` —
     after the #557 flatten this drives no branching in the skills tool
     itself but is still observable to other code paths under test."""
-    from turnstone.core.session import ChatSession
-    from turnstone.core.workstream import WorkstreamKind
+    from pebble.core.session import ChatSession
+    from pebble.core.workstream import WorkstreamKind
 
     session = ChatSession.__new__(ChatSession)
     session.ui = MagicMock()
@@ -73,7 +73,7 @@ def _make_session(*, kind: str = "interactive", user_id: str = "test-user") -> A
     session._tool_error_flags = {}
     # Skill hints queue onto the tool channel (drained into a system turn);
     # the prepare/exec paths under test reach _skill_hint -> _queue_tool_advisory.
-    from turnstone.core.nudge_queue import NudgeQueue
+    from pebble.core.nudge_queue import NudgeQueue
 
     session._nudge_queue = NudgeQueue()
     session._wake_source_tag = ""
@@ -233,7 +233,7 @@ class TestPrepareSkillsPermissionGate:
 
     def test_create_denied_without_permission(self) -> None:
         session = _make_session()
-        with patch("turnstone.core.auth.user_has_permission", return_value=False):
+        with patch("pebble.core.auth.user_has_permission", return_value=False):
             item = session._prepare_skills(
                 "c",
                 {
@@ -255,13 +255,13 @@ class TestPrepareSkillsPermissionGate:
 
     def test_update_denied_without_permission(self) -> None:
         session = _make_session()
-        with patch("turnstone.core.auth.user_has_permission", return_value=False):
+        with patch("pebble.core.auth.user_has_permission", return_value=False):
             item = session._prepare_skills("c", {"action": "update", "name": "x", "content": "new"})
         assert "permission denied" in item.get("error", "")
 
     def test_enable_denied_without_permission(self) -> None:
         session = _make_session()
-        with patch("turnstone.core.auth.user_has_permission", return_value=False):
+        with patch("pebble.core.auth.user_has_permission", return_value=False):
             item = session._prepare_skills("c", {"action": "enable", "name": "x"})
         assert "permission denied" in item.get("error", "")
 
@@ -276,7 +276,7 @@ class TestPrepareSkillsPermissionGate:
         storage.get_prompt_template_by_name.return_value = None
         storage.get_prompt_template.return_value = {}
         # Grant at prepare time...
-        with patch("turnstone.core.auth.user_has_permission", return_value=True):
+        with patch("pebble.core.auth.user_has_permission", return_value=True):
             item = session._prepare_skills(
                 "c",
                 {
@@ -289,8 +289,8 @@ class TestPrepareSkillsPermissionGate:
         assert "error" not in item, "prepare must succeed when granted"
         # ...revoked between prepare and exec.
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=False),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=False),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
         ):
             _, output = session._exec_skills(item)
         assert "permission denied" in output
@@ -311,9 +311,9 @@ class TestPrepareSkillsPermissionGate:
 
         storage = MagicMock()
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=False),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
-            patch("turnstone.core.audit.record_audit", side_effect=fake_record_audit),
+            patch("pebble.core.auth.user_has_permission", return_value=False),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.audit.record_audit", side_effect=fake_record_audit),
         ):
             session._prepare_skills(
                 "c",
@@ -361,7 +361,7 @@ class TestExecSkillsFind:
             ]
         )
         item = session._prepare_skills("c", {"action": "find"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         import json as _json
 
@@ -383,7 +383,7 @@ class TestExecSkillsFind:
             [{"name": "x"}, {"name": "y"}, {"name": "z"}],
         ]
         item = session._prepare_skills("c", {"action": "find", "category": "nonexistent"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         assert "0 skills matched" in output
         # The hint is a first-class system turn now, not embedded in the result.
@@ -402,7 +402,7 @@ class TestExecSkillsFind:
         storage = MagicMock()
         storage.list_skills_filtered.return_value = []
         item = session._prepare_skills("c", {"action": "find"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         # Unfiltered no-results returns plain JSON, no hint queued.
         assert "[start system-reminder]" not in output
@@ -417,7 +417,7 @@ class TestExecSkillsFind:
             storage = MagicMock()
             storage.list_skills_filtered.return_value = []
             item = session._prepare_skills("c", {"action": "find"})
-            with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+            with patch("pebble.core.storage._registry.get_storage", return_value=storage):
                 session._exec_skills(item)
             call_kwargs = storage.list_skills_filtered.call_args.kwargs
             assert call_kwargs["kinds"] is None, (
@@ -457,7 +457,7 @@ class TestExecSkillsFind:
             },
         ]
         item = session._prepare_skills("c", {"action": "find"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         import json as _json
 
@@ -489,7 +489,7 @@ class TestExecSkillsFind:
             }
         ]
         item = session._prepare_skills("c", {"action": "find", "kind": "coordinator"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             session._exec_skills(item)
         call_kwargs = storage.list_skills_filtered.call_args.kwargs
         assert call_kwargs["kinds"] == ["coordinator", "any"]
@@ -537,7 +537,7 @@ class TestExecSkillsFind:
             },
         ]
         item = session._prepare_skills("c", {"action": "find", "query": "python pytest"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         import json as _json
 
@@ -569,7 +569,7 @@ class TestExecSkillsGet:
             "allowed_tools": "[]",
         }
         item = session._prepare_skills("c", {"action": "get", "name": "code-review"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         import json as _json
 
@@ -585,7 +585,7 @@ class TestExecSkillsGet:
         storage = MagicMock()
         storage.get_prompt_template_by_name.return_value = None
         item = session._prepare_skills("c", {"action": "get", "name": "ghost"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         assert "not found" in output
         assert "[start system-reminder]" not in output
@@ -614,7 +614,7 @@ class TestExecSkillsGet:
             "content": "Full body.",
         }
         item = session._prepare_skills("c", {"action": "get", "name": "coord-tagged"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         import json as _json
 
@@ -651,7 +651,7 @@ class TestExecSkillsLoad:
             "content": "do not load",
         }
         item = session._prepare_skills("c", {"action": "load", "name": "quarantined"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         assert "not found or disabled" in output
         assert session._skill_name is None  # never activated
@@ -663,7 +663,7 @@ class TestExecSkillsLoad:
         storage = MagicMock()
         storage.get_prompt_template_by_name.return_value = None
         item = session._prepare_skills("c", {"action": "load", "name": "ghost"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         assert "not found or disabled" in output
         assert session._skill_name is None
@@ -689,7 +689,7 @@ class TestExecSkillsLoad:
                 "risk_level": "low",
             }
             item = session._prepare_skills("c", {"action": "load", "name": skill_name})
-            with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+            with patch("pebble.core.storage._registry.get_storage", return_value=storage):
                 _, output = session._exec_skills(item)
             assert f"Loaded skill '{skill_name}'" in output, (
                 f"session kind={sess_kind!r} couldn't load row kind={row_kind!r}; "
@@ -711,7 +711,7 @@ class TestExecSkillsLoad:
             "risk_level": "low",
         }
         item = session._prepare_skills("c", {"action": "load", "name": "coord-persona"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         assert "Loaded skill 'coord-persona'" in output
         assert session._set_skill_called == [("coord-persona", "")]
@@ -730,7 +730,7 @@ class TestExecSkillsLoad:
             "risk_level": "low",
         }
         item = session._prepare_skills("c", {"action": "load", "name": "universal"})
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         assert "Loaded skill 'universal'" in output
         assert session._set_skill_called == [("universal", "")]
@@ -763,7 +763,7 @@ class TestExecSkillsLoad:
         assert item["approval_label"] != "skills__load__fix-issue__no-args"
         # Preview surfaces the args to the operator card.
         assert "arguments: 123 main" in item["preview"]
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output = session._exec_skills(item)
         assert "Loaded skill 'fix-issue'" in output
         # set_skill received the args verbatim — the renderer (covered
@@ -791,7 +791,7 @@ class TestExecSkillsLoad:
         item1 = session._prepare_skills(
             "c", {"action": "load", "name": "fix-issue", "arguments": "123 main"}
         )
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             session._exec_skills(item1)
 
         # Second load — same name, DIFFERENT args.  The fake set_skill
@@ -800,7 +800,7 @@ class TestExecSkillsLoad:
         item2 = session._prepare_skills(
             "c", {"action": "load", "name": "fix-issue", "arguments": "456 dev"}
         )
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             _, output2 = session._exec_skills(item2)
         # Second invocation re-renders rather than short-circuiting.
         assert "Loaded skill 'fix-issue'" in output2
@@ -820,7 +820,7 @@ class TestSkillArgNames:
     empty ``arg_names`` without breaking any other test."""
 
     def test_valid_json_array(self) -> None:
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         assert ChatSession._skill_arg_names({"arguments": '["issue", "branch"]'}) == [
             "issue",
@@ -828,7 +828,7 @@ class TestSkillArgNames:
         ]
 
     def test_malformed_json_returns_empty(self) -> None:
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         assert ChatSession._skill_arg_names({"arguments": "[not-json"}) == []
 
@@ -836,7 +836,7 @@ class TestSkillArgNames:
         """A row whose ``arguments`` column got corrupted to a JSON
         object (rather than array) shouldn't blow up the load — fall
         back to the empty list so $<name> placeholders stay literal."""
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         assert ChatSession._skill_arg_names({"arguments": '{"k": "v"}'}) == []
 
@@ -844,7 +844,7 @@ class TestSkillArgNames:
         """Element-level resilience — a JSON list with mixed types
         keeps only the strings (the spec's ``arguments:`` field is
         list-of-strings)."""
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         assert ChatSession._skill_arg_names({"arguments": '["good", 42, null, "ok"]'}) == [
             "good",
@@ -854,7 +854,7 @@ class TestSkillArgNames:
     def test_missing_column_returns_empty(self) -> None:
         """Legacy row written before migration 056 has no ``arguments``
         key at all — must not raise."""
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         assert ChatSession._skill_arg_names({"name": "legacy"}) == []
 
@@ -865,7 +865,7 @@ class TestSkillArgNames:
         ``-number`` as stray text).  Filtered out at decode so the
         renderer's invariant holds: every name in arg_names IS
         matchable.  Copilot review on PR #578 caught the mismatch."""
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         result = ChatSession._skill_arg_names(
             {
@@ -881,7 +881,7 @@ class TestSkillArgNames:
         """Valid Python-identifier names — uppercase, underscore-start,
         mixed case — all match the broadened ``$<name>`` regex.  Pinned
         so a future regex tightening doesn't silently re-narrow."""
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         assert ChatSession._skill_arg_names(
             {"arguments": '["lowercase", "UPPER", "_leading", "Mixed_Case_42"]'}
@@ -908,7 +908,7 @@ class TestExecSkillsCreate:
         # exec-time re-check is the TOCTOU defense added in this PR; if
         # the patch falls off, exec sees the un-patched permission state
         # and denies.
-        with patch("turnstone.core.auth.user_has_permission", return_value=True):
+        with patch("pebble.core.auth.user_has_permission", return_value=True):
             item = session._prepare_skills(
                 "c",
                 {
@@ -919,7 +919,7 @@ class TestExecSkillsCreate:
                 },
             )
             assert item["needs_approval"] is True
-            with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+            with patch("pebble.core.storage._registry.get_storage", return_value=storage):
                 session._exec_skills(item)
         # ``origin='model'`` stamps provenance so admins can distinguish
         # LLM-authored rows from human-installed ones at a glance.
@@ -945,9 +945,9 @@ class TestExecSkillsCreate:
             )
 
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
-            patch("turnstone.core.audit.record_audit", side_effect=fake_record_audit),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.audit.record_audit", side_effect=fake_record_audit),
         ):
             item = session._prepare_skills(
                 "c",
@@ -968,8 +968,8 @@ class TestExecSkillsCreate:
         storage = MagicMock()
         storage.get_prompt_template_by_name.return_value = {"name": "existing"}
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
         ):
             item = session._prepare_skills(
                 "c",
@@ -988,7 +988,7 @@ class TestExecSkillsCreate:
 
     def test_create_missing_required_fields(self) -> None:
         session = _make_session()
-        with patch("turnstone.core.auth.user_has_permission", return_value=True):
+        with patch("pebble.core.auth.user_has_permission", return_value=True):
             # missing content
             item = session._prepare_skills(
                 "c", {"action": "create", "name": "x", "description": "d"}
@@ -1001,7 +1001,7 @@ class TestExecSkillsCreate:
         token_budget shape — every numeric field on the validator errors
         loudly on bad input, no silent coerce."""
         session = _make_session()
-        with patch("turnstone.core.auth.user_has_permission", return_value=True):
+        with patch("pebble.core.auth.user_has_permission", return_value=True):
             item = session._prepare_skills(
                 "c",
                 {
@@ -1019,7 +1019,7 @@ class TestExecSkillsCreate:
         """SkillKind ValueError branch — model passes unknown kind, gets
         explicit listing of valid values rather than a stack trace."""
         session = _make_session()
-        with patch("turnstone.core.auth.user_has_permission", return_value=True):
+        with patch("pebble.core.auth.user_has_permission", return_value=True):
             item = session._prepare_skills(
                 "c",
                 {
@@ -1049,10 +1049,10 @@ class TestExecSkillsCreate:
         storage.get_prompt_template_by_name.return_value = None
         storage.get_prompt_template.return_value = {}
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
             patch(
-                "turnstone.core.audit.record_audit",
+                "pebble.core.audit.record_audit",
                 side_effect=RuntimeError("audit backend down"),
             ),
         ):
@@ -1103,8 +1103,8 @@ class TestExecSkillsUpdate:
         storage = MagicMock()
         storage.get_prompt_template_by_name.return_value = row
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
         ):
             item = session._prepare_skills(
                 "c",
@@ -1127,8 +1127,8 @@ class TestExecSkillsUpdate:
         storage_b.get_prompt_template_by_name.return_value = row_b
         session_b = _make_session()
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage_b),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage_b),
         ):
             item_b = session_b._prepare_skills(
                 "c",
@@ -1141,10 +1141,10 @@ class TestExecSkillsUpdate:
         storage = MagicMock()
         storage.get_prompt_template_by_name.return_value = self._existing_row()
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
             patch(
-                "turnstone.core.storage._utils.scan_skill_content",
+                "pebble.core.storage._utils.scan_skill_content",
                 return_value=("medium", "{}", "v1"),
             ),
         ):
@@ -1166,8 +1166,8 @@ class TestExecSkillsUpdate:
         storage = MagicMock()
         storage.get_prompt_template_by_name.return_value = row
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
         ):
             # ``content`` is NOT in the readonly runtime-fields set, so this
             # update has no applicable fields and should be rejected.
@@ -1195,8 +1195,8 @@ class TestExecSkillsUpdate:
             {"version": 3, "changed_by": "admin", "created": "..."},
         ]
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
         ):
             item = session._prepare_skills(
                 "c", {"action": "update", "name": "existing", "description": "new"}
@@ -1215,8 +1215,8 @@ class TestExecSkillsUpdate:
         storage.get_prompt_template.return_value = self._existing_row()
         storage.list_skill_versions.return_value = []
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
         ):
             item = session._prepare_skills(
                 "c", {"action": "update", "name": "existing", "description": "new"}
@@ -1243,9 +1243,9 @@ class TestExecSkillsToggle:
         # Patch get_storage across BOTH prepare and exec — prepare looks
         # up the row to validate (existence + enabled state), exec writes.
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
-            patch("turnstone.core.audit.record_audit", side_effect=fake_record_audit),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.audit.record_audit", side_effect=fake_record_audit),
         ):
             item = session._prepare_skills("c", {"action": "disable", "name": "x"})
             session._exec_skills(item)
@@ -1262,8 +1262,8 @@ class TestExecSkillsToggle:
             "enabled": False,
         }
         with (
-            patch("turnstone.core.auth.user_has_permission", return_value=True),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.auth.user_has_permission", return_value=True),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
         ):
             item = session._prepare_skills("c", {"action": "disable", "name": "x"})
             assert "already disabled" in item.get("error", "")
@@ -1319,7 +1319,7 @@ class TestSkillCatalogDisclosure:
         self,
         search_skills: list[dict[str, Any]] | None = None,
     ) -> Any:
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         session = ChatSession.__new__(ChatSession)
         ui = MagicMock()
@@ -1345,14 +1345,14 @@ class TestSkillCatalogDisclosure:
         session.system_messages = []
         session._agent_system_messages = []
         session.reasoning_effort = "medium"
-        from turnstone.core.nudge_queue import NudgeQueue
+        from pebble.core.nudge_queue import NudgeQueue
 
         session._nudge_queue = NudgeQueue()
         session._tool_search = None
         session._mcp_client = None
         session._notify_on_complete = "{}"
         session._tool_error_flags = {}
-        from turnstone.prompts import ClientType
+        from pebble.prompts import ClientType
 
         session._tools = []
         session._client_type = ClientType.CLI
@@ -1390,7 +1390,7 @@ class TestSkillCatalogDisclosure:
 
         with (
             patch(
-                "turnstone.core.session.list_skills_by_activation",
+                "pebble.core.session.list_skills_by_activation",
                 return_value=search_skills or [],
             ),
             patch.object(session, "_list_visible_memories", return_value=[]),
@@ -1463,7 +1463,7 @@ class TestSkillsLoadRiskGate:
     @staticmethod
     def _load_item(session, name: str, risk: str):
         row = {"name": name, "risk_level": risk, "enabled": True, "content": "x"}
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_prompt_template_by_name.return_value = row
             return session._prepare_skills("c1", {"action": "load", "name": name})
 
@@ -1493,7 +1493,7 @@ class TestSkillsLoadRiskGate:
         # not-found error is the exec path's job, so prep still asks for
         # approval rather than erroring on the gate.
         session = _make_session()
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_prompt_template_by_name.return_value = None
             item = session._prepare_skills("c1", {"action": "load", "name": "ghost"})
         assert item.get("needs_approval") is True
@@ -1503,7 +1503,7 @@ class TestSkillsLoadRiskGate:
         # child spawn cannot route around it.
         session = _make_session()
         for tier in ("high", "critical"):
-            with patch("turnstone.core.session.get_storage") as gs:
+            with patch("pebble.core.session.get_storage") as gs:
                 gs.return_value.get_prompt_template_by_name.return_value = {
                     "name": "x",
                     "risk_level": tier,
@@ -1514,7 +1514,7 @@ class TestSkillsLoadRiskGate:
             {"name": "y", "risk_level": ""},
             None,
         ):
-            with patch("turnstone.core.session.get_storage") as gs:
+            with patch("pebble.core.session.get_storage") as gs:
                 gs.return_value.get_prompt_template_by_name.return_value = row
                 assert session._high_risk_skill_denied("y") == ""
 
@@ -1523,7 +1523,7 @@ class TestSkillsLoadRiskGate:
         # through (fail closed).  Returning a denial (not "") also keeps
         # spawn_batch's per-row partial-success intact under a storage blip.
         session = _make_session()
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_prompt_template_by_name.side_effect = RuntimeError("db down")
             denial = session._high_risk_skill_denied("z")
         assert denial != ""
@@ -1535,7 +1535,7 @@ class TestSkillsLoadRiskGate:
         # lookup fault — DENY, not allow.  A gate that can't verify the risk
         # tier must not wave the skill through (Copilot review nit).
         session = _make_session()
-        with patch("turnstone.core.session.get_storage", return_value=None):
+        with patch("pebble.core.session.get_storage", return_value=None):
             denial = session._high_risk_skill_denied("z")
         assert denial != ""
         assert "/skill z" in denial

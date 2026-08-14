@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 if TYPE_CHECKING:
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
 
 def _make_session() -> ChatSession:
@@ -14,10 +14,10 @@ def _make_session() -> ChatSession:
     from unittest.mock import patch
 
     with (
-        patch("turnstone.core.memory.register_workstream"),
-        patch("turnstone.core.session.save_message"),
+        patch("pebble.core.memory.register_workstream"),
+        patch("pebble.core.session.save_message"),
     ):
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         ui = MagicMock()
         session = ChatSession(
@@ -163,7 +163,7 @@ class TestPrepareNotify:
 
 class TestExecNotify:
     def test_sends_http_to_channel_gateway(self, tmp_path):
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -188,8 +188,8 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
-            patch("turnstone.core.session.httpx.post", return_value=mock_resp) as mock_post,
+            patch("pebble.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.httpx.post", return_value=mock_resp) as mock_post,
             patch.dict("os.environ", {}, clear=False),
         ):
             call_id, msg = session._exec_notify(item)
@@ -202,7 +202,7 @@ class TestExecNotify:
         assert post_kwargs.kwargs["json"]["message"] == "Hello!"
 
     def test_no_services_available(self, tmp_path):
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         # No services registered
@@ -221,7 +221,7 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.get_storage", return_value=storage),
             patch.object(session, "_backoff_or_cancelled"),
         ):
             call_id, msg = session._exec_notify(item)
@@ -229,7 +229,7 @@ class TestExecNotify:
         assert "no channel gateway" in msg.lower()
 
     def test_rate_limit(self, tmp_path):
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -254,8 +254,8 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
-            patch("turnstone.core.session.httpx.post", return_value=mock_resp),
+            patch("pebble.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.httpx.post", return_value=mock_resp),
             patch.dict("os.environ", {}, clear=False),
         ):
             for _i in range(5):
@@ -268,7 +268,7 @@ class TestExecNotify:
 
     def test_rate_limit_not_consumed_on_failure(self, tmp_path):
         """Failed delivery should not consume rate limit slots."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -287,9 +287,9 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.get_storage", return_value=storage),
             patch(
-                "turnstone.core.session.httpx.post",
+                "pebble.core.session.httpx.post",
                 side_effect=ConnectionError("refused"),
             ),
             patch.dict("os.environ", {}, clear=False),
@@ -305,7 +305,7 @@ class TestExecNotify:
         assert session._notify_count == 0
 
     def test_http_failure_reported(self, tmp_path):
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -324,9 +324,9 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.get_storage", return_value=storage),
             patch(
-                "turnstone.core.session.httpx.post",
+                "pebble.core.session.httpx.post",
                 side_effect=ConnectionError("refused"),
             ),
             patch.dict("os.environ", {}, clear=False),
@@ -341,7 +341,7 @@ class TestExecNotify:
 
     def test_first_healthy_only(self, tmp_path):
         """Only the first healthy gateway should receive the request."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -367,8 +367,8 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
-            patch("turnstone.core.session.httpx.post", return_value=mock_resp) as mock_post,
+            patch("pebble.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.httpx.post", return_value=mock_resp) as mock_post,
             patch.dict("os.environ", {}, clear=False),
         ):
             session._exec_notify(item)
@@ -378,7 +378,7 @@ class TestExecNotify:
 
     def test_ssrf_protection(self, tmp_path):
         """URLs with non-http(s) schemes should be skipped."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         # Register a service with an invalid scheme
@@ -398,8 +398,8 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
-            patch("turnstone.core.session.httpx.post") as mock_post,
+            patch("pebble.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.httpx.post") as mock_post,
             patch.dict("os.environ", {}, clear=False),
             patch.object(session, "_backoff_or_cancelled"),
         ):
@@ -453,8 +453,8 @@ class TestExecNotify:
         mock_storage.list_services = _list_services
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=mock_storage),
-            patch("turnstone.core.session.httpx.post", return_value=mock_resp),
+            patch("pebble.core.session.get_storage", return_value=mock_storage),
+            patch("pebble.core.session.httpx.post", return_value=mock_resp),
             patch.dict("os.environ", {}, clear=False),
             patch.object(session, "_backoff_or_cancelled") as mock_backoff,
         ):
@@ -467,7 +467,7 @@ class TestExecNotify:
 
     def test_retry_on_all_gateways_failed(self, tmp_path):
         """Retries when all gateways fail on first attempt but succeed on retry."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -500,8 +500,8 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
-            patch("turnstone.core.session.httpx.post", side_effect=_post),
+            patch("pebble.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.httpx.post", side_effect=_post),
             patch.dict("os.environ", {}, clear=False),
             patch.object(session, "_backoff_or_cancelled") as mock_backoff,
         ):
@@ -512,7 +512,7 @@ class TestExecNotify:
 
     def test_no_services_logs_warning(self, tmp_path):
         """Server-side warning is logged when no services are available."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
 
@@ -530,9 +530,9 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.get_storage", return_value=storage),
             patch.object(session, "_backoff_or_cancelled"),
-            patch("turnstone.core.session.log") as mock_log,
+            patch("pebble.core.session.log") as mock_log,
         ):
             session._exec_notify(item)
 
@@ -545,7 +545,7 @@ class TestExecNotify:
 
     def test_all_gateways_failed_logs_warning(self, tmp_path):
         """Server-side warning is logged when all gateways fail."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -564,14 +564,14 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.get_storage", return_value=storage),
             patch(
-                "turnstone.core.session.httpx.post",
+                "pebble.core.session.httpx.post",
                 side_effect=ConnectionError("refused"),
             ),
             patch.dict("os.environ", {}, clear=False),
             patch.object(session, "_backoff_or_cancelled"),
-            patch("turnstone.core.session.log") as mock_log,
+            patch("pebble.core.session.log") as mock_log,
         ):
             session._exec_notify(item)
 
@@ -583,7 +583,7 @@ class TestExecNotify:
 
     def test_gateway_200_but_no_delivery(self, tmp_path):
         """HTTP 200 with all results failed should not count as success."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_path / "test.db"))
         storage.register_service("channel", "ch-1", "http://localhost:8091")
@@ -608,8 +608,8 @@ class TestExecNotify:
         from unittest.mock import patch
 
         with (
-            patch("turnstone.core.session.get_storage", return_value=storage),
-            patch("turnstone.core.session.httpx.post", return_value=mock_resp),
+            patch("pebble.core.session.get_storage", return_value=storage),
+            patch("pebble.core.session.httpx.post", return_value=mock_resp),
             patch.dict("os.environ", {}, clear=False),
             patch.object(session, "_backoff_or_cancelled"),
         ):

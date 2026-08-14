@@ -28,11 +28,11 @@ from unittest.mock import MagicMock
 
 from starlette.requests import Request
 
-from turnstone.core.session_routes import (
+from pebble.core.session_routes import (
     SessionEndpointConfig,
     make_events_handler,
 )
-from turnstone.core.session_ui_base import SessionUIBase
+from pebble.core.session_ui_base import SessionUIBase
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -272,7 +272,7 @@ def test_event_id_persists_across_turn_boundaries(monkeypatch: Any) -> None:
     Batch window forced to 0 (per-token flush) — this test pins id
     numbering across turn boundaries, not the batching cadence."""
 
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
     ui = _make_ui()
     ui.on_content_token("turn-N tok1 ")
     ui.on_content_token("turn-N tok2 ")
@@ -333,7 +333,7 @@ def test_truncated_path_snapshot_captures_real_snap_seq(monkeypatch: Any) -> Non
     the truncation scenario needs 10 distinct buffered events."""
     import collections
 
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
     ui = _make_ui()
     ui._event_buffer = collections.deque(maxlen=3)
     # Fire enough events to trigger truncation on reconnect with a
@@ -590,7 +590,7 @@ def test_handler_replay_ok_skips_snapshot_emits_id(monkeypatch: Any) -> None:
     Batch window forced to 0 so the two tokens are two ring entries
     (the assertion wants two distinct ``id:`` lines)."""
 
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
     ui = _make_ui()
     ui.on_content_token("hello ")
     ui.on_content_token("world")
@@ -615,7 +615,7 @@ def test_handler_truncated_emits_envelope_then_snapshot(monkeypatch: Any) -> Non
     the truncation scenario needs the deque to evict."""
     import collections
 
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
     ui = _make_ui()
     ui._event_buffer = collections.deque(maxlen=3)
     for i in range(10):
@@ -699,7 +699,7 @@ def test_handler_fresh_connect_in_error_state_surfaces_last_error(monkeypatch: A
     ``state_change`` / ``in_progress_snapshot``).  The reconnect half is
     pinned by ``test_handler_replay_ok_does_not_resurface_last_error``.
     """
-    import turnstone.core.memory as memory_mod
+    import pebble.core.memory as memory_mod
 
     monkeypatch.setattr(memory_mod, "load_last_error", lambda _ws: "boom: kaboom")
 
@@ -728,7 +728,7 @@ def test_handler_replay_ok_does_not_resurface_last_error(monkeypatch: Any) -> No
     carries the original ``error`` event, so the synthetic last_error
     surface must NOT fire — otherwise a reconnect to an errored ws would
     double the error bubble.  The surface is fresh/truncated-only."""
-    import turnstone.core.memory as memory_mod
+    import pebble.core.memory as memory_mod
 
     monkeypatch.setattr(memory_mod, "load_last_error", lambda _ws: "boom")
 
@@ -858,7 +858,7 @@ def test_drain_loop_closes_with_overflow_frame_on_poison() -> None:
     client can count overflow closes (reconnect-limiter + the
     drop-vs-render-wedge field instrumentation) without advancing
     ``lastEventId`` past the gap."""
-    from turnstone.core.session_ui_base import _DEFAULT_LISTENER_QUEUE_MAX
+    from pebble.core.session_ui_base import _DEFAULT_LISTENER_QUEUE_MAX
 
     ui = _make_ui()
     handler = _wire_events_handler(ui)
@@ -899,7 +899,7 @@ def test_drain_loop_delivers_until_poison_then_stops_before_backlog() -> None:
     BEFORE delivering the queued backlog (check precedes the blocking
     get), so the client's lastEventId freezes at the contiguous prefix
     and reconnect replays everything else."""
-    from turnstone.core.session_ui_base import _DEFAULT_LISTENER_QUEUE_MAX
+    from pebble.core.session_ui_base import _DEFAULT_LISTENER_QUEUE_MAX
 
     ui = _make_ui()
     handler = _wire_events_handler(ui)
@@ -958,7 +958,7 @@ def test_listener_queue_basic_put_get_semantics() -> None:
     a blocked ``get(timeout=...)`` is woken by a put (the
     ``not_empty.notify`` path the drain loop's executor get relies on),
     and the poison latch engages exactly at the first rejected put."""
-    from turnstone.core.session_ui_base import _ListenerQueue
+    from pebble.core.session_ui_base import _ListenerQueue
 
     q = _ListenerQueue(maxsize=2)
     q.put_nowait({"n": 1})
@@ -1014,7 +1014,7 @@ def test_closing_queue_unwinds_clean_not_overflow_when_poisoned() -> None:
         await agen.__anext__()  # synthetic state_change
         # Overflow the listener queue so it poisons, exactly as a slow
         # consumer would, THEN close the ws (evict/delete/close path).
-        from turnstone.core.session_ui_base import _DEFAULT_LISTENER_QUEUE_MAX
+        from pebble.core.session_ui_base import _DEFAULT_LISTENER_QUEUE_MAX
 
         for i in range(_DEFAULT_LISTENER_QUEUE_MAX + 1):
             ui._enqueue({"type": "info", "message": f"m{i}"})
@@ -1041,7 +1041,7 @@ def test_broadcast_ws_closed_marks_closing_on_poisoned_queue() -> None:
     flag even when the queue is poisoned/full (its in-band ``ws_closed``
     put is refused by the poison latch).  Pins the wiring finding [1]
     depends on: ``mark_closing`` is called for every listener."""
-    from turnstone.core.adapters._ui_cleanup import _broadcast_ws_closed_to_listeners
+    from pebble.core.adapters._ui_cleanup import _broadcast_ws_closed_to_listeners
 
     ui = _make_ui()
     lq = ui._register_listener(maxsize=2)
@@ -1061,7 +1061,7 @@ def test_healthy_queue_close_still_delivers_ws_closed_sentinel() -> None:
     non-full queue still receives the in-band ``ws_closed`` sentinel
     (so a drain loop blocked in ``get`` wakes immediately) AND gets the
     ``closing`` flag."""
-    from turnstone.core.adapters._ui_cleanup import _broadcast_ws_closed_to_listeners
+    from pebble.core.adapters._ui_cleanup import _broadcast_ws_closed_to_listeners
 
     ui = _make_ui()
     lq = ui._register_listener(maxsize=100)
@@ -1086,7 +1086,7 @@ def test_healthy_closing_queue_drains_tail_before_close() -> None:
     checked it at the top of the loop and did exactly that); the in-band
     ``ws_closed`` sentinel — which fits, the queue isn't full — closes the
     stream AFTER the drain delivers everything."""
-    from turnstone.core.adapters._ui_cleanup import _broadcast_ws_closed_to_listeners
+    from pebble.core.adapters._ui_cleanup import _broadcast_ws_closed_to_listeners
 
     ui = _make_ui()
     handler = _wire_events_handler(ui)

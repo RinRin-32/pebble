@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone.core.session import (
+from pebble.core.session import (
     ChatSession,
     GenerationCancelled,
     _CancelRef,
     _tool_turn_meta,
 )
-from turnstone.core.trajectory import (
+from pebble.core.trajectory import (
     EffectStatus,
     Role,
     ToolCall,
@@ -1192,7 +1192,7 @@ class TestEffectStatusPersistence:
         }
 
     def test_reconstruct_routes_tool_effect_status(self):
-        from turnstone.core.storage._utils import reconstruct_turns
+        from pebble.core.storage._utils import reconstruct_turns
 
         # row: (id, role, content, tool_name, tc_id, provider_data,
         #       tool_calls, source, event_id, is_error, meta)
@@ -1214,7 +1214,7 @@ class TestEffectStatusPersistence:
         assert turns[0].is_error is True
 
     def test_reconstruct_leaves_system_source_meta_untouched(self):
-        from turnstone.core.storage._utils import reconstruct_turns
+        from pebble.core.storage._utils import reconstruct_turns
 
         sys_row = (
             2,

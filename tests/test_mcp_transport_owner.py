@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from turnstone.core.mcp_client import MCPClientManager
+from pebble.core.mcp_client import MCPClientManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -129,8 +129,8 @@ class TestTransportOwnerLifecycle:
         fake = _fake_transport_and_session(patches)
 
         with (
-            patch("turnstone.core.mcp_client.stdio_client", patches["stdio_client"]),
-            patch("turnstone.core.mcp_client.ClientSession", patches["ClientSession"]),
+            patch("pebble.core.mcp_client.stdio_client", patches["stdio_client"]),
+            patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
         ):
             _run(loop, mgr._connect_one_locked("srv", mgr._server_configs["srv"]))
             state = mgr._static_servers["srv"]
@@ -164,8 +164,8 @@ class TestTransportOwnerLifecycle:
         fake = _fake_transport_and_session(patches)
 
         with (
-            patch("turnstone.core.mcp_client.stdio_client", patches["stdio_client"]),
-            patch("turnstone.core.mcp_client.ClientSession", patches["ClientSession"]),
+            patch("pebble.core.mcp_client.stdio_client", patches["stdio_client"]),
+            patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
         ):
             _run(loop, mgr._connect_one_locked("srv", mgr._server_configs["srv"]))
             state = mgr._static_servers["srv"]
@@ -224,8 +224,8 @@ class TestTransportOwnerLifecycle:
             return asyncio.get_running_loop().time() - t0, exc
 
         with (
-            patch("turnstone.core.mcp_client.stdio_client", patches["stdio_client"]),
-            patch("turnstone.core.mcp_client.ClientSession", patches["ClientSession"]),
+            patch("pebble.core.mcp_client.stdio_client", patches["stdio_client"]),
+            patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
         ):
             elapsed, exc = _run(loop, _drive(), timeout=15)
 
@@ -275,7 +275,7 @@ class TestTransportOwnerLifecycle:
             owner_exc = owner.exception() if owner.done() and not owner.cancelled() else None
             return waiter_exc, owner_exc
 
-        with patch("turnstone.core.mcp_client.stdio_client", escaping_stdio_client):
+        with patch("pebble.core.mcp_client.stdio_client", escaping_stdio_client):
             waiter_exc, owner_exc = _run(loop, _drive(), timeout=10)
 
         assert isinstance(waiter_exc, ConnectionError)  # waiter resolved, never hung
@@ -290,7 +290,7 @@ class TestTransportOwnerLifecycle:
             yield  # pragma: no cover
 
         with (
-            patch("turnstone.core.mcp_client.stdio_client", failing_stdio_client),
+            patch("pebble.core.mcp_client.stdio_client", failing_stdio_client),
             pytest.raises(ConnectionError, match="refused"),
         ):
             _run(loop, mgr._connect_one_locked("srv", mgr._server_configs["srv"]))
@@ -347,7 +347,7 @@ class TestTransportOwnerLifecycle:
                 await asyncio.sleep(0.02)
             raise AssertionError("owner task still alive after caller cancel")
 
-        with patch("turnstone.core.mcp_client.stdio_client", hanging_stdio_client):
+        with patch("pebble.core.mcp_client.stdio_client", hanging_stdio_client):
             _run(loop, _drive(), timeout=15)
 
         assert events == ["transport_enter", "transport_exit"]

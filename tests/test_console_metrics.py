@@ -1,8 +1,8 @@
-"""Tests for turnstone.console.metrics."""
+"""Tests for pebble.console.metrics."""
 
 from __future__ import annotations
 
-from turnstone.console.metrics import ConsoleMetrics
+from pebble.console.metrics import ConsoleMetrics
 
 
 class TestRecordRoute:

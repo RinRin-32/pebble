@@ -1,9 +1,9 @@
-"""Tests for turnstone.core.policy."""
+"""Tests for pebble.core.policy."""
 
 import pytest
 
-from turnstone.core.policy import evaluate_tool_policies_batch, evaluate_tool_policy
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.policy import evaluate_tool_policies_batch, evaluate_tool_policy
+from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture
@@ -139,7 +139,7 @@ def test_mcp_batch_mixed(storage):
 
 def test_normalize_resource_uri_prevents_traversal():
     """URI normalization resolves .. segments to prevent policy traversal bypass."""
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     # Normal URI unchanged
     assert ChatSession._normalize_resource_uri("file:///docs/readme.md") == "file:///docs/readme.md"

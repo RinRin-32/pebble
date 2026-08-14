@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from turnstone.core.trajectory import (
+from pebble.core.trajectory import (
     AttachmentRef,
     ProviderNative,
     Role,

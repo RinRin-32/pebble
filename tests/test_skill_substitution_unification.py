@@ -4,7 +4,7 @@ Pins the invariant that skill-body placeholder substitution is IDENTICAL
 across every invocation context.  Interactive load, default skills, and
 ``task_agent`` sub-agents all route through
 ``ChatSession._render_skill_body`` — so a skill reading ``$ARGUMENTS`` or
-``${TURNSTONE_EFFORT}`` resolves the same everywhere, rather than
+``${PEBBLE_EFFORT}`` resolves the same everywhere, rather than
 rendering literally on the ``task_agent`` path (which previously ran
 ``_render_template`` alone).
 
@@ -12,7 +12,7 @@ Also covers the two behaviours the unified path newly guarantees:
 
 * ``${TURNSTONE_*}`` env vars (canonical) and their ``${CLAUDE_*}``
   back-compat aliases both resolve.
-* ``${TURNSTONE_SKILL_DIR}`` resolves to the concrete materialized bundle
+* ``${PEBBLE_SKILL_DIR}`` resolves to the concrete materialized bundle
   path in the rendered body, because resources are materialized BEFORE
   substitution (the ordering fix).
 """
@@ -21,8 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from pebble.core.storage._registry import get_storage
 from tests._session_helpers import make_session
-from turnstone.core.storage._registry import get_storage
 
 if TYPE_CHECKING:
     import pytest
@@ -73,9 +73,7 @@ class TestRenderSkillBodySharedPath:
     def test_env_vars_resolve(self, tmp_db: str) -> None:
         session = make_session(reasoning_effort="high")
         try:
-            out = session._render_skill_body(
-                "id ${TURNSTONE_SESSION_ID} effort ${TURNSTONE_EFFORT}"
-            )
+            out = session._render_skill_body("id ${PEBBLE_SESSION_ID} effort ${PEBBLE_EFFORT}")
             assert out == f"id {session._ws_id} effort high"
         finally:
             session.close()
@@ -98,11 +96,11 @@ class TestRenderSkillBodySharedPath:
             session.close()
 
     def test_curly_and_spec_passes_both_apply(self, tmp_db: str) -> None:
-        # Legacy ``{{model}}`` AND spec ``${TURNSTONE_EFFORT}`` in one body —
+        # Legacy ``{{model}}`` AND spec ``${PEBBLE_EFFORT}`` in one body —
         # both passes run through the shared path.
         session = make_session(model="my-model", reasoning_effort="high")
         try:
-            out = session._render_skill_body("model {{model}} effort ${TURNSTONE_EFFORT}")
+            out = session._render_skill_body("model {{model}} effort ${PEBBLE_EFFORT}")
             assert out == "model my-model effort high"
         finally:
             session.close()
@@ -124,7 +122,7 @@ class TestRenderSkillBodySharedPath:
         session = make_session(reasoning_effort="high")
         try:
             out = session._render_skill_body(
-                "run ./deploy.sh $1 $2 at ${TURNSTONE_EFFORT}; process $ARGUMENTS",
+                "run ./deploy.sh $1 $2 at ${PEBBLE_EFFORT}; process $ARGUMENTS",
                 substitute_args=False,
             )
             assert out == "run ./deploy.sh $1 $2 at high; process $ARGUMENTS"
@@ -133,26 +131,24 @@ class TestRenderSkillBodySharedPath:
 
     def test_skill_dir_literal_on_sub_agent_path(self, tmp_db: str) -> None:
         # task_agent calls _render_skill_body with no skill_dir (sub-agent
-        # bundles aren't materialized yet), so ${TURNSTONE_SKILL_DIR} stays
+        # bundles aren't materialized yet), so ${PEBBLE_SKILL_DIR} stays
         # literal on this path — unchanged from before, resolved in a later
         # step.  The env vars that DO have values still resolve.
         session = make_session(reasoning_effort="high")
         try:
-            out = session._render_skill_body(
-                "dir ${TURNSTONE_SKILL_DIR} effort ${TURNSTONE_EFFORT}"
-            )
-            assert out == "dir ${TURNSTONE_SKILL_DIR} effort high"
+            out = session._render_skill_body("dir ${PEBBLE_SKILL_DIR} effort ${PEBBLE_EFFORT}")
+            assert out == "dir ${PEBBLE_SKILL_DIR} effort high"
         finally:
             session.close()
 
 
 class TestSkillDirResolvesInBody:
-    """Materialize-before-substitute: ``${TURNSTONE_SKILL_DIR}`` in a skill
+    """Materialize-before-substitute: ``${PEBBLE_SKILL_DIR}`` in a skill
     body resolves to the concrete on-disk bundle path after a full load."""
 
     def test_turnstone_skill_dir_in_body(self, tmp_db: str) -> None:
         db = get_storage()
-        _create_skill(db, "s1", "dir-skill", "Scripts under ${TURNSTONE_SKILL_DIR}/scripts.")
+        _create_skill(db, "s1", "dir-skill", "Scripts under ${PEBBLE_SKILL_DIR}/scripts.")
         db.create_skill_resource("r1", "s1", "scripts/go.py", "print('x')")
 
         session = make_session(skill="dir-skill")
@@ -167,13 +163,13 @@ class TestSkillDirResolvesInBody:
         # CLAUDE_SKILL_DIR is NOT a turnstone-owned alias: it stays a literal
         # placeholder even with a materialized bundle (that name belongs to the
         # host in bash; turnstone claims neither surface).  The canonical
-        # TURNSTONE_SKILL_DIR does resolve.
+        # PEBBLE_SKILL_DIR does resolve.
         db = get_storage()
         _create_skill(
             db,
             "s1",
             "dir-alias-skill",
-            "Bundle at ${CLAUDE_SKILL_DIR} vs ${TURNSTONE_SKILL_DIR}",
+            "Bundle at ${CLAUDE_SKILL_DIR} vs ${PEBBLE_SKILL_DIR}",
         )
         db.create_skill_resource("r1", "s1", "references/a.md", "# a")
 
@@ -189,19 +185,19 @@ class TestSkillDirResolvesInBody:
         # No bundled resources → no dir → placeholder stays literal
         # (graceful degradation), not an empty path.
         db = get_storage()
-        _create_skill(db, "s1", "no-res-skill", "Path ${TURNSTONE_SKILL_DIR} here.")
+        _create_skill(db, "s1", "no-res-skill", "Path ${PEBBLE_SKILL_DIR} here.")
 
         session = make_session(skill="no-res-skill")
         try:
             assert session._skill_resources_dir is None
-            assert session._skill_content == "Path ${TURNSTONE_SKILL_DIR} here."
+            assert session._skill_content == "Path ${PEBBLE_SKILL_DIR} here."
         finally:
             session.close()
 
 
 class TestSkillResourceEnvAliases:
     """Bash env exposes the materialized bundle dir under turnstone-owned
-    names (``TURNSTONE_SKILL_DIR`` / ``SKILL_RESOURCES_DIR``) unconditionally,
+    names (``PEBBLE_SKILL_DIR`` / ``SKILL_RESOURCES_DIR``) unconditionally,
     and never under the foreign ``CLAUDE_SKILL_DIR`` — that name is the host's,
     so turnstone leaves it untouched whether or not the host has set it."""
 
@@ -218,7 +214,7 @@ class TestSkillResourceEnvAliases:
             env = session._skill_resource_env()
             d = session._skill_resources_dir
             assert env["SKILL_RESOURCES_DIR"] == d
-            assert env["TURNSTONE_SKILL_DIR"] == d
+            assert env["PEBBLE_SKILL_DIR"] == d
             # turnstone never supplies CLAUDE_SKILL_DIR (the host's namespace),
             # even when the host hasn't set it.
             assert "CLAUDE_SKILL_DIR" not in env
@@ -240,7 +236,7 @@ class TestSkillResourceEnvAliases:
         try:
             env = session._skill_resource_env()
             d = session._skill_resources_dir
-            assert env["TURNSTONE_SKILL_DIR"] == d
+            assert env["PEBBLE_SKILL_DIR"] == d
             assert env["SKILL_RESOURCES_DIR"] == d
             assert "CLAUDE_SKILL_DIR" not in env
         finally:

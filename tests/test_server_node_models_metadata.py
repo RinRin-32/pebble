@@ -18,9 +18,9 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from turnstone.core.healthcheck import HealthTrackerRegistry
-from turnstone.core.model_registry import ModelConfig, ModelRegistry
-from turnstone.server import (
+from pebble.core.healthcheck import HealthTrackerRegistry
+from pebble.core.model_registry import ModelConfig, ModelRegistry
+from pebble.server import (
     _collect_node_models_metadata,
     _publish_models_metadata,
 )
@@ -158,7 +158,7 @@ def test_publish_records_metric_outcome(monkeypatch):
     record either outcome — counters should reflect actual cache
     decisions, not transient DB errors that will retry.
 
-    Replaces the module-level ``turnstone.server._metrics`` binding
+    Replaces the module-level ``pebble.server._metrics`` binding
     via string-form monkeypatch (with auto-restore) rather than
     patching an instance attribute on the imported singleton.  Other
     tests in the suite reassign ``srv_mod._metrics`` (some without
@@ -174,7 +174,7 @@ def test_publish_records_metric_outcome(monkeypatch):
         def record_node_models_publish(self, *, written: bool) -> None:
             calls.append(written)
 
-    monkeypatch.setattr("turnstone.server._metrics", _FakeMetrics())
+    monkeypatch.setattr("pebble.server._metrics", _FakeMetrics())
 
     _publish_models_metadata(state, storage, "node-a")  # first → write
     _publish_models_metadata(state, storage, "node-a")  # second → skip
@@ -246,8 +246,8 @@ def test_model_reload_endpoint_rewrites_models_metadata(monkeypatch, tmp_path):
     loader to return a registry with a different alias set so the
     publish-cache invalidation is exercised end-to-end.
     """
-    from turnstone.core.storage._sqlite import SQLiteBackend
-    from turnstone.server import internal_model_reload
+    from pebble.core.storage._sqlite import SQLiteBackend
+    from pebble.server import internal_model_reload
 
     storage = SQLiteBackend(str(tmp_path / "reload.db"))
 
@@ -283,14 +283,14 @@ def test_model_reload_endpoint_rewrites_models_metadata(monkeypatch, tmp_path):
     request = SimpleNamespace(app=SimpleNamespace(state=app_state))
 
     # Patch the loader and storage accessors used inside the endpoint.
-    # ``internal_model_reload`` does ``from turnstone.core.storage._registry
+    # ``internal_model_reload`` does ``from pebble.core.storage._registry
     # import get_storage`` inline, so patching the symbol on that module
     # is what intercepts the call.
-    monkeypatch.setattr("turnstone.core.model_registry.load_model_registry", lambda **_kw: new_reg)
-    monkeypatch.setattr("turnstone.core.storage._registry.get_storage", lambda: storage)
+    monkeypatch.setattr("pebble.core.model_registry.load_model_registry", lambda **_kw: new_reg)
+    monkeypatch.setattr("pebble.core.storage._registry.get_storage", lambda: storage)
     # The endpoint also broadcasts schema refreshes to active sessions
     # — stub this out, it's irrelevant to the metadata-write path.
-    monkeypatch.setattr("turnstone.server._broadcast_agent_tool_schema_refresh", lambda _s: None)
+    monkeypatch.setattr("pebble.server._broadcast_agent_tool_schema_refresh", lambda _s: None)
 
     response = internal_model_reload(request)  # type: ignore[arg-type]
     assert response.status_code == 200

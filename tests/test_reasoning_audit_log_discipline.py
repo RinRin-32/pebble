@@ -27,15 +27,15 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-from tests._session_helpers import make_session
-from turnstone.core.history_decoration import (
+from pebble.core.history_decoration import (
     extract_reasoning_for_history,
     extract_reasoning_text_from_provider_content,
 )
-from turnstone.core.providers._anthropic import AnthropicProvider
-from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
-from turnstone.core.providers._protocol import StreamChunk, UsageInfo
+from pebble.core.providers._anthropic import AnthropicProvider
+from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from pebble.core.providers._openai_responses import OpenAIResponsesProvider
+from pebble.core.providers._protocol import StreamChunk, UsageInfo
+from tests._session_helpers import make_session
 
 _MARKER = "SECRET_REASONING_MARKER_xyz123_unlikely_collision"
 
@@ -308,7 +308,7 @@ class TestReasoningAuditLogDiscipline:
         wire-bound (vLLM template render) and UI-bound (history rehydration
         already covered by Phase 1 tests above), but MUST NOT appear in
         any INFO+ log call along the way."""
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         captured, patchers = _capture_log_calls()
         for p in patchers:
@@ -339,7 +339,7 @@ class TestReasoningAuditLogDiscipline:
         adjacent to the reasoning bytes; a defensive ``log.warning``
         showing the message dict on an error path would silently
         violate the contract)."""
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = make_session()
         session._registry = SimpleNamespace(

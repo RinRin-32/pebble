@@ -600,7 +600,7 @@ work.
 
 **Breaking changes at a glance** (details in the sections below): the
 `/creative` REPL toggle removed (replaced by the `writer` persona), the
-`turnstone-bootstrap` entry point renamed to `turnstone-doctor`, and the
+`turnstone-bootstrap` entry point renamed to `pebble-doctor`, and the
 approval-status API/SDK field `pending_approval_details` changed from a
 single object to a list (one entry per concurrent approval cycle).
 
@@ -638,7 +638,7 @@ single object to a list (one entry per concurrent approval cycle).
   active model can't natively handle an attachment, the client degrades
   gracefully (PDF → extracted text, audio → transcript) instead of
   failing the turn.
-- **Eval measurement / optimizer split** (#763, #765) — `turnstone-eval`
+- **Eval measurement / optimizer split** (#763, #765) — `pebble-eval`
   is now a measure-only substrate with the prompt optimizer factored out,
   plus a new skill-adherence measurement mode.
 - **Deployment examples** — a vLLM + LiteLLM unified-memory inference
@@ -675,7 +675,7 @@ single object to a list (one entry per concurrent approval cycle).
   Skill-body substitution is unified across every invocation context so
   the same skill renders identically whether loaded interactively, by the
   model, or inside a sub-agent.
-- **`turnstone-doctor` replaces `turnstone-bootstrap`** (#718)
+- **`pebble-doctor` replaces `turnstone-bootstrap`** (#718)
   *(BREAKING)* — the setup/diagnostics entry point is renamed; update any
   scripts or service units that invoke `turnstone-bootstrap`.
 - **Honest cancellation dispositions** — cancelled or timed-out
@@ -750,7 +750,7 @@ The first stable release of the 1.6 line — and the first under Apache 2.0.
 > workstreams and attachments in place — **back up your storage before
 > upgrading** (`pg_dump` for PostgreSQL; copy the database file for
 > SQLite). Background: discussion
-> [#631](https://github.com/turnstonelabs/turnstone/discussions/631).
+> [#631](https://github.com/RinRin-32/pebble/discussions/631).
 
 **Breaking changes at a glance** (details in the sections below):
 `web_search` backend overhaul (Tavily/DuckDuckGo removed, `topic` →
@@ -829,8 +829,8 @@ endpoint replaced by path-keyed workstream verbs.
   models boot into a degraded state instead of crash-looping; channel
   gateways stand by when no adapter token is set.
 - **MCP OAuth tokens encrypted at rest**.
-- **`turnstone-admin` reads `config.toml`** — same `[database]` section
-  and precedence as the server (`CLI / config.toml > TURNSTONE_DB_* env
+- **`pebble-admin` reads `config.toml`** — same `[database]` section
+  and precedence as the server (`CLI / config.toml > PEBBLE_DB_* env
   > defaults`), including `pool_size` and the `ssl*` knobs it previously
   dropped; new `--config PATH` flag.
 
@@ -914,7 +914,7 @@ endpoint replaced by path-keyed workstream verbs.
 - **Tavily and DuckDuckGo `web_search` backends** *(BREAKING)* —
   replaced by the bundled SearxNG service. Removed:
   `tools.tavily_api_key`, `$TAVILY_API_KEY`, `[api].tavily_key`, and the
-  `ddg` install extra. Point `TURNSTONE_SEARXNG_URL` at an existing
+  `ddg` install extra. Point `PEBBLE_SEARXNG_URL` at an existing
   instance or use the bundled one; no database migration required.
 - **`man`, `math`, and `plan_agent` built-in tools** *(BREAKING)* —
   `man`/`math` duplicated `bash`; planning is better expressed as a
@@ -961,7 +961,7 @@ INSERT paths.  No schema changes.
 ### Fixed
 
 - **`intent_verdicts` PK collisions on every llm_fallback delivery** —
-  async LLM-tier "llm_fallback" verdicts (`turnstone/core/judge.py` —
+  async LLM-tier "llm_fallback" verdicts (`pebble/core/judge.py` —
   `_deliver_fallbacks` and the in-loop fallback path) deliberately
   reuse the heuristic verdict's `verdict_id` so the row gets
   "upgraded in place" from `tier="heuristic"` → `tier="llm_fallback"`
@@ -1108,7 +1108,7 @@ the dispatcher uses in-process fan-out).
   loop; the 60 s loop is retained as the backstop for crash-shaped loss
   (NOTIFY only fires on real writes). The storage layer also gains a uniform
   `notify` / `listen` API with an SQLite synthetic-sweep fallback so consumer
-  code is identical across backends. `TURNSTONE_DB_LISTEN_URL` (or
+  code is identical across backends. `PEBBLE_DB_LISTEN_URL` (or
   `[database] listen_url` in `config.toml`) points the dispatcher at a
   direct-to-Postgres URL; defaults to the main DB URL when unset.
 - **Event-driven `wait_for_workstream`** — coord's block-wait tool no longer
@@ -1362,7 +1362,7 @@ on `conversations`.
   concurrent request.
 - **OIDC hardening** — multiple security and correctness fixes:
   SSRF + plaintext credential exfil via discovery document (sec-1, sec-3);
-  `TURNSTONE_OIDC_REDIRECT_BASE` now required, Host-header fallback removed
+  `PEBBLE_OIDC_REDIRECT_BASE` now required, Host-header fallback removed
   (sec-2); atomic user + identity provisioning prevents orphan rows (bug-1);
   callback robustness — typed exceptions, shape checks, log sanitization, JS
   race (bug-4–6, sec-4); role-mapping concurrency serialized (bug-2, perf-1);
@@ -2033,7 +2033,7 @@ server applies automatically on first startup. All are additive; no data loss.
 
   Three lifted helpers (``sniff_image_mime``,
   ``classify_text_attachment``, ``upload_lock``) moved from
-  ``turnstone/server.py`` to ``turnstone/core/attachments.py`` so
+  ``turnstone/server.py`` to ``pebble/core/attachments.py`` so
   both processes use the canonical implementation. The interactive
   surface keeps the same behaviour; the helpers are simply
   imported from their new home.

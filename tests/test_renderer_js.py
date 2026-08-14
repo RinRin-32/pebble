@@ -33,8 +33,8 @@ from typing import Any
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_UTILS_JS = _REPO_ROOT / "turnstone/shared_static/utils.js"
-_RENDERER_JS = _REPO_ROOT / "turnstone/shared_static/renderer.js"
+_UTILS_JS = _REPO_ROOT / "pebble/shared_static/utils.js"
+_RENDERER_JS = _REPO_ROOT / "pebble/shared_static/renderer.js"
 
 
 def _has_node() -> bool:

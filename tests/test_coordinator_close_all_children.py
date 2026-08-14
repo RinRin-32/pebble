@@ -15,6 +15,8 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
+from pebble.console.server import coordinator_close_all_children
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests._coord_test_helpers import (
     _AuthMiddleware,
     _build_mgr,
@@ -22,8 +24,6 @@ from tests._coord_test_helpers import (
     _FakeConfigStore,
     _seed_children,
 )
-from turnstone.console.server import coordinator_close_all_children
-from turnstone.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture

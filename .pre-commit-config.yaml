@@ -13,4 +13,4 @@ repos:
         additional_dependencies: []
         args: [--config-file=pyproject.toml]
         pass_filenames: false
-        entry: mypy turnstone/
+        entry: mypy pebble/

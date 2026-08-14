@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from turnstone.core.mcp_client import MCPClientManager, PoolEntryState, _AuthCapture
+from pebble.core.mcp_client import MCPClientManager, PoolEntryState, _AuthCapture
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -151,10 +151,8 @@ class TestPoolTransportOwnerLifecycle:
         key = ("user-1", "pool-srv")
 
         with (
-            patch(
-                "turnstone.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]
-            ),
-            patch("turnstone.core.mcp_client.ClientSession", patches["ClientSession"]),
+            patch("pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]),
+            patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
             entry = _run(loop, _connect_under_lock(mgr, key, _http_cfg()))
@@ -228,10 +226,8 @@ class TestPoolTransportOwnerLifecycle:
             return asyncio.get_running_loop().time() - t0, exc
 
         with (
-            patch(
-                "turnstone.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]
-            ),
-            patch("turnstone.core.mcp_client.ClientSession", patches["ClientSession"]),
+            patch("pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]),
+            patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
             elapsed, exc = _run(loop, _drive(), timeout=15)
@@ -324,8 +320,8 @@ class TestPoolTransportOwnerLifecycle:
 
         key = ("user-1", "pool-srv")
         with (
-            patch("turnstone.core.mcp_client.streamablehttp_client", fake_streamablehttp_client),
-            patch("turnstone.core.mcp_client.ClientSession", fake_session),
+            patch("pebble.core.mcp_client.streamablehttp_client", fake_streamablehttp_client),
+            patch("pebble.core.mcp_client.ClientSession", fake_session),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
             entry = _run(loop, _connect_under_lock(mgr, key, _http_cfg()))
@@ -348,10 +344,8 @@ class TestPoolTransportOwnerLifecycle:
         key = ("user-1", "pool-srv")
 
         with (
-            patch(
-                "turnstone.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]
-            ),
-            patch("turnstone.core.mcp_client.ClientSession", patches["ClientSession"]),
+            patch("pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]),
+            patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
             entry = _run(loop, _connect_under_lock(mgr, key, _http_cfg()))
@@ -426,7 +420,7 @@ class TestPoolTransportOwnerLifecycle:
             raise AssertionError("owner task still alive after caller cancel")
 
         with (
-            patch("turnstone.core.mcp_client.streamablehttp_client", hanging_streamablehttp_client),
+            patch("pebble.core.mcp_client.streamablehttp_client", hanging_streamablehttp_client),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
             _run(loop, _drive(), timeout=15)
@@ -454,10 +448,10 @@ class TestPoolOwnerClientKwargs:
         fake_a = _fake_transport_and_session(patches_a)
         with (
             patch(
-                "turnstone.core.mcp_client.streamablehttp_client",
+                "pebble.core.mcp_client.streamablehttp_client",
                 patches_a["streamablehttp_client"],
             ),
-            patch("turnstone.core.mcp_client.ClientSession", patches_a["ClientSession"]),
+            patch("pebble.core.mcp_client.ClientSession", patches_a["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
             _run(loop, _connect_under_lock(mgr, key, _http_cfg(), auth_capture=_AuthCapture()))
@@ -470,10 +464,10 @@ class TestPoolOwnerClientKwargs:
         fake_b = _fake_transport_and_session(patches_b)
         with (
             patch(
-                "turnstone.core.mcp_client.streamablehttp_client",
+                "pebble.core.mcp_client.streamablehttp_client",
                 patches_b["streamablehttp_client"],
             ),
-            patch("turnstone.core.mcp_client.ClientSession", patches_b["ClientSession"]),
+            patch("pebble.core.mcp_client.ClientSession", patches_b["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
             _run(loop, _connect_under_lock(mgr, key, _http_cfg()))

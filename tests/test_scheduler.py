@@ -1,4 +1,4 @@
-"""Tests for turnstone.console.scheduler — TaskScheduler tick and dispatch."""
+"""Tests for pebble.console.scheduler — TaskScheduler tick and dispatch."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone.console.scheduler import TaskScheduler
-from turnstone.sdk._types import TurnstoneAPIError
+from pebble.console.scheduler import TaskScheduler
+from pebble.sdk._types import TurnstoneAPIError
 
 
 def _wire_lock_storage(storage: MagicMock, initial: dict[str, str] | None = None) -> None:
@@ -144,7 +144,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -168,7 +168,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -193,7 +193,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -214,7 +214,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -237,7 +237,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -256,7 +256,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -277,7 +277,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ):
             scheduler._tick()
@@ -302,7 +302,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ):
             scheduler._tick()
@@ -361,7 +361,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage, max_fan_out=3)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -381,7 +381,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -403,7 +403,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             return_value=_mock_create_response(),
         ) as mock_create:
             scheduler._tick()
@@ -424,7 +424,7 @@ class TestSchedulerTick:
 
         scheduler = TaskScheduler(collector, storage)
         with patch(
-            "turnstone.console.scheduler.TurnstoneServer.create_workstream",
+            "pebble.console.scheduler.TurnstoneServer.create_workstream",
             side_effect=TurnstoneAPIError(502, "Bad Gateway"),
         ):
             scheduler._tick()

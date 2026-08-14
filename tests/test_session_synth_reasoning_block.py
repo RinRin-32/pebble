@@ -29,13 +29,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from tests._session_helpers import make_session as _make_session
-from turnstone.core.model_turn import _server_type_of, synth_reasoning_block
-from turnstone.core.providers._anthropic import (
+from pebble.core.model_turn import _server_type_of, synth_reasoning_block
+from pebble.core.providers._anthropic import (
     ANTHROPIC_VALID_BLOCK_TYPES,
     AnthropicProvider,
 )
-from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from tests._session_helpers import make_session as _make_session
 
 
 class TestSynthReasoningBlock:
@@ -227,7 +227,7 @@ class TestStreamResponseSynthBlockIntegration:
         capture (reasoning_delta chunks, content chunks, no
         provider_blocks emitted).
         """
-        from turnstone.core.providers._protocol import StreamChunk, UsageInfo
+        from pebble.core.providers._protocol import StreamChunk, UsageInfo
 
         chunks = []
         # Reasoning first (matches live SSE order).

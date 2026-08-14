@@ -10,8 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests._helpers import wait_until
-from turnstone.core.watch import (
+from pebble.core.watch import (
     WatchRunner,
     build_watch_reminder,
     evaluate_condition,
@@ -20,6 +19,7 @@ from turnstone.core.watch import (
     parse_duration,
     validate_condition,
 )
+from tests._helpers import wait_until
 
 # ---------------------------------------------------------------------------
 # parse_duration
@@ -690,7 +690,7 @@ class TestWatchRunnerDeliveryRetry:
         # budget, and leaves the watch active to re-fire on its next
         # interval.  The baseline (last_output) stays uncommitted so a
         # delta-style stop_on re-fires on the change the model never saw.
-        from turnstone.core.watch import MAX_DELIVERY_ATTEMPTS
+        from pebble.core.watch import MAX_DELIVERY_ATTEMPTS
 
         storage = MagicMock()
         storage.update_watch.return_value = True
@@ -719,7 +719,7 @@ class TestWatchRunnerDeliveryRetry:
         # max_polls budget: once poll_count reaches it, exhaustion commits
         # the held (deactivating) update instead of re-running the command
         # every interval forever against an unreachable workstream.
-        from turnstone.core.watch import MAX_DELIVERY_ATTEMPTS
+        from pebble.core.watch import MAX_DELIVERY_ATTEMPTS
 
         storage = MagicMock()
         storage.update_watch.return_value = True
@@ -738,7 +738,7 @@ class TestWatchRunnerDeliveryRetry:
         # Re-delivery is a cheap in-memory dispatch — a daily watch whose
         # fire hit a busy restore slot must retry within
         # DELIVERY_RETRY_CAP_SECS, not sit on the reminder for 24 h.
-        from turnstone.core.watch import DELIVERY_RETRY_CAP_SECS
+        from pebble.core.watch import DELIVERY_RETRY_CAP_SECS
 
         storage = MagicMock()
         storage.update_watch.return_value = True
@@ -756,7 +756,7 @@ class TestWatchRunnerDeliveryRetry:
         # A permanent failure (restore raises WatchWorkstreamUnrestorable,
         # e.g. corrupt persona stamp) deactivates the watch on the FIRST
         # fire — no held reminder, no waiting out the attempt budget.
-        from turnstone.core.watch import WatchWorkstreamUnrestorable
+        from pebble.core.watch import WatchWorkstreamUnrestorable
 
         storage = MagicMock()
         storage.update_watch.return_value = True
@@ -799,7 +799,7 @@ class TestWatchRunnerDeliveryRetry:
         # When MAX_CONCURRENT_RESTORES restores are already in flight, a
         # new evicted-ws poll must DEFER (return False, hold) rather than
         # block a poll slot — and must not start a restore.
-        from turnstone.core.watch import MAX_CONCURRENT_RESTORES
+        from pebble.core.watch import MAX_CONCURRENT_RESTORES
 
         storage = MagicMock()
         storage.update_watch.return_value = True
@@ -907,7 +907,7 @@ class TestWatchRunnerDeliveryRetry:
         # the WRITE via the redeliver path — the clear-first order let the
         # row re-list into a fresh COMMAND RUN every attempt-budget cycle,
         # forever, with the poll budget never advancing.
-        from turnstone.core.watch import WatchWorkstreamUnrestorable
+        from pebble.core.watch import WatchWorkstreamUnrestorable
 
         storage = MagicMock()
         storage.update_watch.return_value = True
@@ -932,7 +932,7 @@ class TestWatchRunnerDeliveryRetry:
         # not strand the still-active row into a fresh command run every
         # tick: the stash routes the next tick into the redeliver path,
         # which retries the WRITE — never the command.
-        from turnstone.core.watch import WatchWorkstreamUnrestorable
+        from pebble.core.watch import WatchWorkstreamUnrestorable
 
         storage = MagicMock()
         storage.update_watch.side_effect = RuntimeError("disk full")
@@ -964,7 +964,7 @@ class TestWatchRunnerDeliveryRetry:
         # Same pathology on the transient-exhaustion branch: the charge
         # commit failing must keep the hold (write retried next tick), not
         # drop it into a fresh command cycle with the budget never durable.
-        from turnstone.core.watch import MAX_DELIVERY_ATTEMPTS
+        from pebble.core.watch import MAX_DELIVERY_ATTEMPTS
 
         storage = MagicMock()
         storage.update_watch.return_value = True
@@ -1140,7 +1140,7 @@ class TestWatchRunnerRestoreSerialization:
         # this capped degraded state (restores blocked, polling intact) for
         # total poll-pool collapse.  New restores keep deferring; the error
         # log is the operator's restart signal.
-        from turnstone.core.watch import RESTORE_STALL_ALERT_SECS
+        from pebble.core.watch import RESTORE_STALL_ALERT_SECS
 
         storage = MagicMock()
         storage.update_watch.return_value = True

@@ -1,6 +1,6 @@
 # Quickstart
 
-Install Turnstone, then diagnose it with `turnstone-doctor` if anything looks off.
+Install Turnstone, then diagnose it with `pebble-doctor` if anything looks off.
 
 ## Install
 
@@ -19,25 +19,25 @@ user.
 **Other ways to install**
 
 - **Already have Docker?** Clone the repo and `docker compose up` for the full
-  local cluster, or `docker compose -f turnstone/deploy/compose.yaml up` for the
+  local cluster, or `docker compose -f pebble/deploy/compose.yaml up` for the
   released single-node stack. See [docs/docker.md](docs/docker.md).
 - **Python package:** `pip install turnstone` (add `--pre` for the experimental
-  track), then run `turnstone-server` / `turnstone-console` directly. See the
+  track), then run `pebble-server` / `pebble-console` directly. See the
   [README](README.md#quickstart).
 
-## Diagnose: `turnstone-doctor`
+## Diagnose: `pebble-doctor`
 
-`turnstone-doctor` is an LLM-backed assistant that inspects a **running**
+`pebble-doctor` is an LLM-backed assistant that inspects a **running**
 Turnstone install and helps you troubleshoot it. It is **read-only** — it
 investigates and tells you the exact commands to fix things, but never changes
 your system. (Installation is the installer's job, not the doctor's.)
 
 ```bash
 # From a host that has the turnstone package installed:
-turnstone-doctor
+pebble-doctor
 
 # For a Docker install from run.sh (no package on the host), run it with pipx:
-pipx run --spec turnstone turnstone-doctor --dir ~/turnstone
+pipx run --spec turnstone pebble-doctor --dir ~/turnstone
 ```
 
 ### What it does
@@ -69,7 +69,7 @@ pipx run --spec turnstone turnstone-doctor --dir ~/turnstone
 asking for help) — it never needs an API key:
 
 ```bash
-turnstone-doctor --report --dir ~/turnstone
+pebble-doctor --report --dir ~/turnstone
 ```
 
 ```

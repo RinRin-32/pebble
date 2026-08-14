@@ -19,9 +19,9 @@ from typing import Any
 import pytest
 from openai import OpenAI
 
-from turnstone.core.storage import get_storage, init_storage, reset_storage
-from turnstone.eval import core
-from turnstone.eval.core import HeadlessSession, run_skill_adherence
+from pebble.core.storage import get_storage, init_storage, reset_storage
+from pebble.eval import core
+from pebble.eval.core import HeadlessSession, run_skill_adherence
 
 _SKILL = {
     "name": "search-first",

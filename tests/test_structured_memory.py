@@ -1,6 +1,6 @@
-"""Tests for turnstone.core.memory — structured memory facade functions."""
+"""Tests for pebble.core.memory — structured memory facade functions."""
 
-from turnstone.core.memory import (
+from pebble.core.memory import (
     count_structured_memories,
     delete_structured_memory,
     get_structured_memory_by_name,
@@ -260,7 +260,7 @@ class TestSanitizeErrorText:
     inspect/wait surface.
 
     Sanitisation delegates to
-    :func:`turnstone.core.output_guard.redact_credentials` so the
+    :func:`pebble.core.output_guard.redact_credentials` so the
     pattern set is the same one audit logs and the post-tool guard
     use.  The tests below assert the *behaviour* (the secret is gone)
     rather than the exact replacement marker — output_guard owns the
@@ -270,7 +270,7 @@ class TestSanitizeErrorText:
     """
 
     def test_strips_url_userinfo(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         # Misconfigured OPENAI_BASE_URL → httpx ConnectError carries
         # the userinfo verbatim in str(exc).
@@ -281,7 +281,7 @@ class TestSanitizeErrorText:
         assert "api.example.com" in out
 
     def test_strips_url_userinfo_http_too(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         msg = "RequestError on http://admin:s3cret@internal.host/path"
         out = sanitize_error_text(msg)
@@ -292,14 +292,14 @@ class TestSanitizeErrorText:
         """Output_guard already covered DB connection-strings; assert
         the delegation surfaces that coverage so a leaked
         ``DATABASE_URL`` echoed in an error doesn't slip through."""
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         msg = "OperationalError: postgresql://app:topsecret@db.host/main"
         out = sanitize_error_text(msg)
         assert "topsecret" not in out
 
     def test_redacts_openai_keys(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         msg = (
             "AuthenticationError: invalid api key sk-proj-AbCdEfGhIjKlMnOpQrStUv "
@@ -309,14 +309,14 @@ class TestSanitizeErrorText:
         assert "sk-proj-AbCdEfGhIjKlMnOpQrStUv" not in out
 
     def test_redacts_bearer_tokens(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         msg = "401 Unauthorized - Bearer eyJabcDEFghiJKLmnoPQRstuVWX rejected"
         out = sanitize_error_text(msg)
         assert "eyJabcDEFghiJKLmnoPQRstuVWX" not in out
 
     def test_redacts_github_tokens(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         # The output_guard ghp pattern requires exactly 36 chars, so
         # use a realistic-shaped token.
@@ -325,14 +325,14 @@ class TestSanitizeErrorText:
         assert "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij" not in out
 
     def test_redacts_aws_access_keys(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         msg = "S3 error: signature mismatch for AKIAIOSFODNN7EXAMPLE"
         out = sanitize_error_text(msg)
         assert "AKIAIOSFODNN7EXAMPLE" not in out
 
     def test_caps_length(self):
-        from turnstone.core.memory import LAST_ERROR_MAX_LEN, sanitize_error_text
+        from pebble.core.memory import LAST_ERROR_MAX_LEN, sanitize_error_text
 
         msg = "X" * (LAST_ERROR_MAX_LEN * 2)
         out = sanitize_error_text(msg)
@@ -341,13 +341,13 @@ class TestSanitizeErrorText:
         assert out.endswith("...")
 
     def test_passes_through_clean_text(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         msg = "TimeoutError: provider did not respond within 60s"
         assert sanitize_error_text(msg) == msg
 
     def test_handles_empty(self):
-        from turnstone.core.memory import sanitize_error_text
+        from pebble.core.memory import sanitize_error_text
 
         assert sanitize_error_text("") == ""
 
@@ -362,7 +362,7 @@ class TestPersistLastError:
     """
 
     def test_round_trip_uses_constant_key(self, tmp_db):
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             LAST_ERROR_CONFIG_KEY,
             load_last_error,
             persist_last_error,
@@ -379,13 +379,13 @@ class TestPersistLastError:
         # The persisted row uses the published constant key — pinning
         # this catches future drift between the writer and the
         # coordinator_client.py readers that import the same constant.
-        from turnstone.core.memory import load_workstream_config
+        from pebble.core.memory import load_workstream_config
 
         cfg = load_workstream_config("ws-1")
         assert LAST_ERROR_CONFIG_KEY in cfg
 
     def test_sanitises_before_persist(self, tmp_db):
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             load_last_error,
             persist_last_error,
             register_workstream,
@@ -401,13 +401,13 @@ class TestPersistLastError:
         assert "host/" in stored
 
     def test_noop_on_empty_ws_id(self, tmp_db):
-        from turnstone.core.memory import persist_last_error
+        from pebble.core.memory import persist_last_error
 
         # Must not raise; must not write anywhere observable.
         persist_last_error("", "anything")  # no-op
 
     def test_noop_on_empty_err_msg(self, tmp_db):
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             load_last_error,
             persist_last_error,
             register_workstream,
@@ -423,8 +423,8 @@ class TestPersistLastError:
         """A storage failure must not propagate — error surfacing is
         advisory, not safety-critical.  The exception path of a worker
         thread already has enough trouble without this."""
-        from turnstone.core import memory as memory_mod
-        from turnstone.core.memory import persist_last_error
+        from pebble.core import memory as memory_mod
+        from pebble.core.memory import persist_last_error
 
         class _BoomStorage:
             def save_workstream_config(self, *_args, **_kw):
@@ -439,7 +439,7 @@ class TestClearLastError:
     """Verify clear_last_error wipes the row idempotently."""
 
     def test_clears_existing(self, tmp_db):
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             clear_last_error,
             load_last_error,
             persist_last_error,
@@ -457,7 +457,7 @@ class TestClearLastError:
         (close_reason, tasks).  It writes an empty string to the
         last_error key only — INSERT OR REPLACE per key, no row-wide
         delete."""
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             clear_last_error,
             load_workstream_config,
             persist_last_error,
@@ -475,6 +475,6 @@ class TestClearLastError:
         assert cfg.get("close_reason") == "user closed"
 
     def test_noop_on_empty_ws_id(self, tmp_db):
-        from turnstone.core.memory import clear_last_error
+        from pebble.core.memory import clear_last_error
 
         clear_last_error("")  # must not raise

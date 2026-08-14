@@ -116,8 +116,8 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-UI_INDEX = ROOT / "turnstone/ui/static/index.html"
-CONSOLE_INDEX = ROOT / "turnstone/console/static/index.html"
+UI_INDEX = ROOT / "pebble/ui/static/index.html"
+CONSOLE_INDEX = ROOT / "pebble/console/static/index.html"
 
 
 def extract_dialogs(index: Path, only_id: str | None = None) -> list[str]:
@@ -555,7 +555,7 @@ SHELL_TEMPLATE = """<!doctype html>
     </div>
     <div id="view-admin" style="display: none"></div>
     <script>
-      window.TURNSTONE_SHELL_CAPS = { cluster: false, brandSub: "console" };
+      window.PEBBLE_SHELL_CAPS = { cluster: false, brandSub: "console" };
       window.TS_APP = {
         boot() {},
         getClusterState() { return { nodes: {} }; },
@@ -1435,8 +1435,8 @@ def build(out: Path) -> None:
     ui.mkdir(parents=True, exist_ok=True)
     con.mkdir(parents=True, exist_ok=True)
 
-    symlink(ui / "shared", ROOT / "turnstone/shared_static")
-    symlink(ui / "static", ROOT / "turnstone/ui/static")
+    symlink(ui / "shared", ROOT / "pebble/shared_static")
+    symlink(ui / "static", ROOT / "pebble/ui/static")
     blocks = extract_dialogs(UI_INDEX)
     # the coordinator batch dialog shares the cards.js builder — ride along
     blocks += extract_dialogs(CONSOLE_INDEX, only_id="coord-delete-dialog")
@@ -1445,8 +1445,8 @@ def build(out: Path) -> None:
     )
     print(f"{ui}/livepass.html — {len(blocks)} dialogs")
 
-    symlink(con / "shared", ROOT / "turnstone/shared_static")
-    symlink(con / "console-static", ROOT / "turnstone/console/static")
+    symlink(con / "shared", ROOT / "pebble/shared_static")
+    symlink(con / "console-static", ROOT / "pebble/console/static")
     frag = extract_admin_fragment()
     # Dialog-tier markup living OUTSIDE #admin-layout (confirm, install,
     # coord-delete) would otherwise be silently absent — and ?open=confirm
@@ -1459,27 +1459,27 @@ def build(out: Path) -> None:
 
     sh = out / "shell"
     sh.mkdir(parents=True, exist_ok=True)
-    symlink(sh / "shared", ROOT / "turnstone/shared_static")
-    symlink(sh / "static", ROOT / "turnstone/console/static")
+    symlink(sh / "shared", ROOT / "pebble/shared_static")
+    symlink(sh / "static", ROOT / "pebble/console/static")
     (sh / "livepass.html").write_text(SHELL_TEMPLATE, encoding="utf-8")
     print(f"{sh}/livepass.html — split-view shell surface")
 
     att = out / "attachments"
     att.mkdir(parents=True, exist_ok=True)
-    symlink(att / "shared", ROOT / "turnstone/shared_static")
+    symlink(att / "shared", ROOT / "pebble/shared_static")
     (att / "livepass.html").write_text(ATTACH_TEMPLATE, encoding="utf-8")
     print(f"{att}/livepass.html — composer chips + message attachment pills")
 
     ta = out / "taskagent"
     ta.mkdir(parents=True, exist_ok=True)
-    symlink(ta / "shared", ROOT / "turnstone/shared_static")
+    symlink(ta / "shared", ROOT / "pebble/shared_static")
     (ta / "livepass.html").write_text(TASKAGENT_TEMPLATE, encoding="utf-8")
     print(f"{ta}/livepass.html — task_agent card (real Pane.handleEvent routing)")
 
     pf = out / "perf"
     pf.mkdir(parents=True, exist_ok=True)
-    symlink(pf / "shared", ROOT / "turnstone/shared_static")
-    symlink(pf / "static", ROOT / "turnstone/ui/static")
+    symlink(pf / "shared", ROOT / "pebble/shared_static")
+    symlink(pf / "static", ROOT / "pebble/ui/static")
     (pf / "livepass.html").write_text(PERF_TEMPLATE, encoding="utf-8")
     print(f"{pf}/livepass.html — long-session perf baseline (real InteractivePane)")
 

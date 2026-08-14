@@ -26,11 +26,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from turnstone.console.collector import ClusterCollector
-from turnstone.console.coordinator_adapter import CoordinatorAdapter
-from turnstone.console.coordinator_client import CoordinatorClient
-from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
-from turnstone.console.server import (
+from pebble.console.collector import ClusterCollector
+from pebble.console.coordinator_adapter import CoordinatorAdapter
+from pebble.console.coordinator_client import CoordinatorClient
+from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+from pebble.console.server import (
     _audit_close_coordinator,
     _audit_coordinator_create,
     _coord_create_build_kwargs,
@@ -39,17 +39,17 @@ from turnstone.console.server import (
     _require_admin_coordinator,
     _require_coord_mgr,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.child_event_bus import ChildEventBus
-from turnstone.core.session_manager import SessionManager
-from turnstone.core.session_routes import (
+from pebble.core.auth import AuthResult
+from pebble.core.child_event_bus import ChildEventBus
+from pebble.core.session_manager import SessionManager
+from pebble.core.session_routes import (
     SessionEndpointConfig,
     make_close_handler,
     make_create_handler,
     make_detail_handler,
     make_list_handler,
 )
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # Per-kind config the lifted handler factories capture by closure.
 _coord_endpoint_config = SessionEndpointConfig(

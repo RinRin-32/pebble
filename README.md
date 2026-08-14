@@ -1,6 +1,6 @@
 # Turnstone
 
-[![CI](https://github.com/turnstonelabs/turnstone/actions/workflows/ci.yml/badge.svg)](https://github.com/turnstonelabs/turnstone/actions/workflows/ci.yml)
+[![CI](https://github.com/RinRin-32/pebble/actions/workflows/ci.yml/badge.svg)](https://github.com/RinRin-32/pebble/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/turnstone)](https://pypi.org/project/turnstone/)
 [![Python](https://img.shields.io/pypi/pyversions/turnstone)](https://pypi.org/project/turnstone/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
@@ -57,18 +57,18 @@ pip install turnstone
 turnstone --base-url http://localhost:8000/v1
 
 # Browser UI
-turnstone-server --port 8080 --base-url http://localhost:8000/v1
+pebble-server --port 8080 --base-url http://localhost:8000/v1
 
 # Cluster dashboard
-turnstone-console --port 8090
+pebble-console --port 8090
 ```
 
 For PostgreSQL (recommended for production):
 
 ```bash
-export TURNSTONE_DB_BACKEND=postgresql
+export PEBBLE_DB_BACKEND=postgresql
 export TURNSTONE_DB_URL="postgresql+psycopg://user:pass@localhost:5432/turnstone"
-turnstone-server --port 8080 --base-url http://localhost:8000/v1
+pebble-server --port 8080 --base-url http://localhost:8000/v1
 ```
 
 ### Docker
@@ -93,7 +93,7 @@ serves it over TLS with its own local CA — trust it once). Nodes boot without 
 LLM; add model backends from the console UI.
 
 For production (released images from ghcr.io, real secrets required), use the
-bundled stack: `docker compose -f turnstone/deploy/compose.yaml up`.
+bundled stack: `docker compose -f pebble/deploy/compose.yaml up`.
 
 See [QUICKSTART.md](QUICKSTART.md) for the install + troubleshooting walkthrough and [docs/docker.md](docs/docker.md) for Docker configuration.
 
@@ -121,13 +121,13 @@ Built-in tools for shell, files, search, web, memory, notifications, and autonom
 | Component | Purpose |
 |-----------|---------|
 | `turnstone` | Terminal CLI (REPL) |
-| `turnstone-server` | Web UI + REST API + SSE events |
-| `turnstone-console` | Cluster dashboard + routing proxy + admin panel |
-| `turnstone-channel` | Channel gateway (Discord and Slack adapters) |
-| `turnstone-admin` | User/token management CLI |
-| `turnstone-eval` | Headless measurement — scores tool-use against expected actions |
-| `turnstone-optimizer` | Prompt/tool optimizer (UCB self-modify loop over the eval substrate) |
-| `turnstone-doctor` | LLM-backed cluster diagnostics |
+| `pebble-server` | Web UI + REST API + SSE events |
+| `pebble-console` | Cluster dashboard + routing proxy + admin panel |
+| `pebble-channel` | Channel gateway (Discord and Slack adapters) |
+| `pebble-admin` | User/token management CLI |
+| `pebble-eval` | Headless measurement — scores tool-use against expected actions |
+| `pebble-optimizer` | Prompt/tool optimizer (UCB self-modify loop over the eval substrate) |
+| `pebble-doctor` | LLM-backed cluster diagnostics |
 
 ### Diagrams
 

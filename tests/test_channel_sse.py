@@ -1,4 +1,4 @@
-"""Tests for the shared SSE reconnect helper in turnstone.channels._sse."""
+"""Tests for the shared SSE reconnect helper in pebble.channels._sse."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def _fast_sleep(monkeypatch):
     async def fake_sleep(delay: float) -> None:
         sleeps.append(delay)
 
-    monkeypatch.setattr("turnstone.channels._sse.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("pebble.channels._sse.asyncio.sleep", fake_sleep)
     return sleeps
 
 
@@ -100,7 +100,7 @@ def _valid_event_data(ws_id: str = "ws-1") -> str:
 
 class TestStaleRoute:
     def test_404_calls_on_stale_and_returns(self, monkeypatch, _fast_sleep):
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         queue = [_FakeEventSource(status_code=404, events=[])]
         fake_connect = _FakeConnect(queue)
@@ -132,7 +132,7 @@ class TestStaleRoute:
 
     def test_on_stale_exception_still_exits(self, monkeypatch, _fast_sleep):
         """If on_stale raises, the loop must not reconnect."""
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         queue = [_FakeEventSource(status_code=404, events=[])]
         fake_connect = _FakeConnect(queue)
@@ -167,7 +167,7 @@ class TestStaleRoute:
 
 class TestBackoff:
     def test_500_triggers_backoff_and_retries(self, monkeypatch, _fast_sleep):
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         queue = [
             _FakeEventSource(status_code=503, events=[]),
@@ -204,7 +204,7 @@ class TestBackoff:
     def test_backoff_resets_after_successful_dispatch(self, monkeypatch, _fast_sleep):
         """After a 200 + successful event dispatch, the next error
         restarts backoff at the initial delay."""
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         good_event = _FakeSSEEvent(event="message", data=_valid_event_data())
         queue = [
@@ -249,7 +249,7 @@ class TestBackoff:
 
 class TestEventDispatch:
     def test_invalid_json_is_skipped(self, monkeypatch, _fast_sleep):
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         bad = _FakeSSEEvent(event="message", data="{not json")
         good = _FakeSSEEvent(event="message", data=_valid_event_data())
@@ -279,7 +279,7 @@ class TestEventDispatch:
         assert on_event.await_count == 1
 
     def test_on_event_exception_does_not_kill_stream(self, monkeypatch, _fast_sleep):
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         e1 = _FakeSSEEvent(event="message", data=_valid_event_data())
         e2 = _FakeSSEEvent(event="message", data=_valid_event_data())
@@ -318,7 +318,7 @@ class TestTokenFactory:
     def test_header_refreshed_per_connection(self, monkeypatch, _fast_sleep):
         """token_factory is called once per reconnect so rotating service
         JWTs stay fresh."""
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         # Two reconnects followed by CancelledError to exit.
         queue = [
@@ -363,7 +363,7 @@ class TestTokenFactory:
 class TestTransportErrors:
     def test_connect_error_falls_through_to_backoff(self, monkeypatch, _fast_sleep):
         """ConnectError is caught and treated as retryable."""
-        from turnstone.channels import _sse
+        from pebble.channels import _sse
 
         call_order = {"n": 0}
 

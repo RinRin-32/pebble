@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+from pebble.core.judge import IntentJudge, IntentVerdict, JudgeConfig, evaluate_heuristic
+from pebble.core.trajectory import Role
 from tests._session_helpers import as_stream
 from tests._session_helpers import mock_completion_result as _mock_result
-from turnstone.core.judge import IntentJudge, IntentVerdict, JudgeConfig, evaluate_heuristic
-from turnstone.core.trajectory import Role
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -477,7 +477,7 @@ class TestArgBudget:
     rather than blind-capped."""
 
     def test_positive_window_coerces_zero_and_non_int(self):
-        from turnstone.core.judge import _DEFAULT_JUDGE_CONTEXT_WINDOW, _positive_window
+        from pebble.core.judge import _DEFAULT_JUDGE_CONTEXT_WINDOW, _positive_window
 
         assert _positive_window(50_000) == 50_000
         assert _positive_window(0, 40_000) == 40_000  # 0 falls through to next
@@ -486,12 +486,12 @@ class TestArgBudget:
         assert _positive_window(0) == _DEFAULT_JUDGE_CONTEXT_WINDOW  # floor default
 
     def test_honest_truncate_verbatim_when_it_fits(self):
-        from turnstone.core.judge import honest_truncate
+        from pebble.core.judge import honest_truncate
 
         assert honest_truncate("short", 100) == "short"
 
     def test_honest_truncate_reports_exact_omitted_count(self):
-        from turnstone.core.judge import honest_truncate
+        from pebble.core.judge import honest_truncate
 
         out = honest_truncate("A" * 5000, 1000)
         assert out.startswith("A" * 1000)
@@ -501,7 +501,7 @@ class TestArgBudget:
         """The judge-prompt budget scales with the real window and is NOT
         ceilinged — a big-window judge gets a proportionally big budget so args
         lower whole; only a genuine overflow truncates."""
-        from turnstone.core.judge import _ARG_CONTEXT_RATIO, _CHARS_PER_TOKEN
+        from pebble.core.judge import _ARG_CONTEXT_RATIO, _CHARS_PER_TOKEN
 
         judge = _make_judge()
         judge._judge_context_window = 40_000
@@ -515,7 +515,7 @@ class TestArgBudget:
         """The func_args stored on the verdict (persisted + streamed) is bounded
         by _VERDICT_ARG_CAP even when the args are enormous — the judge PROMPT
         is bounded separately by the window, not by this cap."""
-        from turnstone.core.judge import _VERDICT_ARG_CAP, evaluate_heuristic
+        from pebble.core.judge import _VERDICT_ARG_CAP, evaluate_heuristic
 
         v = evaluate_heuristic("write_file", {"content": "Z" * 40_000}, "write_file", "c1")
         assert len(v.func_args) <= _VERDICT_ARG_CAP + 80  # payload + honest marker
@@ -913,7 +913,7 @@ class TestModelAliasResolution:
         operator overrides (effort passthrough, tool support) were silently
         ignored on judge calls; deleting ``capabilities=self._capabilities`` from
         the call site, or breaking the merge, must fail here."""
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         base = ModelCapabilities(supports_tools=True, effort_passthrough=False)
         alias_provider = _make_mock_provider(response_content=_good_verdict_json())
@@ -976,7 +976,7 @@ class TestModelAliasResolution:
     def test_fallback_threads_session_capabilities_to_wire(self):
         """No judge alias → the judge inherits the session model AND the
         session's resolved capabilities, threaded to ``create_streaming``."""
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         sess_caps = ModelCapabilities(context_window=54_321, effort_passthrough=True)
         provider = _make_mock_provider(response_content=_good_verdict_json())

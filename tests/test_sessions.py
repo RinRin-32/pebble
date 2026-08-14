@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import sqlalchemy as sa
 
-from turnstone.core.memory import (
+from pebble.core.memory import (
     delete_workstream,
     list_workstreams_with_history,
     load_messages,
@@ -17,9 +17,9 @@ from turnstone.core.memory import (
     set_workstream_alias,
     update_workstream_title,
 )
-from turnstone.core.session import ChatSession
-from turnstone.core.storage import get_storage
-from turnstone.core.trajectory import turn_to_dict
+from pebble.core.session import ChatSession
+from pebble.core.storage import get_storage
+from pebble.core.trajectory import turn_to_dict
 
 # ── Workstream registration ───────────────────────────────────────────
 
@@ -906,7 +906,7 @@ class TestWebSearchGating:
     def test_web_search_filtered_when_no_backend(self, tmp_db, mock_openai_client):
         from unittest.mock import patch
 
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = ChatSession(
             client=mock_openai_client,
@@ -921,7 +921,7 @@ class TestWebSearchGating:
         caps = ModelCapabilities(supports_web_search=False)
         with (
             patch.object(session, "_get_capabilities", return_value=caps),
-            patch("turnstone.core.session.get_searxng_url", return_value=None),
+            patch("pebble.core.session.get_searxng_url", return_value=None),
         ):
             tools = session._get_active_tools()
 
@@ -931,7 +931,7 @@ class TestWebSearchGating:
     def test_web_search_kept_when_searxng_configured(self, tmp_db, mock_openai_client):
         from unittest.mock import patch
 
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = ChatSession(
             client=mock_openai_client,
@@ -946,7 +946,7 @@ class TestWebSearchGating:
         caps = ModelCapabilities(supports_web_search=False)
         with (
             patch.object(session, "_get_capabilities", return_value=caps),
-            patch("turnstone.core.session.get_searxng_url", return_value="http://searxng:8080"),
+            patch("pebble.core.session.get_searxng_url", return_value="http://searxng:8080"),
         ):
             tools = session._get_active_tools()
 
@@ -956,7 +956,7 @@ class TestWebSearchGating:
     def test_web_search_kept_when_native_support(self, tmp_db, mock_openai_client):
         from unittest.mock import patch
 
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = ChatSession(
             client=mock_openai_client,
@@ -971,7 +971,7 @@ class TestWebSearchGating:
         caps = ModelCapabilities(supports_web_search=True)
         with (
             patch.object(session, "_get_capabilities", return_value=caps),
-            patch("turnstone.core.session.get_searxng_url", return_value=None),
+            patch("pebble.core.session.get_searxng_url", return_value=None),
         ):
             tools = session._get_active_tools()
 
@@ -985,7 +985,7 @@ class TestWebSearchGating:
         key falls through to env (storage -> toml -> env -> default)."""
         from unittest.mock import patch
 
-        from turnstone.core.web_search import SearXNGClient
+        from pebble.core.web_search import SearXNGClient
 
         class _StubStore:
             def __init__(self, values):
@@ -1011,19 +1011,19 @@ class TestWebSearchGating:
 
         # (a) explicit DB URL wins over a None env fallback
         s_db = _session({"tools.searxng_url": "http://db-searx:8080"})
-        with patch("turnstone.core.session.get_searxng_url", return_value=None):
+        with patch("pebble.core.session.get_searxng_url", return_value=None):
             client = s_db._resolve_search_client()
         assert isinstance(client, SearXNGClient)
         assert client._base_url == "http://db-searx:8080"
 
         # (b) explicit empty string disables, even though env would supply a URL
         s_off = _session({"tools.searxng_url": ""})
-        with patch("turnstone.core.session.get_searxng_url", return_value="http://env-searx:8080"):
+        with patch("pebble.core.session.get_searxng_url", return_value="http://env-searx:8080"):
             assert s_off._resolve_search_client() is None
 
         # (c) unset key falls through to the env/config layer
         s_env = _session({})
-        with patch("turnstone.core.session.get_searxng_url", return_value="http://env-searx:8080"):
+        with patch("pebble.core.session.get_searxng_url", return_value="http://env-searx:8080"):
             client_env = s_env._resolve_search_client()
         assert isinstance(client_env, SearXNGClient)
         assert client_env._base_url == "http://env-searx:8080"
@@ -1151,7 +1151,7 @@ class TestMCPToolGating:
         """Gating applies when provider handles tool search natively."""
         from unittest.mock import patch
 
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         mcp_client = MagicMock()
         mcp_client.get_tools.return_value = []

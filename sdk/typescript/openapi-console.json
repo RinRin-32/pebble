@@ -7845,7 +7845,7 @@
             "type": "string"
           },
           "service": {
-            "default": "turnstone-console",
+            "default": "pebble-console",
             "title": "Service",
             "type": "string"
           },

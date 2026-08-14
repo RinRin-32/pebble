@@ -1,10 +1,10 @@
-"""Tests for the per-node pending-upload buffer (turnstone.core.attachment_buffer)."""
+"""Tests for the per-node pending-upload buffer (pebble.core.attachment_buffer)."""
 
 from __future__ import annotations
 
 import hashlib
 
-from turnstone.core.attachment_buffer import (
+from pebble.core.attachment_buffer import (
     AttachmentBuffer,
     StagedAttachment,
     get_attachment_buffer,

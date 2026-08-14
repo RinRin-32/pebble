@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Health check for turnstone containers.
+"""Health check for pebble containers.
 
 Usage: healthcheck.py <url>
 Exit 0 if the endpoint returns {"status": "ok"} or {"status": "degraded"},
@@ -9,7 +9,7 @@ When the node serves mTLS (tls.enabled), a plain-HTTP probe is rejected at
 the socket, so on failure this script retries over HTTPS, presenting the
 node's own certificate as the client cert and pinning the cluster CA. The
 PEM files are the ones the server writes at boot under
-$TURNSTONE_TLS_PEM_DIR (default: <tmpdir>/turnstone-tls). The host is
+$PEBBLE_TLS_PEM_DIR (default: <tmpdir>/turnstone-tls). The host is
 rewritten to "localhost" for the TLS attempt because the internal CA issues
 DNS SANs only — certificate verification rejects a literal-IP dial.
 
@@ -39,11 +39,14 @@ def _check(url: str, context: ssl.SSLContext | None = None) -> None:
 def _pem_root() -> Path:
     """PEM runtime root.
 
-    Must mirror turnstone.core.tls.tls_pem_runtime_dir — this script is
-    standalone stdlib and cannot import turnstone; a drift-guard test in
+    Must mirror pebble.core.tls.tls_pem_runtime_dir — this script is
+    standalone stdlib and cannot import pebble; a drift-guard test in
     tests/test_docker_healthcheck.py pins the two together.
     """
-    root_env = os.environ.get("TURNSTONE_TLS_PEM_DIR")
+    # Both spellings, explicitly: this script is standalone stdlib and never
+    # imports pebble, so the package-level PEBBLE_*/TURNSTONE_* aliasing
+    # does not reach it.
+    root_env = os.environ.get("PEBBLE_TLS_PEM_DIR") or os.environ.get("TURNSTONE_TLS_PEM_DIR")
     return Path(root_env) if root_env else Path(tempfile.gettempdir()) / "turnstone-tls"
 
 

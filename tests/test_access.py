@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from turnstone.core import access
+from pebble.core import access
 
 
 class _FakeStore:
@@ -65,9 +65,7 @@ class TestResolveAllowedModel:
 
     def test_coercion_all_unknown_fails(self) -> None:
         s = _FakeStore(models=["ghost"])
-        alias, err = access.resolve_allowed_model(
-            s, "u", "", "forbidden", known_aliases={"real"}
-        )
+        alias, err = access.resolve_allowed_model(s, "u", "", "forbidden", known_aliases={"real"})
         assert alias == "" and err
 
 

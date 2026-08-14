@@ -229,7 +229,7 @@ Located at `sdk/typescript/`. Zero runtime dependencies for browsers; uses nativ
 ### Quick Start
 
 ```typescript
-import { TurnstoneServer } from "@turnstone/sdk";
+import { TurnstoneServer } from "@pebble/sdk";
 
 const client = new TurnstoneServer({ baseUrl: "http://localhost:8080" });
 
@@ -253,7 +253,7 @@ for await (const event of client.streamEvents(ws.ws_id)) {
 ### Console Client
 
 ```typescript
-import { TurnstoneConsole } from "@turnstone/sdk";
+import { TurnstoneConsole } from "@pebble/sdk";
 
 const client = new TurnstoneConsole({ baseUrl: "http://localhost:8090" });
 await client.login({ username: "alice", password: "s3cret" });
@@ -286,8 +286,8 @@ for await (const event of client.clusterEvents()) {
 All event types are modeled as a discriminated union:
 
 ```typescript
-import { isContentEvent, isErrorEvent } from "@turnstone/sdk";
-import type { ServerEvent } from "@turnstone/sdk";
+import { isContentEvent, isErrorEvent } from "@pebble/sdk";
+import type { ServerEvent } from "@pebble/sdk";
 
 function handleEvent(event: ServerEvent) {
   if (isContentEvent(event)) {
@@ -315,7 +315,7 @@ const client = new TurnstoneServer({
 ## Architecture
 
 ```
-turnstone/sdk/               Python SDK (sub-package)
+pebble/sdk/               Python SDK (sub-package)
   _base.py                   Shared httpx async client, auth, error handling
   _sync.py                   Background event loop for sync wrappers
   _types.py                  TurnResult + TurnstoneAPIError
@@ -356,7 +356,7 @@ In both cases the server returns the JWT in the response body and as a `Set-Cook
 # Username + password
 client.login(username="alice", password="s3cret")
 
-# API token (created via admin API or turnstone-admin CLI)
+# API token (created via admin API or pebble-admin CLI)
 client.login(token="ts_abc123...")
 ```
 

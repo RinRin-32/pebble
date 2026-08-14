@@ -9,8 +9,8 @@ attaches.  The tool executor and the HTTP route are covered separately
 
 from __future__ import annotations
 
-from turnstone.core.attachments import IMAGE_SIZE_CAP, PDF_SIZE_CAP, TEXT_DOC_SIZE_CAP
-from turnstone.core.preview import (
+from pebble.core.attachments import IMAGE_SIZE_CAP, PDF_SIZE_CAP, TEXT_DOC_SIZE_CAP
+from pebble.core.preview import (
     PREVIEW_BLOB_KIND,
     PREVIEW_KINDS,
     PREVIEW_SERVE_MIMES,

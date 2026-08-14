@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from turnstone.core.judge import IntentVerdict, evaluate_heuristic
+from pebble.core.judge import IntentVerdict, evaluate_heuristic
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -460,7 +460,7 @@ class TestCustomRulesParam:
 
     def test_custom_rules_override_builtins(self):
         """Custom rules list is used instead of built-in rules."""
-        from turnstone.core.judge import _HeuristicRule, evaluate_heuristic
+        from pebble.core.judge import _HeuristicRule, evaluate_heuristic
 
         custom = [
             _HeuristicRule(
@@ -487,7 +487,7 @@ class TestCustomRulesParam:
 
     def test_custom_rules_no_match_default(self):
         """When custom rules don't match, default medium/review verdict returned."""
-        from turnstone.core.judge import evaluate_heuristic
+        from pebble.core.judge import evaluate_heuristic
 
         verdict = evaluate_heuristic(
             "bash",
@@ -501,7 +501,7 @@ class TestCustomRulesParam:
 
     def test_none_rules_uses_builtins(self):
         """When rules=None, built-in rules are used (backward compat)."""
-        from turnstone.core.judge import evaluate_heuristic
+        from pebble.core.judge import evaluate_heuristic
 
         verdict = evaluate_heuristic(
             "bash",

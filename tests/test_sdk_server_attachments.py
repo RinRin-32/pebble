@@ -1,4 +1,4 @@
-"""Tests for the attachment surface of turnstone.sdk.server (async + sync).
+"""Tests for the attachment surface of pebble.sdk.server (async + sync).
 
 Uses ``httpx.MockTransport`` to record what the SDK sends so we can
 assert on multipart bodies, the auto-generated ws_id, etc.
@@ -12,8 +12,8 @@ import re
 import httpx
 import pytest
 
-from turnstone.sdk._types import AttachmentUpload
-from turnstone.sdk.server import AsyncTurnstoneServer
+from pebble.sdk._types import AttachmentUpload
+from pebble.sdk.server import AsyncTurnstoneServer
 
 PNG_1x1 = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"

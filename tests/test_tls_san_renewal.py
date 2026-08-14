@@ -14,7 +14,7 @@ import socket
 
 import pytest
 
-from turnstone.core.storage import get_storage, init_storage, reset_storage
+from pebble.core.storage import get_storage, init_storage, reset_storage
 
 lacme = pytest.importorskip("lacme")
 
@@ -33,7 +33,7 @@ def _storage(tmp_path):
 
 def test_advertised_host_is_primary():
     """The advertised host is first, so it becomes the cert's primary domain."""
-    from turnstone.core.tls import build_cert_hostnames
+    from pebble.core.tls import build_cert_hostnames
 
     names = build_cert_hostnames("http://server-1:8080", bind_host="0.0.0.0")
     assert names[0] == "server-1"
@@ -45,14 +45,14 @@ def test_advertised_host_is_primary():
 
 def test_strips_scheme_and_port():
     """Only the hostname is extracted from the advertise URL."""
-    from turnstone.core.tls import build_cert_hostnames
+    from pebble.core.tls import build_cert_hostnames
 
     assert build_cert_hostnames("https://node-7:9999")[0] == "node-7"
 
 
 def test_extra_sans_appended_and_deduped():
     """Env SANs are added once; duplicates collapse, order preserved."""
-    from turnstone.core.tls import build_cert_hostnames
+    from pebble.core.tls import build_cert_hostnames
 
     names = build_cert_hostnames("http://server-1:8080", extra_sans="server-1, edge, edge")
     assert names[0] == "server-1"
@@ -62,14 +62,14 @@ def test_extra_sans_appended_and_deduped():
 
 def test_fallback_to_os_hostname_when_no_advertise_url():
     """Bare-metal fallback: OS hostname becomes primary when no URL is given."""
-    from turnstone.core.tls import build_cert_hostnames
+    from pebble.core.tls import build_cert_hostnames
 
     assert build_cert_hostnames("")[0] == socket.gethostname()
 
 
 def test_extra_sans_rejects_wildcard_and_unspecified():
     """A stray wildcard / unspecified-address SAN must not reach the cert."""
-    from turnstone.core.tls import build_cert_hostnames
+    from pebble.core.tls import build_cert_hostnames
 
     names = build_cert_hostnames("http://server-1:8080", extra_sans="*, 0.0.0.0, ::, edge")
     assert "*" not in names
@@ -92,8 +92,8 @@ def _san_values(cert_pem: bytes) -> list[str]:
 @pytest.mark.anyio
 async def test_single_domain_store_filters_and_delegates():
     """list_certs exposes only the wrapped domain; other ops delegate."""
-    from turnstone.console.tls import TLSManager
-    from turnstone.core.tls import _SingleDomainStore
+    from pebble.console.tls import TLSManager
+    from pebble.core.tls import _SingleDomainStore
 
     mgr = TLSManager(get_storage())
     await mgr.init_ca()
@@ -118,8 +118,8 @@ async def test_single_domain_store_filters_and_delegates():
 @pytest.mark.anyio
 async def test_issued_cert_covers_advertised_host():
     """A cert issued from the helper's hostnames covers the dialed name."""
-    from turnstone.console.tls import TLSManager
-    from turnstone.core.tls import build_cert_hostnames
+    from pebble.console.tls import TLSManager
+    from pebble.core.tls import build_cert_hostnames
 
     mgr = TLSManager(get_storage())
     await mgr.init_ca()
@@ -137,8 +137,8 @@ async def test_issued_cert_covers_advertised_host():
 @pytest.mark.anyio
 async def test_renewal_sweep_only_touches_own_domain():
     """A scoped sweep renews this node's cert and leaves siblings alone."""
-    from turnstone.console.tls import TLSManager
-    from turnstone.core.tls import _SingleDomainStore
+    from pebble.console.tls import TLSManager
+    from pebble.core.tls import _SingleDomainStore
 
     mgr = TLSManager(get_storage())
     await mgr.init_ca()
@@ -164,7 +164,7 @@ async def test_gc_removes_only_long_expired_certs():
     """GC reclaims certs expired past the cutoff and keeps live ones."""
     from datetime import UTC, datetime, timedelta
 
-    from turnstone.console.tls import TLSManager
+    from pebble.console.tls import TLSManager
 
     mgr = TLSManager(get_storage())
     await mgr.init_ca()
@@ -196,7 +196,7 @@ async def test_gc_removes_only_long_expired_certs():
 @pytest.mark.anyio
 async def test_client_ctx_cached_and_reloaded_in_place():
     """The client context is cached and mutated in place on renewal."""
-    from turnstone.console.tls import TLSManager
+    from pebble.console.tls import TLSManager
 
     mgr = TLSManager(get_storage())
     await mgr.init_ca()
@@ -219,7 +219,7 @@ def test_renew_callback_updates_bundle_and_runs_reload_hook():
     """The renewal callback caches the new bundle and fires the reload hook."""
     from types import SimpleNamespace
 
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(storage=get_storage(), hostnames=["server-1"])
     seen: list[object] = []
@@ -236,7 +236,7 @@ def test_renew_callback_swallows_reload_hook_errors():
     """A failing reload hook must not abort the renewal callback."""
     from types import SimpleNamespace
 
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(storage=get_storage(), hostnames=["server-1"])
 
@@ -265,8 +265,8 @@ async def test_swap_context_cert_loads_and_leaves_no_temp_dir():
     """The hot-swap loads the renewed cert and reclaims its temp PEM dir."""
     import ssl
 
-    from turnstone.console.tls import TLSManager
-    from turnstone.core.tls import swap_context_cert
+    from pebble.console.tls import TLSManager
+    from pebble.core.tls import swap_context_cert
 
     mgr = TLSManager(get_storage())
     await mgr.init_ca()
@@ -284,8 +284,8 @@ async def test_swap_context_cert_cleans_up_on_failure():
     import ssl
     from types import SimpleNamespace
 
-    from turnstone.console.tls import TLSManager
-    from turnstone.core.tls import swap_context_cert
+    from pebble.console.tls import TLSManager
+    from pebble.core.tls import swap_context_cert
 
     mgr = TLSManager(get_storage())
     await mgr.init_ca()

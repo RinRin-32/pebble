@@ -13,10 +13,10 @@ import re
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
-_HATCH_JS = _ROOT / "turnstone/shared_static/hatch.js"
-_HATCH_CSS = _ROOT / "turnstone/shared_static/hatch.css"
-_CONSOLE_INDEX = _ROOT / "turnstone/console/static/index.html"
-_UI_INDEX = _ROOT / "turnstone/ui/static/index.html"
+_HATCH_JS = _ROOT / "pebble/shared_static/hatch.js"
+_HATCH_CSS = _ROOT / "pebble/shared_static/hatch.css"
+_CONSOLE_INDEX = _ROOT / "pebble/console/static/index.html"
+_UI_INDEX = _ROOT / "pebble/ui/static/index.html"
 
 
 def test_shelf_is_nonmodal_and_dialog_is_modal() -> None:
@@ -149,10 +149,9 @@ def test_classic_scripts_use_the_bridge_only_at_handler_time() -> None:
     ``TurnstoneHatch`` use — every reference must sit inside a function
     body (indented)."""
     classic = [
-        _ROOT / "turnstone/console/static" / name
-        for name in ("admin.js", "governance.js", "app.js")
+        _ROOT / "pebble/console/static" / name for name in ("admin.js", "governance.js", "app.js")
     ]
-    classic.append(_ROOT / "turnstone/ui/static/app.js")
+    classic.append(_ROOT / "pebble/ui/static/app.js")
     for path in classic:
         if not path.exists():
             continue
@@ -172,14 +171,14 @@ def test_every_hatch_button_is_wired() -> None:
     (data-close and container-delegated id-less buttons are hatch-owned.)"""
     js_by_app = {
         "console": [
-            _ROOT / "turnstone/console/static/admin.js",
-            _ROOT / "turnstone/console/static/governance.js",
-            _ROOT / "turnstone/console/static/app.js",
-            _ROOT / "turnstone/shared_static/cards.js",
+            _ROOT / "pebble/console/static/admin.js",
+            _ROOT / "pebble/console/static/governance.js",
+            _ROOT / "pebble/console/static/app.js",
+            _ROOT / "pebble/shared_static/cards.js",
         ],
         "ui": [
-            _ROOT / "turnstone/ui/static/app.js",
-            _ROOT / "turnstone/shared_static/cards.js",
+            _ROOT / "pebble/ui/static/app.js",
+            _ROOT / "pebble/shared_static/cards.js",
         ],
     }
     # Built via cards.js's `$("${idPrefix}-confirm-btn")` helper — the literal

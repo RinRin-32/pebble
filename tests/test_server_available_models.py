@@ -31,8 +31,8 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
+from pebble.server import list_available_models
 from tests._coord_test_helpers import _AuthMiddleware, _FakeConfigStore
-from turnstone.server import list_available_models
 
 
 class _StubRegistry:

@@ -26,15 +26,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import mcp.types as mcp_types
 import pytest
 
+from pebble.core.mcp_client import MCPClientManager, PoolEntryState
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests.conftest import (
     _drain_background,
     _run_on_loop,
     make_mcp_token_cipher,
     stop_loop_thread,
 )
-from turnstone.core.mcp_client import MCPClientManager, PoolEntryState
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Fixtures and helpers
@@ -255,9 +255,9 @@ class TestLazyConnect:
             return _AsyncCM((AsyncMock(), AsyncMock(), lambda: None))
 
         with (
-            patch("turnstone.core.mcp_client.streamablehttp_client", side_effect=_stream_factory),
+            patch("pebble.core.mcp_client.streamablehttp_client", side_effect=_stream_factory),
             patch.object(mgr, "_tcp_probe", side_effect=_probe),
-            patch("turnstone.core.mcp_client.ClientSession", return_value=_AsyncCM(fake_session)),
+            patch("pebble.core.mcp_client.ClientSession", return_value=_AsyncCM(fake_session)),
         ):
             cfg = {
                 "type": "streamable-http",
@@ -284,7 +284,7 @@ class TestLazyConnect:
     def test_pool_path_does_not_touch_static_servers(self, running_loop_mgr) -> None:
         mgr, loop, _ = running_loop_mgr
         # Pre-seed a static-path entry so accidental writes are observable.
-        from turnstone.core.mcp_client import StaticServerState
+        from pebble.core.mcp_client import StaticServerState
 
         sentinel = StaticServerState(name="static-srv", session=MagicMock())
         mgr._static_servers["static-srv"] = sentinel
@@ -1253,7 +1253,7 @@ class TestDispatchStateMachine:
     def test_decrypt_failure_does_not_emit_consent(
         self, running_loop_mgr, storage: SQLiteBackend
     ) -> None:
-        from turnstone.core.mcp_crypto import MCPTokenDecryptError
+        from pebble.core.mcp_crypto import MCPTokenDecryptError
 
         mgr, _loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -1543,7 +1543,7 @@ class TestHttpsEnforcement:
         assert result == "ok"
 
     def test_validate_oauth_user_url_helper(self) -> None:
-        from turnstone.core.mcp_client import _validate_oauth_user_url
+        from pebble.core.mcp_client import _validate_oauth_user_url
 
         # Acceptable: https + the exact loopback hostnames.
         _validate_oauth_user_url("https://mcp.example.com/sse")
@@ -1759,7 +1759,7 @@ class TestUserIdThreadThrough:
         mgr, _loop, _ = running_loop_mgr
         # Static-path tool registered the standard way.
         mgr._tool_map["mcp__static__t"] = ("static-srv", "t")
-        from turnstone.core.mcp_client import StaticServerState
+        from pebble.core.mcp_client import StaticServerState
 
         fake_session = MagicMock()
 
@@ -1799,7 +1799,7 @@ class TestUserIdThreadThrough:
         mgr.set_app_state(SimpleNamespace())
 
         mgr._tool_map["mcp__static-srv__t"] = ("static-srv", "t")
-        from turnstone.core.mcp_client import StaticServerState
+        from pebble.core.mcp_client import StaticServerState
 
         fake_session = MagicMock()
 
@@ -1868,8 +1868,8 @@ class TestOboPriming:
         user_lookup = AsyncMock()
         with (
             patch.object(mgr, "_prime_user_server", new=_fake_prime_server),
-            patch("turnstone.core.mcp_client.get_obo_access_token_classified", new=obo_lookup),
-            patch("turnstone.core.mcp_client.get_user_access_token_classified", new=user_lookup),
+            patch("pebble.core.mcp_client.get_obo_access_token_classified", new=obo_lookup),
+            patch("pebble.core.mcp_client.get_user_access_token_classified", new=user_lookup),
         ):
             _run_on_loop(loop, mgr._prime_user_pools("user-1"))
 
@@ -1915,7 +1915,7 @@ class TestOboPriming:
         assert mgr.is_mcp_tool("mcp__pool-srv__t", user_id="user-1") is True
 
         dead = AsyncMock(return_value=SimpleNamespace(kind="missing", token=None))
-        with patch("turnstone.core.mcp_client.get_user_access_token_classified", new=dead):
+        with patch("pebble.core.mcp_client.get_user_access_token_classified", new=dead):
             _run_on_loop(loop, mgr._prime_user_pools("user-1"))
         # The drop is scheduled — drain the tracked tasks before asserting.
         _drain_background(mgr, loop)
@@ -1956,7 +1956,7 @@ class TestOboPriming:
         obo_lookup = AsyncMock(return_value=SimpleNamespace(kind="missing", token=None))
         with (
             patch.object(mgr, "_prime_user_server", new=_fake_prime_server),
-            patch("turnstone.core.mcp_client.get_obo_access_token_classified", new=obo_lookup),
+            patch("pebble.core.mcp_client.get_obo_access_token_classified", new=obo_lookup),
         ):
             _run_on_loop(loop, mgr._prime_user_pools("user-1"))
 
@@ -2098,7 +2098,7 @@ class TestPendingConsentClearGate:
         then node B wrote a fresh badge — node A has no local signal, so its
         cleared entry must AGE OUT and the next success re-run the DELETE.
         With a permanent set the badge survived until node A restarted."""
-        from turnstone.core.mcp_client import _PENDING_CONSENT_CLEAR_TTL_SECONDS
+        from pebble.core.mcp_client import _PENDING_CONSENT_CLEAR_TTL_SECONDS
 
         mgr = MCPClientManager({})
         mgr._storage = MagicMock()
@@ -2119,12 +2119,12 @@ class TestPendingConsentClearGate:
 
         mgr = MCPClientManager({})
         mgr._storage = MagicMock()
-        with _patch("turnstone.core.mcp_client._PENDING_CONSENT_CLEARED_MAX", 4):
+        with _patch("pebble.core.mcp_client._PENDING_CONSENT_CLEARED_MAX", 4):
             for i in range(4):
                 mgr._clear_pending_consent_sync("u", f"srv-{i}")
             assert len(mgr._pending_consent_cleared) == 4
             # Age everything out; the next insert prunes the expired entries.
-            from turnstone.core.mcp_client import _PENDING_CONSENT_CLEAR_TTL_SECONDS
+            from pebble.core.mcp_client import _PENDING_CONSENT_CLEAR_TTL_SECONDS
 
             for key in list(mgr._pending_consent_cleared):
                 mgr._pending_consent_cleared[key] -= _PENDING_CONSENT_CLEAR_TTL_SECONDS + 1
@@ -2139,7 +2139,7 @@ class TestTokenRejectedDetail:
         users 'Re-consent required' with consent_url=None — a dead end, since
         no per-server consent flow exists for sign-in passthrough. The obo
         detail points at the admin (audience/config) instead."""
-        from turnstone.core.mcp_client import _token_rejected_detail
+        from pebble.core.mcp_client import _token_rejected_detail
 
         user_detail = _token_rejected_detail({"auth_type": "oauth_user"})
         assert "Re-consent required" in user_detail
@@ -2155,7 +2155,7 @@ class TestTokenRejectedDetail:
         (consent_url is None, /start rejects obo). The obo detail names the real
         remedy (an administrator widening access), the oauth_user one keeps the
         step-up re-consent language."""
-        from turnstone.core.mcp_client import _pool_error_detail
+        from pebble.core.mcp_client import _pool_error_detail
 
         user_detail = _pool_error_detail(
             {"auth_type": "oauth_user"}, "insufficient_scope", kind="tool"
@@ -2204,7 +2204,7 @@ class TestUserTokenFreshnessSweep:
         storage.list_mcp_user_token_reconcile_targets = MagicMock(return_value=[])  # type: ignore[method-assign]
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=AsyncMock(),
         ) as classified:
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2215,7 +2215,7 @@ class TestUserTokenFreshnessSweep:
         mgr, loop, _ = running_loop_mgr
         mgr._oauth_user_server_names = {"pool-srv"}  # oauth configured but app not wired yet
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=AsyncMock(),
         ) as classified:
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2230,7 +2230,7 @@ class TestUserTokenFreshnessSweep:
         _seed_user_token(storage, cipher, user_id="u1", server_name="ghost-srv")
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=AsyncMock(),
         ) as classified:
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2246,7 +2246,7 @@ class TestUserTokenFreshnessSweep:
         storage.upsert_mcp_pending_consent = MagicMock()  # type: ignore[method-assign]
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=self._classified("token", token="access-aaa"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2262,10 +2262,10 @@ class TestUserTokenFreshnessSweep:
 
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 new=self._classified("refresh_failed"),
             ),
-            caplog.at_level(logging.WARNING, logger="turnstone.core.mcp_client"),
+            caplog.at_level(logging.WARNING, logger="pebble.core.mcp_client"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
             _run_on_loop(loop, mgr._sweep_user_token_freshness())  # second tick: no re-badge
@@ -2288,7 +2288,7 @@ class TestUserTokenFreshnessSweep:
         storage.upsert_mcp_pending_consent = MagicMock()  # type: ignore[method-assign]
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=self._classified("decrypt_failure"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2305,7 +2305,7 @@ class TestUserTokenFreshnessSweep:
         storage.upsert_mcp_pending_consent = MagicMock()  # type: ignore[method-assign]
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=self._classified("refresh_failed_transient"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2325,13 +2325,13 @@ class TestUserTokenFreshnessSweep:
         key = ("u1", "pool-srv")
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=self._classified("refresh_failed"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
         assert key in mgr._token_sweep_warned
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=self._classified("token", token="access-aaa"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2354,7 +2354,7 @@ class TestUserTokenFreshnessSweep:
         key = ("u1", "pool-srv")
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=self._classified("refresh_failed"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2377,7 +2377,7 @@ class TestUserTokenFreshnessSweep:
             seen_kwargs.append(kwargs)
             return SimpleNamespace(kind="token", token="access-aaa")
 
-        with patch("turnstone.core.mcp_client.get_user_access_token_classified", new=_spy):
+        with patch("pebble.core.mcp_client.get_user_access_token_classified", new=_spy):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
         assert seen_kwargs and seen_kwargs[0]["revoke_on_failure"] is False
         assert seen_kwargs[0]["revoke_ambiguous_escalation"] is False
@@ -2414,7 +2414,7 @@ class TestUserTokenFreshnessSweep:
             seen_kwargs.append(kwargs)
             return SimpleNamespace(kind="token", token="access-aaa")
 
-        with patch("turnstone.core.mcp_client.get_user_access_token_classified", new=_spy):
+        with patch("pebble.core.mcp_client.get_user_access_token_classified", new=_spy):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
         assert seen_kwargs and seen_kwargs[0]["force_refresh"] is True
 
@@ -2433,7 +2433,7 @@ class TestUserTokenFreshnessSweep:
             seen_kwargs.append(kwargs)
             return SimpleNamespace(kind="token", token="access-aaa")
 
-        with patch("turnstone.core.mcp_client.get_user_access_token_classified", new=_spy):
+        with patch("pebble.core.mcp_client.get_user_access_token_classified", new=_spy):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
         assert seen_kwargs and seen_kwargs[0]["force_refresh"] is False  # still warm
 
@@ -2447,7 +2447,7 @@ class TestUserTokenFreshnessSweep:
         mgr._token_sweep_warned = {("gone-user", "pool-srv"), ("u1", "pool-srv")}
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             new=self._classified("token", token="access-aaa"),
         ):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
@@ -2471,7 +2471,7 @@ class TestUserTokenFreshnessSweep:
                 raise RuntimeError("boom")
             return SimpleNamespace(kind="token", token="access-aaa")
 
-        with patch("turnstone.core.mcp_client.get_user_access_token_classified", new=_flaky):
+        with patch("pebble.core.mcp_client.get_user_access_token_classified", new=_flaky):
             _run_on_loop(loop, mgr._sweep_user_token_freshness())
         assert {"u-bad", "u-ok"} <= set(seen)  # both attempted despite one raising
 
@@ -2536,7 +2536,7 @@ class TestUserTokenFreshnessSweep:
         """The config cadence is floored (positive) or disabled (<= 0) so an
         ``asyncio.sleep(0)`` busy-loop is unreachable."""
         with patch(
-            "turnstone.core.mcp_client.load_config",
+            "pebble.core.mcp_client.load_config",
             return_value={"user_token_sweep_seconds": configured},
         ):
             mgr = MCPClientManager({})

@@ -1,4 +1,4 @@
-"""Tests for turnstone.console.router (rendezvous routing)."""
+"""Tests for pebble.console.router (rendezvous routing)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import secrets
 
 import pytest
 
-from turnstone.console.router import ConsoleRouter, NodeRef
-from turnstone.core.rendezvous import NoAvailableNodeError
+from pebble.console.router import ConsoleRouter, NodeRef
+from pebble.core.rendezvous import NoAvailableNodeError
 
 
 class FakeStorage:

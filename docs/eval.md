@@ -1,11 +1,11 @@
-# Evaluation and Prompt Optimization (turnstone-eval, turnstone-optimizer)
+# Evaluation and Prompt Optimization (pebble-eval, pebble-optimizer)
 
 Evaluation for turnstone is split into two commands:
 
-- **`turnstone-eval`** — the measurement substrate. Runs test cases against the LLM
+- **`pebble-eval`** — the measurement substrate. Runs test cases against the LLM
   and scores tool call sequences against expected actions. A single measurement pass,
   no self-modification.
-- **`turnstone-optimizer`** — the prompt/tool optimizer. Loops over the measurement
+- **`pebble-optimizer`** — the prompt/tool optimizer. Loops over the measurement
   substrate, using a multi-agent pipeline (analyst, optimizer, observer, diversifier,
   tool optimizer) to edit the developer prompt and tool descriptions so more tests pass.
 
@@ -13,7 +13,7 @@ The dependency is strictly one-way: the optimizer consumes the eval substrate; t
 substrate never depends on the optimizer.
 
 Source: `turnstone/eval/core.py` (measurement substrate), `turnstone/eval/cli.py`
-(the `turnstone-eval` CLI), `turnstone/optimizer.py` (the `turnstone-optimizer` CLI).
+(the `pebble-eval` CLI), `turnstone/optimizer.py` (the `pebble-optimizer` CLI).
 
 ---
 
@@ -35,7 +35,7 @@ This approach (inspired by [Learning to Self-Evolve](https://arxiv.org/abs/2603.
 prevents irrecoverable collapse from bad edits — UCB naturally backtracks to
 high-scoring ancestors instead of following a linear chain.
 
-The `turnstone-eval` command (or `turnstone-optimizer --no-optimize`) executes only
+The `pebble-eval` command (or `pebble-optimizer --no-optimize`) executes only
 steps 2-4: a single measurement pass over the root prompt, no optimization.
 
 ---
@@ -463,34 +463,34 @@ structure is:
 Two console scripts (installed as entry points), or the equivalent `python -m`
 invocations:
 
-- `turnstone-eval` / `python -m turnstone.eval.cli` — measure only.
-- `turnstone-optimizer` / `python -m turnstone.optimizer` — optimize.
+- `pebble-eval` / `python -m pebble.eval.cli` — measure only.
+- `pebble-optimizer` / `python -m pebble.optimizer` — optimize.
 
-### Measure (`turnstone-eval`)
-
-```
-turnstone-eval tests.json                     # one measurement pass, print scores
-turnstone-eval tests.json --prompt custom.txt # measure a custom prompt
-turnstone-eval tests.json --n-runs 5          # more runs per case
-turnstone-eval tests.json --parallel 4        # run cases across 4 workers
-turnstone-eval tests.json -v                  # verbose per-turn logging
-```
-
-### Optimize (`turnstone-optimizer`)
+### Measure (`pebble-eval`)
 
 ```
-turnstone-optimizer tests.json                          # evaluate + optimize
-turnstone-optimizer tests.json --no-optimize            # single pass, no optimization
-turnstone-optimizer tests.json --n-runs 5 --max-iter 10 # more thorough optimization
-turnstone-optimizer tests.json --prompt custom.txt      # start from a custom prompt
-turnstone-optimizer tests.json --optimize-tools         # optimize tool descriptions only
-turnstone-optimizer tests.json --diversify 10           # test with prompt variants
+pebble-eval tests.json                     # one measurement pass, print scores
+pebble-eval tests.json --prompt custom.txt # measure a custom prompt
+pebble-eval tests.json --n-runs 5          # more runs per case
+pebble-eval tests.json --parallel 4        # run cases across 4 workers
+pebble-eval tests.json -v                  # verbose per-turn logging
+```
+
+### Optimize (`pebble-optimizer`)
+
+```
+pebble-optimizer tests.json                          # evaluate + optimize
+pebble-optimizer tests.json --no-optimize            # single pass, no optimization
+pebble-optimizer tests.json --n-runs 5 --max-iter 10 # more thorough optimization
+pebble-optimizer tests.json --prompt custom.txt      # start from a custom prompt
+pebble-optimizer tests.json --optimize-tools         # optimize tool descriptions only
+pebble-optimizer tests.json --diversify 10           # test with prompt variants
 ```
 
 #### Multi-model setup (local test model, cloud optimizer)
 
 ```
-turnstone-optimizer tests.json \
+pebble-optimizer tests.json \
   --base-url http://localhost:8000/v1 \
   --optimizer-base-url https://api.anthropic.com \
   --optimizer-model claude-sonnet-4-6 \
@@ -520,7 +520,7 @@ Accepted by **both** commands.
 
 ### Optimizer Options
 
-Accepted by **`turnstone-optimizer`** only.
+Accepted by **`pebble-optimizer`** only.
 
 | Flag                    | Default                    | Description |
 |-------------------------|----------------------------|-------------|
@@ -541,7 +541,7 @@ Accepted by **`turnstone-optimizer`** only.
 | `--optimize-tools`      | false                      | Optimize tool descriptions only (freeze system prompt). |
 | `--tool-optimizer-model` | same as optimizer          | Model for tool description optimization. |
 | `--tool-optimizer-base-url` | same as optimizer      | Base URL for tool optimizer model. |
-| `--save-tools`          | false                      | Write optimized tool descriptions back to `turnstone/tools/*.json`. |
+| `--save-tools`          | false                      | Write optimized tool descriptions back to `pebble/tools/*.json`. |
 
 ### Precedence for n_runs
 

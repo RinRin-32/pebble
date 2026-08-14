@@ -17,11 +17,11 @@ from unittest.mock import MagicMock
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from turnstone.console.collector import ClusterCollector
-from turnstone.console.coordinator_adapter import CoordinatorAdapter
-from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
-from turnstone.core.auth import AuthResult
-from turnstone.core.session_manager import SessionManager
+from pebble.console.collector import ClusterCollector
+from pebble.console.coordinator_adapter import CoordinatorAdapter
+from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+from pebble.core.auth import AuthResult
+from pebble.core.session_manager import SessionManager
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

@@ -14,8 +14,8 @@ plus the ``MCPTokenStore`` encrypt/decrypt wrappers over the same rows.
 
 from __future__ import annotations
 
+from pebble.core.mcp_crypto import MCPTokenStore
 from tests.conftest import make_mcp_token_cipher
-from turnstone.core.mcp_crypto import MCPTokenStore
 
 ISS = "https://login.example.test/tenant-1/v2.0"
 
@@ -47,7 +47,7 @@ class TestUpsertAndGet:
         """
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import oidc_user_credentials
+        from pebble.core.storage._schema import oidc_user_credentials
 
         backend.upsert_oidc_user_credential("u1", ISS, refresh_token_ct=b"ct-old")
         planted = "2020-01-01T00:00:00"

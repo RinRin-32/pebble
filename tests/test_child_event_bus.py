@@ -1,7 +1,7 @@
-"""Unit tests for :class:`turnstone.core.child_event_bus.ChildEventBus`.
+"""Unit tests for :class:`pebble.core.child_event_bus.ChildEventBus`.
 
 The bus is the in-process wakeup primitive for ``wait_for_workstream``
-(see :mod:`turnstone.console.coordinator_client`).  It's a small dict
+(see :mod:`pebble.console.coordinator_client`).  It's a small dict
 of ws_id → set[threading.Event] under a lock — focused tests for
 register/notify symmetry, no-subscriber notify, multi-waiter fan-out,
 multi-child waiter, and concurrent register/notify (smoke).  End-to-end
@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from turnstone.core.child_event_bus import ChildEventBus
+from pebble.core.child_event_bus import ChildEventBus
 
 
 def test_register_returns_event_that_starts_unset() -> None:

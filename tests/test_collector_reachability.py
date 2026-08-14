@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from turnstone.console.collector import ClusterCollector, NodeSnapshot
+from pebble.console.collector import ClusterCollector, NodeSnapshot
 
 
 def _collector() -> ClusterCollector:

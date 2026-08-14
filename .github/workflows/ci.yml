@@ -31,7 +31,7 @@ jobs:
           python-version: "3.14"
       - run: pip install mypy
       - run: pip install -e ".[all]"
-      - run: mypy turnstone/
+      - run: mypy pebble/
 
   test:
     runs-on: ubuntu-latest
@@ -57,7 +57,7 @@ jobs:
       # -v lists each test id as it starts (pytest prints the nodeid at
       # logstart), so a hang names the culprit on the last line instead of
       # riding the job timeout with only a trail of "..." dots.
-      - run: pytest tests/ -m "not live" --cov=turnstone --cov-report=term-missing --cov-report=xml -v
+      - run: pytest tests/ -m "not live" --cov=pebble --cov-report=term-missing --cov-report=xml -v
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -92,7 +92,7 @@ jobs:
       - run: pip install -e ".[test]"
       - run: pytest tests/ -m "not live" --storage-backend=postgresql -v
         env:
-          TURNSTONE_TEST_PG_URL: postgresql+psycopg://postgres:postgres@localhost:5432/turnstone_test
+          PEBBLE_TEST_PG_URL: postgresql+psycopg://postgres:postgres@localhost:5432/turnstone_test
 
   wheel-completeness:
     runs-on: ubuntu-latest
@@ -105,7 +105,7 @@ jobs:
       - run: python -m build --wheel
       - name: Check all data files are in wheel
         run: |
-          SOURCE=$(find turnstone -type f \
+          SOURCE=$(find pebble -type f \
             ! -name '*.py' ! -name '*.pyc' ! -path '*__pycache__*' \
             | sort)
           WHEEL=$(python -m zipfile -l dist/*.whl \
@@ -117,12 +117,12 @@ jobs:
           # The vllm-litellm/ deploy example ships in the repo, not the wheel
           # (you clone the repo to run it; the package doesn't reference it).
           ALLOW="
-          turnstone/core/storage/migrations/script.py.mako
-          turnstone/deploy/vllm-litellm/.env.example
-          turnstone/deploy/vllm-litellm/README.md
-          turnstone/deploy/vllm-litellm/docker-compose.yml
-          turnstone/deploy/vllm-litellm/gemma.Dockerfile
-          turnstone/deploy/vllm-litellm/litellm-config.yaml
+          pebble/core/storage/migrations/script.py.mako
+          pebble/deploy/vllm-litellm/.env.example
+          pebble/deploy/vllm-litellm/README.md
+          pebble/deploy/vllm-litellm/docker-compose.yml
+          pebble/deploy/vllm-litellm/gemma.Dockerfile
+          pebble/deploy/vllm-litellm/litellm-config.yaml
           "
 
           MISSING=$(comm -23 <(echo "$SOURCE") <(echo "$WHEEL") \
@@ -141,12 +141,12 @@ jobs:
         run: |
           python -m venv /tmp/smoke
           /tmp/smoke/bin/pip install dist/*.whl
-          /tmp/smoke/bin/turnstone --help
-          /tmp/smoke/bin/turnstone-server --help
-          /tmp/smoke/bin/turnstone-console --help
-          /tmp/smoke/bin/turnstone-admin --help
-          /tmp/smoke/bin/turnstone-channel --help
-          /tmp/smoke/bin/turnstone-doctor --help
+          /tmp/smoke/bin/pebble --help
+          /tmp/smoke/bin/pebble-server --help
+          /tmp/smoke/bin/pebble-console --help
+          /tmp/smoke/bin/pebble-admin --help
+          /tmp/smoke/bin/pebble-channel --help
+          /tmp/smoke/bin/pebble-doctor --help
 
   lock-check:
     runs-on: ubuntu-latest
@@ -174,7 +174,7 @@ jobs:
         # supplier because the key length is chosen by the calling
         # application, not the library.  Turnstone generates its JWT
         # signing keys via the standard ``secrets`` module at
-        # operator-controlled strength (see ``turnstone/core/auth.py``),
+        # operator-controlled strength (see ``pebble/core/auth.py``),
         # so the advisory does not apply.  pyjwt 2.12.1 is the current
         # latest release; no fix version exists.
         run: >-

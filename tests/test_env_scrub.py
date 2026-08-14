@@ -1,18 +1,18 @@
-"""Tests for turnstone.core.env — subprocess environment scrubbing."""
+"""Tests for pebble.core.env — subprocess environment scrubbing."""
 
 from __future__ import annotations
 
 import os
 from unittest.mock import patch
 
-from turnstone.core.env import _is_safe, _is_secret, scrubbed_env
+from pebble.core.env import _is_safe, _is_secret, scrubbed_env
 
 
 class TestIsSecret:
     def test_explicit_scrub_list(self):
         assert _is_secret("OPENAI_API_KEY") is True
         assert _is_secret("ANTHROPIC_API_KEY") is True
-        assert _is_secret("TURNSTONE_JWT_SECRET") is True
+        assert _is_secret("PEBBLE_JWT_SECRET") is True
         assert _is_secret("AWS_SECRET_ACCESS_KEY") is True
 
     def test_tool_config_paths_scrubbed(self):

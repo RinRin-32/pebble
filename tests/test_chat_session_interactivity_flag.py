@@ -9,8 +9,8 @@ write path.
 
 from __future__ import annotations
 
+from pebble.prompts import INTERACTIVE_CONSENT_CLIENT_TYPES, ClientType
 from tests._session_helpers import make_session
-from turnstone.prompts import INTERACTIVE_CONSENT_CLIENT_TYPES, ClientType
 
 
 def test_web_is_interactive() -> None:
@@ -59,7 +59,7 @@ def test_default_client_type_is_cli_interactive() -> None:
 def test_scheduled_env_file_exists() -> None:
     """The SCHEDULED env module must exist; otherwise
     ``compose_system_message`` for a scheduled session would 500."""
-    from turnstone.prompts import _load
+    from pebble.prompts import _load
 
     text = _load("env/scheduled.md")
     assert "Output Environment" in text

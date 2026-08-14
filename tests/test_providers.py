@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.providers — protocol, OpenAI provider, Anthropic provider."""
+"""Tests for pebble.core.providers — protocol, OpenAI provider, Anthropic provider."""
 
 from __future__ import annotations
 
@@ -9,11 +9,10 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
-from tests._session_helpers import fake_anthropic_stream, fake_chat_stream
-from turnstone.core.lowering import repair_wire_messages
-from turnstone.core.providers._openai import OpenAIProvider
-from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-from turnstone.core.providers._openai_common import (
+from pebble.core.lowering import repair_wire_messages
+from pebble.core.providers._openai import OpenAIProvider
+from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from pebble.core.providers._openai_common import (
     OPENAI_COMPAT_DEFAULT,
     apply_cache_retention,
     apply_temperature_and_effort,
@@ -23,7 +22,7 @@ from turnstone.core.providers._openai_common import (
     lookup_openai_capabilities,
     sanitize_messages,
 )
-from turnstone.core.providers._protocol import (
+from pebble.core.providers._protocol import (
     CompletionResult,
     LLMProvider,
     ModelCapabilities,
@@ -32,6 +31,7 @@ from turnstone.core.providers._protocol import (
     UsageInfo,
     drain_stream,
 )
+from tests._session_helpers import fake_anthropic_stream, fake_chat_stream
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -213,7 +213,7 @@ class TestOpenAIProvider:
 
     def test_effort_param_suppresses_flat_reasoning_effort(self) -> None:
         """Declaring the ctk effort channel must not double-send the flat param."""
-        from turnstone.core.providers._openai_common import apply_temperature_and_effort
+        from pebble.core.providers._openai_common import apply_temperature_and_effort
 
         caps = ModelCapabilities(
             effort_param="reasoning_effort",
@@ -850,7 +850,7 @@ class TestOpenAIProvider:
         # from a generation that died behind a clean-closing proxy/ASGI
         # layer — the drain refuses to bless possibly-truncated text and
         # raises (retryable) instead of storing half an answer.
-        from turnstone.core.providers import IncompleteStreamError
+        from pebble.core.providers import IncompleteStreamError
 
         with pytest.raises(IncompleteStreamError):
             self._drain_chunks([_openai_stream_chunk(content="half an ans")])
@@ -883,7 +883,7 @@ class TestOpenAIProvider:
         # The shim is output-gated even when ARMED: an empty clean-close
         # stream (dead generation, zero-chunk fakes) still hits the
         # drain's complete-or-error gate.
-        from turnstone.core.providers import IncompleteStreamError
+        from pebble.core.providers import IncompleteStreamError
 
         with pytest.raises(IncompleteStreamError):
             self._drain_chunks([], capabilities=ModelCapabilities(finish_reason_optional=True))
@@ -1065,7 +1065,7 @@ class TestAnthropicProvider:
     """Tests for the Anthropic native provider adapter."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         self.provider = AnthropicProvider()
 
@@ -1346,14 +1346,14 @@ class TestAnthropicProvider:
         assert result == {"thinking": {"type": "enabled", "budget_tokens": 3072}}
 
     def test_finish_reason_normalization(self) -> None:
-        from turnstone.core.providers._anthropic import _normalize_finish_reason
+        from pebble.core.providers._anthropic import _normalize_finish_reason
 
         assert _normalize_finish_reason("end_turn") == "stop"
         assert _normalize_finish_reason("tool_use") == "tool_calls"
         assert _normalize_finish_reason("max_tokens") == "length"
         assert _normalize_finish_reason("other_reason") == "other_reason"
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_drained_stream_basic(self, mock_ensure: MagicMock) -> None:
         client = MagicMock()
         client.messages.stream.return_value = fake_anthropic_stream(
@@ -1372,13 +1372,13 @@ class TestAnthropicProvider:
         assert result.tool_calls is None
         assert result.finish_reason == "stop"
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_terminal_signal_less_stream_raises_by_default(self, mock_ensure: MagicMock) -> None:
         # No message_delta stop_reason and no message_stop: on a
         # signal-disciplined server (the real API always sends both) this
         # is a generation that died mid-response — the drain refuses to
         # bless possibly-truncated content.
-        from turnstone.core.providers import IncompleteStreamError
+        from pebble.core.providers import IncompleteStreamError
 
         client = MagicMock()
         client.messages.stream.return_value = fake_anthropic_stream(
@@ -1393,7 +1393,7 @@ class TestAnthropicProvider:
                 )
             )
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_terminal_signal_less_stream_completes_with_declared_tolerance(
         self, mock_ensure: MagicMock
     ) -> None:
@@ -1428,7 +1428,7 @@ class TestAnthropicProvider:
         mgr.__exit__ = MagicMock(return_value=False)
         return mgr
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_whole_block_start_text_reaches_content(self, mock_ensure: MagicMock) -> None:
         # Text delivered inside content_block_start with no text_delta
         # events: the retired non-streaming path (SDK get_final_message)
@@ -1456,7 +1456,7 @@ class TestAnthropicProvider:
         assert result.content == "whole answer"
         assert result.finish_reason == "stop"
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_whole_block_start_tool_use_reaches_arguments(self, mock_ensure: MagicMock) -> None:
         # A tool_use block whose input arrives pre-populated in the start
         # event (no input_json_delta events) must still produce a call
@@ -1493,7 +1493,7 @@ class TestAnthropicProvider:
         assert result.tool_calls[0]["function"]["name"] == "read_file"
         assert json.loads(result.tool_calls[0]["function"]["arguments"]) == {"path": "x"}
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_drained_stream_with_tool_use(self, mock_ensure: MagicMock) -> None:
         client = MagicMock()
         client.messages.stream.return_value = fake_anthropic_stream(
@@ -1523,7 +1523,7 @@ class TestAnthropicProvider:
         assert tc["function"]["name"] == "read_file"
         assert json.loads(tc["function"]["arguments"]) == {"path": "foo.py"}
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_drained_stream_separates_text_blocks(self, mock_ensure: MagicMock) -> None:
         # The retired non-streaming lane joined text blocks with "\n"; the
         # iterator now emits the separator at each subsequent text block
@@ -1546,7 +1546,7 @@ class TestAnthropicProvider:
         )
         assert result.content == "Before the search.\nAfter the results."
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_captures_text_block_citations(self, mock_ensure: MagicMock) -> None:
         # citations_delta events must land on the raw block: Anthropic
         # requires citations to replay unmodified alongside their
@@ -1580,7 +1580,7 @@ class TestAnthropicProvider:
         citations = result.provider_blocks[0].get("citations")
         assert citations == [{"type": "web_search_result_location", "url": "https://x.test"}]
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_message_stop_supplies_missing_stop_reason(self, mock_ensure: MagicMock) -> None:
         # Compat tolerance: a /v1/messages shim that streams content and
         # message_stop but never a message_delta stop_reason.  message_stop
@@ -1610,7 +1610,7 @@ class TestAnthropicProvider:
         assert result.content == "intact"
         assert result.finish_reason == "stop"
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_drained_stream_usage(self, mock_ensure: MagicMock) -> None:
         client = MagicMock()
         client.messages.stream.return_value = fake_anthropic_stream(
@@ -1635,7 +1635,7 @@ class TestAnthropicProvider:
         assert result.usage.completion_tokens == 50
         assert result.usage.total_tokens == 150
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_text_delta(self, mock_ensure: MagicMock) -> None:
         events = [
             _anthropic_event("content_block_delta", delta_type="text_delta", text="Hello"),
@@ -1661,7 +1661,7 @@ class TestAnthropicProvider:
         assert results[1].content_delta == " world"
         assert results[1].is_first is False
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_thinking_delta(self, mock_ensure: MagicMock) -> None:
         events = [
             _anthropic_event(
@@ -1693,7 +1693,7 @@ class TestAnthropicProvider:
         assert results[0].reasoning_delta == "reasoning step 1"
         assert results[1].reasoning_delta == "reasoning step 2"
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_tool_use(self, mock_ensure: MagicMock) -> None:
         events = [
             _anthropic_event(
@@ -1739,7 +1739,7 @@ class TestAnthropicProvider:
         assert results[1].tool_call_deltas[0].arguments_delta == '{"path":'
         assert results[2].tool_call_deltas[0].arguments_delta == '"foo.py"}'
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_message_delta_usage(self, mock_ensure: MagicMock) -> None:
         events = [
             _anthropic_event("content_block_delta", delta_type="text_delta", text="Hi"),
@@ -1771,7 +1771,7 @@ class TestAnthropicProvider:
         assert delta_chunks[0].usage is not None
         assert delta_chunks[0].usage.completion_tokens == 12
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_message_start_usage(self, mock_ensure: MagicMock) -> None:
         events = [
             _anthropic_event("message_start", usage_input_tokens=42),
@@ -1817,7 +1817,7 @@ class TestAnthropicHelpers:
     """Tests for Anthropic module-level helper functions."""
 
     def test_merge_consecutive(self) -> None:
-        from turnstone.core.providers._anthropic import _merge_consecutive
+        from pebble.core.providers._anthropic import _merge_consecutive
 
         messages = [
             {"role": "user", "content": "A"},
@@ -1836,12 +1836,12 @@ class TestAnthropicHelpers:
         assert merged[2]["role"] == "user"
 
     def test_merge_consecutive_empty(self) -> None:
-        from turnstone.core.providers._anthropic import _merge_consecutive
+        from pebble.core.providers._anthropic import _merge_consecutive
 
         assert _merge_consecutive([]) == []
 
     def test_merge_consecutive_no_duplicates(self) -> None:
-        from turnstone.core.providers._anthropic import _merge_consecutive
+        from pebble.core.providers._anthropic import _merge_consecutive
 
         messages = [
             {"role": "user", "content": "A"},
@@ -1852,26 +1852,26 @@ class TestAnthropicHelpers:
         assert len(merged) == 3
 
     def test_to_blocks_string(self) -> None:
-        from turnstone.core.providers._anthropic import _to_blocks
+        from pebble.core.providers._anthropic import _to_blocks
 
         result = _to_blocks("hello")
         assert result == [{"type": "text", "text": "hello"}]
 
     def test_to_blocks_list(self) -> None:
-        from turnstone.core.providers._anthropic import _to_blocks
+        from pebble.core.providers._anthropic import _to_blocks
 
         blocks = [{"type": "text", "text": "already a block"}]
         result = _to_blocks(blocks)
         assert result == blocks
 
     def test_to_blocks_other(self) -> None:
-        from turnstone.core.providers._anthropic import _to_blocks
+        from pebble.core.providers._anthropic import _to_blocks
 
         result = _to_blocks(42)
         assert result == [{"type": "text", "text": "42"}]
 
     def test_capabilities_lookup_exact(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-opus-4-6")
@@ -1881,7 +1881,7 @@ class TestAnthropicHelpers:
         assert caps.supports_effort is True
 
     def test_capabilities_lookup_prefix(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         # Prefix match: "claude-sonnet-4-6" matches dated variants
@@ -1891,7 +1891,7 @@ class TestAnthropicHelpers:
         assert caps.thinking_mode == "adaptive"
 
     def test_capabilities_fable_5(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-fable-5")
@@ -1910,7 +1910,7 @@ class TestAnthropicHelpers:
         assert caps.supports_mid_conversation_system is True
 
     def test_capabilities_fable_5_dated(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-fable-5-20260815")
@@ -1920,7 +1920,7 @@ class TestAnthropicHelpers:
         assert caps.supports_mid_conversation_system is True
 
     def test_capabilities_opus_4_8(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-opus-4-8")
@@ -1939,7 +1939,7 @@ class TestAnthropicHelpers:
         assert caps.supports_mid_conversation_system is True
 
     def test_capabilities_opus_4_8_dated(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-opus-4-8-20260601")
@@ -1948,7 +1948,7 @@ class TestAnthropicHelpers:
         assert caps.thinking_display == "summarized"
 
     def test_capabilities_opus_4_7(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-opus-4-7")
@@ -1964,7 +1964,7 @@ class TestAnthropicHelpers:
         assert caps.supports_vision is True
 
     def test_capabilities_opus_4_7_dated(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-opus-4-7-20260416")
@@ -1973,7 +1973,7 @@ class TestAnthropicHelpers:
         assert caps.thinking_display == "summarized"
 
     def test_capabilities_lookup_unknown(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("unknown-model-xyz")
@@ -1992,27 +1992,27 @@ class TestProviderFactory:
     """Tests for create_provider and create_client factory functions."""
 
     def test_create_provider_openai(self) -> None:
-        from turnstone.core.providers import OpenAIResponsesProvider, create_provider
+        from pebble.core.providers import OpenAIResponsesProvider, create_provider
 
         provider = create_provider("openai")
         assert isinstance(provider, OpenAIResponsesProvider)
         assert provider.provider_name == "openai"
 
     def test_create_provider_anthropic(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         provider = create_provider("anthropic")
         assert provider.provider_name == "anthropic"
 
     def test_create_provider_unknown(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         with pytest.raises(ValueError, match="Unknown provider"):
             create_provider("gemini")
 
     @patch("openai.OpenAI")
     def test_create_client_openai(self, mock_openai_cls: MagicMock) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_openai_cls.return_value = MagicMock()
         client = create_client("openai", base_url="http://localhost:8000/v1", api_key="test-key")
@@ -2023,7 +2023,7 @@ class TestProviderFactory:
 
     @patch("openai.OpenAI")
     def test_create_client_empty_api_key_passes_none(self, mock_openai_cls: MagicMock) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_openai_cls.return_value = MagicMock()
         create_client("openai", base_url="http://localhost:8000/v1", api_key="")
@@ -2031,17 +2031,17 @@ class TestProviderFactory:
 
     @patch("openai.OpenAI")
     def test_create_client_empty_api_key_no_base_url(self, mock_openai_cls: MagicMock) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_openai_cls.return_value = MagicMock()
         create_client("openai", base_url="", api_key="")
         mock_openai_cls.assert_called_once_with(api_key=None)
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_create_client_anthropic_empty_api_key_omits_kwarg(
         self, mock_ensure: MagicMock
     ) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_anthropic_cls = MagicMock()
         mock_mod = MagicMock()
@@ -2051,11 +2051,11 @@ class TestProviderFactory:
         create_client("anthropic", base_url="", api_key="")
         mock_anthropic_cls.assert_called_once_with()
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_create_client_anthropic_nonempty_api_key_passes_kwarg(
         self, mock_ensure: MagicMock
     ) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_anthropic_cls = MagicMock()
         mock_mod = MagicMock()
@@ -2065,11 +2065,11 @@ class TestProviderFactory:
         create_client("anthropic", base_url="", api_key="sk-ant-test")
         mock_anthropic_cls.assert_called_once_with(api_key="sk-ant-test")
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_create_client_anthropic_empty_api_key_with_custom_base_url(
         self, mock_ensure: MagicMock
     ) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_anthropic_cls = MagicMock()
         mock_mod = MagicMock()
@@ -2080,7 +2080,7 @@ class TestProviderFactory:
         mock_anthropic_cls.assert_called_once_with(base_url="http://my-proxy:8000")
 
     def test_create_client_unknown(self) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         with pytest.raises(ValueError, match="Unknown provider"):
             create_client("gemini", base_url="http://x", api_key="k")
@@ -2099,14 +2099,14 @@ class TestProviderFactory:
         assert not isinstance(NotAProvider(), LLMProvider)
 
     def test_create_provider_openai_compatible(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         provider = create_provider("openai-compatible")
         assert isinstance(provider, OpenAIChatCompletionsProvider)
         assert provider.provider_name == "openai-compatible"
 
     def test_create_provider_openai_vs_compatible_distinct(self) -> None:
-        from turnstone.core.providers import OpenAIResponsesProvider, create_provider
+        from pebble.core.providers import OpenAIResponsesProvider, create_provider
 
         openai_prov = create_provider("openai")
         compat = create_provider("openai-compatible")
@@ -2121,7 +2121,7 @@ class TestProviderFactory:
         collision with a cloud model id must not inherit that model's
         sampling/effort contract, on either API surface.  Cloud lookups
         are unaffected."""
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         compat = create_provider("openai-compatible")
         compat_responses = create_provider("openai-compatible", api_surface="responses")
@@ -2136,7 +2136,7 @@ class TestProviderFactory:
         assert create_provider("openai") is not compat_responses
 
     def test_create_provider_returns_singleton(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         p1 = create_provider("openai")
         p2 = create_provider("openai")
@@ -2144,28 +2144,28 @@ class TestProviderFactory:
 
     def test_create_provider_compat_responses_surface(self) -> None:
         """openai-compatible + api_surface=responses returns the Responses provider."""
-        from turnstone.core.providers import OpenAIResponsesProvider, create_provider
+        from pebble.core.providers import OpenAIResponsesProvider, create_provider
 
         provider = create_provider("openai-compatible", api_surface="responses")
         assert isinstance(provider, OpenAIResponsesProvider)
 
     def test_create_provider_compat_chat_surface_default(self) -> None:
         """openai-compatible defaults to Chat Completions."""
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         for surface in (None, "", "chat"):
             provider = create_provider("openai-compatible", api_surface=surface)
             assert isinstance(provider, OpenAIChatCompletionsProvider)
 
     def test_create_provider_invalid_api_surface(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         with pytest.raises(ValueError, match="Unknown api_surface"):
             create_provider("openai-compatible", api_surface="bogus")
 
     def test_create_provider_openai_ignores_api_surface(self) -> None:
         """Cloud OpenAI is always Responses regardless of api_surface."""
-        from turnstone.core.providers import OpenAIResponsesProvider, create_provider
+        from pebble.core.providers import OpenAIResponsesProvider, create_provider
 
         provider = create_provider("openai", api_surface="chat")
         assert isinstance(provider, OpenAIResponsesProvider)
@@ -2173,15 +2173,15 @@ class TestProviderFactory:
     # -- Google provider -------------------------------------------------------
 
     def test_create_provider_google(self) -> None:
-        from turnstone.core.providers import create_provider
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers import create_provider
+        from pebble.core.providers._google import GoogleProvider
 
         provider = create_provider("google")
         assert isinstance(provider, GoogleProvider)
         assert provider.provider_name == "google"
 
     def test_create_provider_google_singleton(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         p1 = create_provider("google")
         p2 = create_provider("google")
@@ -2189,8 +2189,8 @@ class TestProviderFactory:
 
     @patch("openai.OpenAI")
     def test_create_client_google_default_base_url(self, mock_openai_cls: MagicMock) -> None:
-        from turnstone.core.providers import create_client
-        from turnstone.core.providers._google import GOOGLE_DEFAULT_BASE_URL
+        from pebble.core.providers import create_client
+        from pebble.core.providers._google import GOOGLE_DEFAULT_BASE_URL
 
         mock_openai_cls.return_value = MagicMock()
         create_client("google", base_url="", api_key="test-key")
@@ -2200,14 +2200,14 @@ class TestProviderFactory:
 
     @patch("openai.OpenAI")
     def test_create_client_google_custom_base_url(self, mock_openai_cls: MagicMock) -> None:
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_openai_cls.return_value = MagicMock()
         create_client("google", base_url="http://custom:8080/v1", api_key="k")
         mock_openai_cls.assert_called_once_with(base_url="http://custom:8080/v1", api_key="k")
 
     def test_google_capabilities_defaults(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         provider = create_provider("google")
         caps = provider.get_capabilities("gemini-2.5-pro")
@@ -2218,7 +2218,7 @@ class TestProviderFactory:
         assert caps.supports_vision is True
 
     def test_google_capabilities_same_for_all_models(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         provider = create_provider("google")
         c1 = provider.get_capabilities("gemini-2.5-pro")
@@ -2227,17 +2227,17 @@ class TestProviderFactory:
         assert c1 is c2 is c3
 
     def test_list_known_models_google_empty(self) -> None:
-        from turnstone.core.providers import list_known_models
+        from pebble.core.providers import list_known_models
 
         assert list_known_models("google") == []
 
     def test_lookup_model_capabilities_google_returns_none(self) -> None:
-        from turnstone.core.providers import lookup_model_capabilities
+        from pebble.core.providers import lookup_model_capabilities
 
         assert lookup_model_capabilities("google", "gemini-2.5-pro") is None
 
     def test_resolve_openai_provider_googleapis(self) -> None:
-        from turnstone.core.model_registry import _resolve_openai_provider
+        from pebble.core.model_registry import _resolve_openai_provider
 
         assert (
             _resolve_openai_provider(
@@ -2248,7 +2248,7 @@ class TestProviderFactory:
         )
 
     def test_resolve_openai_provider_not_spoofable(self) -> None:
-        from turnstone.core.model_registry import _resolve_openai_provider
+        from pebble.core.model_registry import _resolve_openai_provider
 
         # evil-googleapis.com must NOT match — requires the dot prefix
         assert (
@@ -2257,7 +2257,7 @@ class TestProviderFactory:
         )
 
     def test_resolve_openai_provider_api_openai_unchanged(self) -> None:
-        from turnstone.core.model_registry import _resolve_openai_provider
+        from pebble.core.model_registry import _resolve_openai_provider
 
         assert _resolve_openai_provider("openai", "https://api.openai.com/v1") == "openai"
 
@@ -2271,7 +2271,7 @@ class TestGoogleEffortKnob:
     """The session effort knob reaches Gemini as a flat reasoning_effort."""
 
     def _create_kwargs(self, reasoning_effort: str) -> dict[str, Any]:
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         client = MagicMock()
@@ -2304,7 +2304,7 @@ class TestGoogleProviderFidelity:
     """Tests for thought_signature round-trip via provider_blocks."""
 
     def test_prepare_messages_strips_provider_content(self) -> None:
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2334,7 +2334,7 @@ class TestGoogleProviderFidelity:
         assert tc["thought_signature"] == "sig123"
 
     def test_prepare_messages_passthrough_without_provider_content(self) -> None:
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2351,7 +2351,7 @@ class TestGoogleProviderFidelity:
         # dict whose arguments are malformed must be legalized during the
         # swap (thought_signature and id untouched) — otherwise every replay
         # resurrects the malformed string the upstream sanitize pass fixed.
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2399,7 +2399,7 @@ class TestGoogleProviderFidelity:
         # The internal-shape case the shared legalize helper handles: a raw
         # fidelity dict whose arguments landed as an unserialized dict is
         # json.dumps'd — content preserved, not collapsed to "{}".
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2430,7 +2430,7 @@ class TestGoogleProviderFidelity:
         # before the capture-time blank-id gate existed): swapping it in
         # would resurrect the blank id on every replay, so the swap is
         # skipped and the sanitized mirror — with its back-filled id — stays.
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2463,7 +2463,7 @@ class TestGoogleProviderFidelity:
     def test_prepare_messages_ignores_non_dict_provider_content_elements(self) -> None:
         # A corrupted persisted lane with a non-dict element must not crash
         # the request build.
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2482,7 +2482,7 @@ class TestGoogleProviderFidelity:
         # element) must not swap a SHORTER list over the mirror — that would
         # drop a mirrored call whose tool result remains in history and
         # orphan it.  The sanitized mirror stays.
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2521,7 +2521,7 @@ class TestGoogleProviderFidelity:
     def test_prepare_messages_swap_passes_non_dict_function_through(self) -> None:
         # A degenerate fidelity block with function=None must pass through
         # untouched (the prior behaviour), not raise.
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
         msgs = [
@@ -2542,7 +2542,7 @@ class TestGoogleProviderFidelity:
 
     def test_prepare_messages_base_class_unchanged(self) -> None:
         """Base class _prepare_messages just calls sanitize_messages."""
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         prov = OpenAIChatCompletionsProvider()
         msgs = [
@@ -2554,7 +2554,7 @@ class TestGoogleProviderFidelity:
 
     def test_streaming_captures_thought_signature(self) -> None:
         """Streaming _iter_stream taps raw deltas and emits provider_blocks."""
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
 
@@ -2620,7 +2620,7 @@ class TestGoogleProviderFidelity:
         # yield TWO raw dicts, each keeping its own thought_signature — a
         # fused single dict would fail _prepare_messages' length gate and
         # silently drop the signature lane from the replay.
-        from turnstone.core.providers._google import GoogleProvider
+        from pebble.core.providers._google import GoogleProvider
 
         prov = GoogleProvider()
 
@@ -2652,7 +2652,7 @@ class TestGoogleProviderFidelity:
         only the Google subclass's tap captures raw dicts.  Pinned on the
         drained stream (the one transport) so a base-lane regression that
         started manufacturing blocks would surface here."""
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         prov = OpenAIChatCompletionsProvider()
         client = MagicMock()
@@ -2711,7 +2711,7 @@ class TestDataclasses:
         assert sc.info_delta == ""
 
     def test_model_capabilities_web_search_default(self) -> None:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         caps = ModelCapabilities()
         assert caps.supports_web_search is False
@@ -2876,7 +2876,7 @@ class TestAnthropicOrphanedToolUse:
     """Verify _convert_messages synthesizes tool_results for orphaned tool_use."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         self.provider = AnthropicProvider()
 
@@ -3059,7 +3059,7 @@ class TestAnthropicReasoningNone:
     """Verify 'none' effort disables thinking for manual-thinking models."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         self.provider = AnthropicProvider()
 
@@ -3077,7 +3077,7 @@ class TestAnthropicReasoningNone:
         assert result["thinking"]["budget_tokens"] == 1024
 
     def test_map_xhigh_effort(self) -> None:
-        from turnstone.core.providers._anthropic import _map_reasoning_to_effort
+        from pebble.core.providers._anthropic import _map_reasoning_to_effort
 
         result = _map_reasoning_to_effort("xhigh", ("low", "medium", "high", "xhigh", "max"))
         assert result == "xhigh"
@@ -3085,13 +3085,13 @@ class TestAnthropicReasoningNone:
     def test_map_xhigh_snaps_up_through_gap_to_max(self) -> None:
         """Levels with a hole (no xhigh) round the knob UP to the next
         declared level rather than dropping output_config entirely."""
-        from turnstone.core.providers._anthropic import _map_reasoning_to_effort
+        from pebble.core.providers._anthropic import _map_reasoning_to_effort
 
         result = _map_reasoning_to_effort("xhigh", ("low", "medium", "high", "max"))
         assert result == "max"
 
     def test_map_above_ceiling_rides_ceiling(self) -> None:
-        from turnstone.core.providers._anthropic import _map_reasoning_to_effort
+        from pebble.core.providers._anthropic import _map_reasoning_to_effort
 
         assert _map_reasoning_to_effort("max", ("low", "medium", "high")) == "high"
         assert _map_reasoning_to_effort("minimal", ("low", "medium", "high")) == "low"
@@ -3107,7 +3107,7 @@ class TestAnthropicWebSearch:
     """Tests for Anthropic native web search tool injection and streaming."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         self.provider = AnthropicProvider()
 
@@ -3134,7 +3134,7 @@ class TestAnthropicWebSearch:
         assert "web_search" in names
         # The web_search entry should be the native tool, not the function tool
         ws_tool = next(t for t in result if t.get("name") == "web_search")
-        from turnstone.core.providers._anthropic import _WEB_SEARCH_TOOL_TYPE
+        from pebble.core.providers._anthropic import _WEB_SEARCH_TOOL_TYPE
 
         assert ws_tool["type"] == _WEB_SEARCH_TOOL_TYPE
         assert "input_schema" not in ws_tool
@@ -3298,7 +3298,7 @@ class TestAnthropicWebSearch:
 
     def test_pause_turn_normalized_to_stop(self) -> None:
         """pause_turn stop reason should normalize to 'stop'."""
-        from turnstone.core.providers._anthropic import _normalize_finish_reason
+        from pebble.core.providers._anthropic import _normalize_finish_reason
 
         assert _normalize_finish_reason("pause_turn") == "stop"
 
@@ -3314,7 +3314,7 @@ class TestAnthropicWebSearch:
             ]
         )
 
-        with patch("turnstone.core.providers._anthropic._ensure_anthropic"):
+        with patch("pebble.core.providers._anthropic._ensure_anthropic"):
             result = drain_stream(
                 self.provider.create_streaming(
                     client=client,
@@ -3731,7 +3731,7 @@ class TestAnthropicProviderBlocks:
     """Tests for multi-turn web search content preservation."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         self.provider = AnthropicProvider()
 
@@ -3786,8 +3786,8 @@ class TestAnthropicProviderBlocks:
         the lowering map.  The native blocks replay verbatim (thinking +
         signature untouched) and the native tool_use id, the top-level
         mirror, and the tool_result all agree."""
-        from turnstone.core.lowering import restore_provider_tool_ids
-        from turnstone.core.trajectory import (
+        from pebble.core.lowering import restore_provider_tool_ids
+        from pebble.core.trajectory import (
             ProviderNative,
             ToolCall,
             Turn,
@@ -3824,7 +3824,7 @@ class TestAnthropicProviderBlocks:
         id, matches no native tool_use, and the converter drops it as an
         orphan — leaving an unanswered tool_use on the wire (a provider
         rejection)."""
-        from turnstone.core.trajectory import (
+        from pebble.core.trajectory import (
             ProviderNative,
             ToolCall,
             Turn,
@@ -3856,7 +3856,7 @@ class TestAnthropicProviderBlocks:
 
     def test_block_to_dict_with_model_dump(self) -> None:
         """_block_to_dict uses model_dump(exclude_none=True) when available."""
-        from turnstone.core.providers._anthropic import _block_to_dict
+        from pebble.core.providers._anthropic import _block_to_dict
 
         class FakeBlock:
             def model_dump(self, **kwargs: Any) -> dict[str, Any]:
@@ -3871,7 +3871,7 @@ class TestAnthropicProviderBlocks:
 
     def test_block_to_dict_fallback(self) -> None:
         """_block_to_dict extracts known attributes as fallback."""
-        from turnstone.core.providers._anthropic import _block_to_dict
+        from pebble.core.providers._anthropic import _block_to_dict
 
         class FakeBlock:
             type = "web_search_tool_result"
@@ -3886,7 +3886,7 @@ class TestAnthropicProviderBlocks:
 
     def test_streaming_captures_provider_blocks(self) -> None:
         """Streaming events produce provider_blocks on the final chunk."""
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
 
@@ -4041,7 +4041,7 @@ class TestAnthropicProviderBlocks:
 
     def test_block_to_dict_preserves_thinking_signature(self) -> None:
         """_block_to_dict preserves signature on thinking blocks."""
-        from turnstone.core.providers._anthropic import _block_to_dict
+        from pebble.core.providers._anthropic import _block_to_dict
 
         class FakeThinkingBlock:
             def model_dump(self, **kwargs: Any) -> dict[str, Any]:
@@ -4074,7 +4074,7 @@ class TestAnthropicToolSearch:
 
     @pytest.fixture()
     def provider(self):
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         return AnthropicProvider()
 
@@ -4170,7 +4170,7 @@ class TestModelCapabilitiesToolSearch:
     """Test supports_tool_search defaults and values."""
 
     def test_default_is_false(self):
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         caps = ModelCapabilities()
         assert caps.supports_tool_search is False
@@ -4205,13 +4205,13 @@ class TestMidConversationSystemCapability:
     """supports_mid_conversation_system — NextOpus (claude-opus-4-8) only."""
 
     def test_default_is_false(self) -> None:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         caps = ModelCapabilities()
         assert caps.supports_mid_conversation_system is False
 
     def test_opus_4_8_supports_it(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         for model in ("claude-opus-4-8", "claude-opus-4-8-20260601"):
@@ -4220,7 +4220,7 @@ class TestMidConversationSystemCapability:
 
     def test_other_claude_models_do_not(self) -> None:
         """Only NextOpus has it; older/other Claude models and the default off."""
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         for model in (
@@ -4244,7 +4244,7 @@ class TestVisionCapabilities:
     """Test supports_vision flag across providers."""
 
     def test_default_is_false(self) -> None:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         caps = ModelCapabilities()
         assert caps.supports_vision is False
@@ -4261,7 +4261,7 @@ class TestVisionCapabilities:
         assert caps.supports_vision is False
 
     def test_anthropic_supports_vision(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         for model in ("claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"):
@@ -4270,7 +4270,7 @@ class TestVisionCapabilities:
 
     def test_anthropic_default_supports_vision(self) -> None:
         """Anthropic default (unknown Claude model) supports vision."""
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         provider = AnthropicProvider()
         caps = provider.get_capabilities("claude-unknown-9")
@@ -4281,7 +4281,7 @@ class TestAnthropicVisionConversion:
     """Test image content conversion in _convert_messages."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         self.provider = AnthropicProvider()
 
@@ -4353,7 +4353,7 @@ class TestAnthropicVisionConversion:
 
     def test_convert_content_parts_static_method(self) -> None:
         """_convert_content_parts handles both image_url and text."""
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         parts = [
             {"type": "text", "text": "description"},
@@ -4378,7 +4378,7 @@ class TestAnthropicPromptCaching:
     """Tests for Anthropic prompt caching (cache_control)."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         self.provider = AnthropicProvider()
 
@@ -4497,7 +4497,7 @@ class TestAnthropicPromptCaching:
         )
         assert kwargs["output_config"] == {"effort": "max"}
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_message_start_cache_metrics(self, mock_ensure: MagicMock) -> None:
         """Cache metrics from message_start flow into UsageInfo."""
         msg_start = MagicMock()
@@ -4533,7 +4533,7 @@ class TestAnthropicPromptCaching:
         assert start_chunks[0].usage.cache_creation_tokens == 80
         assert start_chunks[0].usage.cache_read_tokens == 0
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_message_delta_cache_metrics(self, mock_ensure: MagicMock) -> None:
         """Cache metrics from message_delta flow into UsageInfo."""
         text_event = _anthropic_event("content_block_delta", delta_type="text_delta", text="Hi")
@@ -4571,7 +4571,7 @@ class TestAnthropicPromptCaching:
         assert u.cache_read_tokens == 120
         assert u.cache_creation_tokens == 0
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_drained_stream_cache_metrics(self, mock_ensure: MagicMock) -> None:
         """The drained transport carries cache metrics through the max-merge."""
         client = MagicMock()
@@ -4597,7 +4597,7 @@ class TestAnthropicPromptCaching:
         assert u.cache_creation_tokens == 150
         assert u.cache_read_tokens == 50
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_streaming_cache_metrics_missing_gracefully(self, mock_ensure: MagicMock) -> None:
         """When cache attributes are absent, tokens default to 0."""
         import types
@@ -4826,7 +4826,7 @@ class TestMetricsCacheTokens:
     """Tests for cache token recording in MetricsCollector."""
 
     def test_record_cache_tokens(self) -> None:
-        from turnstone.core.metrics import MetricsCollector
+        from pebble.core.metrics import MetricsCollector
 
         m = MetricsCollector()
         m.record_cache_tokens(100, 200)
@@ -4835,7 +4835,7 @@ class TestMetricsCacheTokens:
         assert m._tokens["cache_read"] == 500
 
     def test_prometheus_output_includes_cache_tokens(self) -> None:
-        from turnstone.core.metrics import MetricsCollector
+        from pebble.core.metrics import MetricsCollector
 
         m = MetricsCollector()
         m.record_tokens(1000, 500)
@@ -4855,7 +4855,7 @@ class TestOpenAIResponsesProvider:
     """Tests for the OpenAI Responses API provider."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         self.provider = OpenAIResponsesProvider()
 
@@ -4937,7 +4937,7 @@ class TestResponsesMessageConversion:
     """Tests for _convert_messages — Chat Completions format to Responses API."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         self.provider = OpenAIResponsesProvider()
 
@@ -5058,7 +5058,7 @@ class TestResponsesToolConversion:
     """Tests for _convert_tools — Chat Completions tool format to Responses API."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         self.provider = OpenAIResponsesProvider()
 
@@ -5112,7 +5112,7 @@ class TestResponsesParamBuilding:
     """Tests for _build_kwargs — parameter construction for Responses API."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         self.provider = OpenAIResponsesProvider()
 
@@ -5441,7 +5441,7 @@ class TestResponsesStreaming:
     """Tests for Responses API streaming event handling."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         self.provider = OpenAIResponsesProvider()
 
@@ -5580,7 +5580,7 @@ class TestResponsesDrainedStream:
     real truncation terminal), and usage."""
 
     def setup_method(self) -> None:
-        from turnstone.core.providers import OpenAIResponsesProvider
+        from pebble.core.providers import OpenAIResponsesProvider
 
         self.provider = OpenAIResponsesProvider()
 
@@ -5684,7 +5684,7 @@ class TestResponsesDrainedStream:
         # event-disciplined server this is a generation that died
         # mid-response — the drain refuses to bless possibly-truncated
         # content.
-        from turnstone.core.providers import IncompleteStreamError
+        from pebble.core.providers import IncompleteStreamError
 
         events = self._make_events(text="Hello")[:-1]  # drop the terminal event
         with pytest.raises(IncompleteStreamError):
@@ -6045,7 +6045,7 @@ class TestResponsesDrainedStream:
         assert "[Cite](https://cite.test)" in result.content
 
     def test_transient_error_event_is_retryable(self) -> None:
-        from turnstone.core.providers._openai_responses import ResponsesStreamFailedError
+        from pebble.core.providers._openai_responses import ResponsesStreamFailedError
 
         events = [SimpleNamespace(type="error", code="server_error", message="overloaded")]
         with pytest.raises(ResponsesStreamFailedError, match="overloaded"):
@@ -6069,7 +6069,7 @@ class TestResponsesDrainedStream:
         # A TRANSIENT in-band response.failed (server_error / rate limit)
         # raises the typed error the provider advertises as retryable —
         # retry loops re-run it like the wire errors it stands in for.
-        from turnstone.core.providers._openai_responses import ResponsesStreamFailedError
+        from pebble.core.providers._openai_responses import ResponsesStreamFailedError
 
         events = [
             SimpleNamespace(
@@ -6089,7 +6089,7 @@ class TestResponsesDrainedStream:
         # policy) re-fail identically on every attempt — they surface as
         # plain RuntimeError so retry loops stop on attempt zero instead
         # of running the whole backoff ladder against a doomed request.
-        from turnstone.core.providers._openai_responses import ResponsesStreamFailedError
+        from pebble.core.providers._openai_responses import ResponsesStreamFailedError
 
         events = [
             SimpleNamespace(
@@ -6117,7 +6117,7 @@ class TestTransportRetryability:
         ["openai", "openai-compatible", "anthropic", "anthropic-compatible", "google", "xai"],
     )
     def test_incomplete_stream_error_is_retryable(self, provider_name: str) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         provider = create_provider(provider_name)
         assert "IncompleteStreamError" in provider.retryable_error_names

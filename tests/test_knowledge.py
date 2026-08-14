@@ -6,16 +6,20 @@ and re-reading them is the behaviour that matters.
 
 from __future__ import annotations
 
-from pathlib import Path
+import contextlib
+from typing import TYPE_CHECKING
 
 import pytest
 
-from turnstone.core import knowledge as kb
+from pebble.core import knowledge as kb
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(autouse=True)
 def _vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TURNSTONE_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path / "workspace"))
 
 
 class TestSlugAndLinks:
@@ -302,8 +306,10 @@ class TestVaultIsGit:
         kb.write_note(kb.Note(title="Alpha", body="a"))
         kb.write_note(kb.Note(title="Beta", body="b"))
         log = subprocess.run(
-            ["git", "log", "--oneline"], cwd=kb.vault_root(),
-            capture_output=True, text=True,
+            ["git", "log", "--oneline"],
+            cwd=kb.vault_root(),
+            capture_output=True,
+            text=True,
         ).stdout
         assert "Alpha" in log and "Beta" in log
 
@@ -313,8 +319,10 @@ class TestVaultIsGit:
         kb.write_note(kb.Note(title="Log", body="one"))
         kb.write_note(kb.Note(title="Log", body="two"), append=True)
         log = subprocess.run(
-            ["git", "log", "--oneline"], cwd=kb.vault_root(),
-            capture_output=True, text=True,
+            ["git", "log", "--oneline"],
+            cwd=kb.vault_root(),
+            capture_output=True,
+            text=True,
         ).stdout
         # History is the point: a finding can be traced to when it was learned.
         assert "append: Log" in log and "write: Log" in log
@@ -325,11 +333,11 @@ class TestVaultIsGit:
 
     def test_a_failed_commit_never_loses_the_note(self, monkeypatch) -> None:
         # The note is the product; version control is a convenience on top.
-        monkeypatch.setattr(kb, "_commit_vault", lambda msg: (_ for _ in ()).throw(OSError("no git")))
-        try:
+        monkeypatch.setattr(
+            kb, "_commit_vault", lambda msg: (_ for _ in ()).throw(OSError("no git"))
+        )
+        with contextlib.suppress(OSError):
             kb.write_note(kb.Note(title="Survives", body="content"))
-        except OSError:
-            pass
         assert kb.note_path("Survives").exists()
 
     def test_readme_is_not_a_note(self) -> None:

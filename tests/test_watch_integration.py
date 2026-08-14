@@ -28,11 +28,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pebble.core.session import ChatSession
+from pebble.core.storage import get_storage
+from pebble.core.trajectory import dicts_from_turns
+from pebble.core.watch import WatchRunner
 from tests._helpers import patch_session_storage
-from turnstone.core.session import ChatSession
-from turnstone.core.storage import get_storage
-from turnstone.core.trajectory import dicts_from_turns
-from turnstone.core.watch import WatchRunner
 
 
 class _NullUI:
@@ -110,7 +110,7 @@ def test_watch_fires_then_user_send_drains_envelope(tmp_db, monkeypatch):
         patch.object(session, "_update_token_table"),
         patch.object(session, "_print_status_line"),
         patch.object(session, "_visible_memory_count", return_value=0),
-        patch("turnstone.core.session.save_message"),
+        patch("pebble.core.session.save_message"),
     ):
         session._title_generated = True  # suppress orthogonal title side-thread
         session.send("ok")
@@ -171,7 +171,7 @@ def test_three_back_to_back_watch_fires_drain_into_one_turn(tmp_db, monkeypatch)
         patch.object(session, "_update_token_table"),
         patch.object(session, "_print_status_line"),
         patch.object(session, "_visible_memory_count", return_value=0),
-        patch("turnstone.core.session.save_message"),
+        patch("pebble.core.session.save_message"),
     ):
         session._title_generated = True
         session.send("user")
@@ -211,7 +211,7 @@ def test_watch_dispatch_through_restore_fn_lands_on_rehydrated_session(tmp_db, m
     ``manager.create + session.resume`` for ``manager.open``) doesn't
     silently break the watch-restore pipeline.
     """
-    from turnstone.core import session as session_mod
+    from pebble.core import session as session_mod
 
     patch_session_storage(monkeypatch, active=True)
 

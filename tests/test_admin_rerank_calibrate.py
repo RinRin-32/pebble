@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from turnstone.admin import _cmd_rerank_calibrate
-from turnstone.core.rerank_calibrate import CalibrationResult
-from turnstone.core.storage import init_storage, reset_storage
+from pebble.admin import _cmd_rerank_calibrate
+from pebble.core.rerank_calibrate import CalibrationResult
+from pebble.core.storage import init_storage, reset_storage
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -81,7 +81,7 @@ def _seed_reranker(db_path: str, *, base_url: str = "http://localhost:9999/reran
 
 def _stub_calibrate(monkeypatch, result: CalibrationResult) -> None:
     monkeypatch.setattr(
-        "turnstone.core.rerank_calibrate.calibrate_model",
+        "pebble.core.rerank_calibrate.calibrate_model",
         lambda base_url, model, api_key, *, instruction="", timeout=60.0: result,
     )
 

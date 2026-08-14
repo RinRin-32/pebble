@@ -17,13 +17,13 @@ plugs in.
 | Command | Module | Frontend | Purpose |
 |---------|--------|----------|---------|
 | `turnstone` | `turnstone.cli` | `TerminalUI` | Interactive terminal REPL |
-| `turnstone-server` | `turnstone.server` | `WebUI` | Browser-based chat (HTTP + SSE) |
-| `turnstone-console` | `turnstone.console.server` | ClusterCollector | Cluster dashboard (aggregates all nodes) |
-| `turnstone-eval` | `turnstone.eval.cli` | `NullUI` | Headless measurement (scores tool-use against expected actions) |
-| `turnstone-optimizer` | `turnstone.optimizer` | `NullUI` | Prompt/tool optimization (UCB self-modify loop over the eval substrate) |
-| `turnstone-channel` | `turnstone.channels.cli` | ChannelAdapter | Channel gateway (Discord, Slack, etc.) |
-| `turnstone-admin` | `turnstone.admin` | — | Offline user and API token management |
-| `turnstone-doctor` | `turnstone.doctor` | — | LLM-backed cluster diagnostics |
+| `pebble-server` | `turnstone.server` | `WebUI` | Browser-based chat (HTTP + SSE) |
+| `pebble-console` | `turnstone.console.server` | ClusterCollector | Cluster dashboard (aggregates all nodes) |
+| `pebble-eval` | `turnstone.eval.cli` | `NullUI` | Headless measurement (scores tool-use against expected actions) |
+| `pebble-optimizer` | `turnstone.optimizer` | `NullUI` | Prompt/tool optimization (UCB self-modify loop over the eval substrate) |
+| `pebble-channel` | `turnstone.channels.cli` | ChannelAdapter | Channel gateway (Discord, Slack, etc.) |
+| `pebble-admin` | `turnstone.admin` | — | Offline user and API token management |
+| `pebble-doctor` | `turnstone.doctor` | — | LLM-backed cluster diagnostics |
 
 ---
 
@@ -84,7 +84,7 @@ turnstone/
     server.py         Cluster dashboard HTTP server + SSE + CLI entry point
     static/           Cluster dashboard web UI (page-specific HTML, CSS, JS)
   channels/
-    cli.py            Unified channel gateway entry point (turnstone-channel)
+    cli.py            Unified channel gateway entry point (pebble-channel)
     _protocol.py      ChannelAdapter protocol
     _routing.py       ChannelRouter — channel/thread ↔ workstream mapping via HTTP
     _config.py        Base ChannelConfig dataclass
@@ -105,7 +105,7 @@ turnstone/
     *.json            16 tool schemas (OpenAI function-calling format + turnstone metadata)
 ```
 
-Both UIs share a common design system extracted into `turnstone/shared_static/`: design tokens, login overlay, toast notifications, theme toggle, keyboard shortcuts, and utility functions. Each UI imports `base.css` and the shared JS modules at `/shared/`, then adds only page-specific code at `/static/`.
+Both UIs share a common design system extracted into `pebble/shared_static/`: design tokens, login overlay, toast notifications, theme toggle, keyboard shortcuts, and utility functions. Each UI imports `base.css` and the shared JS modules at `/shared/`, then adds only page-specific code at `/static/`.
 
 ---
 
@@ -412,7 +412,7 @@ non-idle background workstreams above the input prompt.
 
 ### Schema Format
 
-Each tool is a JSON file in `turnstone/tools/`. The file contains an OpenAI
+Each tool is a JSON file in `pebble/tools/`. The file contains an OpenAI
 function-calling schema (`name`, `description`, `parameters`) plus optional
 turnstone metadata keys:
 
@@ -515,7 +515,7 @@ then returns the final content as the tool result.
 
 ### MCP Tool Integration
 
-`MCPClientManager` (`turnstone/core/mcp_client.py`) connects to external MCP servers
+`MCPClientManager` (`pebble/core/mcp_client.py`) connects to external MCP servers
 and exposes their tools alongside built-in tools. The MCP SDK is fully async; turnstone
 bridges this with a background asyncio event loop in a daemon thread.
 
@@ -577,7 +577,7 @@ rather than crashing the session.
 
 **Registry discovery:** The console admin panel provides a registry discovery
 surface backed by the official MCP Registry (registry.modelcontextprotocol.io).
-`MCPRegistryClient` (`turnstone/core/mcp_registry.py`) is a standalone httpx
+`MCPRegistryClient` (`pebble/core/mcp_registry.py`) is a standalone httpx
 async client that queries the registry's v0.1 API for server discovery. Search
 results are annotated with installed status by cross-referencing the
 `mcp_servers` table. Installation creates a DB row with `registry_name`,
@@ -591,7 +591,7 @@ registries.
 > See also: [Core Engine Classes diagram](diagrams/png/03-core-engine-classes.png)
 
 `ChatSession` is provider-agnostic — it delegates all LLM communication to an
-`LLMProvider` protocol (`turnstone/core/providers/_protocol.py`). Internally,
+`LLMProvider` protocol (`pebble/core/providers/_protocol.py`). Internally,
 messages use an OpenAI-like format; each provider translates at the API boundary.
 
 ```
@@ -678,7 +678,7 @@ api_key)` creates the appropriate SDK client.
 
 ### Multi-Model Registry
 
-`ModelRegistry` (`turnstone/core/model_registry.py`) manages named model
+`ModelRegistry` (`pebble/core/model_registry.py`) manages named model
 configurations so workstreams can use different LLM backends.
 
 **Config format:**
@@ -997,7 +997,7 @@ session.py / server.py / cli.py
 **SQLite** is the default (zero-config, single file at `.turnstone.db`).
 **PostgreSQL** is the production backend (connection pooling, `tsvector`
 full-text search). Select via `[database]` in `config.toml`, CLI flags, or
-environment variables (`TURNSTONE_DB_BACKEND`, `TURNSTONE_DB_URL`).
+environment variables (`PEBBLE_DB_BACKEND`, `PEBBLE_DB_URL`).
 
 Schema migrations are managed by Alembic and run automatically on startup.
 Existing SQLite databases created before the migration system are auto-stamped
@@ -1080,8 +1080,8 @@ url = ""                            # PostgreSQL connection URL
 pool_size = 2                       # PostgreSQL connection pool size (per process)
 ```
 
-Environment variables: `TURNSTONE_DB_BACKEND`, `TURNSTONE_DB_URL`, `TURNSTONE_DB_PATH`,
-`TURNSTONE_DB_POOL_SIZE`.
+Environment variables: `PEBBLE_DB_BACKEND`, `PEBBLE_DB_URL`, `PEBBLE_DB_PATH`,
+`PEBBLE_DB_POOL_SIZE`.
 
 The default pool is intentionally small (2 base + 3 overflow = 5 per process)
 because all database operations are short-burst queries that hold connections for
@@ -1231,7 +1231,7 @@ attempts) to avoid transient API errors from poisoning evaluation scores.
 
 ### Health Monitor & Circuit Breaker
 
-`BackendHealthMonitor` (`turnstone/core/healthcheck.py`) runs a daemon thread
+`BackendHealthMonitor` (`pebble/core/healthcheck.py`) runs a daemon thread
 that probes the LLM backend by calling `client.models.list()` every
 `backend_probe_interval` seconds (default 30). Probe results drive a three-state
 circuit breaker:
@@ -1254,7 +1254,7 @@ HALF_OPEN ──(probe fails)──────────>  OPEN
 
 ### Rate Limiting
 
-`RateLimiter` (`turnstone/core/ratelimit.py`) enforces per-client-IP request
+`RateLimiter` (`pebble/core/ratelimit.py`) enforces per-client-IP request
 limits using a token-bucket algorithm. Each IP gets a `TokenBucket` with
 `requests_per_second` (refill rate) and `burst` (bucket capacity) from
 `[ratelimit]` config.
@@ -1322,7 +1322,7 @@ Three hierarchical scopes control endpoint access:
   settings through the browser.
 - **Server** is a JWT validator only — it validates tokens on each request but
   never creates users or tokens. Both processes share the same `jwt_secret`
-  (via `TURNSTONE_JWT_SECRET` env var or `[auth].jwt_secret` config).
+  (via `PEBBLE_JWT_SECRET` env var or `[auth].jwt_secret` config).
 - **First-time setup** — both server and console expose
   `POST /v1/api/auth/setup`, a public endpoint that creates the initial admin
   user when no users exist. This avoids the chicken-and-egg problem of needing
@@ -1538,7 +1538,7 @@ since file contents are no longer in the message history.
 
 > See also: [SDK Architecture diagram](diagrams/png/13-sdk-architecture.png) | [SDK Documentation](sdk.md)
 
-The `turnstone/sdk/` package provides typed HTTP clients for programmatic access
+The `pebble/sdk/` package provides typed HTTP clients for programmatic access
 to both the server and console APIs. It wraps REST endpoints with methods that
 return Pydantic models, and SSE endpoints with async/sync iterators that yield
 typed event dataclasses.
@@ -1577,7 +1577,7 @@ with TurnstoneServer("http://localhost:8080", token="tok_xxx") as client:
 
 > See also: [Channel Integrations guide](channels.md)
 
-The `turnstone-channel` gateway connects external messaging platforms
+The `pebble-channel` gateway connects external messaging platforms
 (Discord and Slack today, with an adapter protocol for future platforms) to
 the turnstone cluster via HTTP. Each
 platform adapter implements the `ChannelAdapter` protocol and translates
@@ -1602,7 +1602,7 @@ The `notify` tool enables the LLM to send notifications to users or
 channels directly. The server calls the channel gateway
 directly over HTTP for lower latency: `_exec_notify()` queries the
 `services` database table for healthy channel gateways (heartbeat within
-120 seconds), authenticates with a service JWT (`aud: turnstone-channel`),
+120 seconds), authenticates with a service JWT (`aud: pebble-channel`),
 and POSTs to `POST /v1/api/notify` on the first healthy gateway. The
 payload includes the originating `ws_id` for reply routing. The gateway
 validates the JWT, resolves the target (username lookup via
@@ -1663,7 +1663,7 @@ client.
 
 Intent validation provides advisory risk assessments for tool calls that
 require human approval. The system runs a two-tier evaluation pipeline
-implemented in `turnstone/core/judge.py`:
+implemented in `pebble/core/judge.py`:
 
 1. **Heuristic tier** (synchronous, sub-millisecond) -- A priority-ordered
    rule table using fnmatch tool patterns and regex argument patterns. Four

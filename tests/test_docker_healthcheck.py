@@ -27,7 +27,7 @@ def run_healthcheck(url: str, pem_root: Path | None = None) -> subprocess.Comple
     env = dict(os.environ)
     # Point the script at the test's PEM root — or at an empty dir to model
     # a plain-HTTP node with no TLS material on disk.
-    env["TURNSTONE_TLS_PEM_DIR"] = str(pem_root) if pem_root else "/nonexistent"
+    env["PEBBLE_TLS_PEM_DIR"] = str(pem_root) if pem_root else "/nonexistent"
     return subprocess.run(
         [sys.executable, str(SCRIPT), url],
         capture_output=True,
@@ -88,7 +88,7 @@ def mtls_setup(tmp_path):
     from lacme import CertificateAuthority, MemoryStore
     from lacme.mtls import write_pem_files
 
-    from turnstone.core.tls import build_cert_hostnames
+    from pebble.core.tls import build_cert_hostnames
 
     ca = CertificateAuthority(store=MemoryStore())
     ca.init()
@@ -211,12 +211,12 @@ def _load_script_module():
 def test_default_pem_root_matches_server(monkeypatch):
     """Drift guard: the script's default PEM root equals the server's.
 
-    The script cannot import turnstone (standalone stdlib), so the default
+    The script cannot import pebble (standalone stdlib), so the default
     path literal is re-encoded; a rename on either side must fail here, not
     silently break mTLS probing in production."""
-    from turnstone.core.tls import tls_pem_runtime_dir
+    from pebble.core.tls import tls_pem_runtime_dir
 
-    monkeypatch.delenv("TURNSTONE_TLS_PEM_DIR", raising=False)
+    monkeypatch.delenv("PEBBLE_TLS_PEM_DIR", raising=False)
     assert _load_script_module()._pem_root() == tls_pem_runtime_dir()
 
 
@@ -226,7 +226,7 @@ def test_find_pem_dir_accepts_real_pem_layout(monkeypatch, mtls_setup):
     Pins the lacme-pem-* dir prefix and the fullchain/key/ca filename
     triplet against real write_pem_files output."""
     pem_root, _ = mtls_setup
-    monkeypatch.setenv("TURNSTONE_TLS_PEM_DIR", str(pem_root))
+    monkeypatch.setenv("PEBBLE_TLS_PEM_DIR", str(pem_root))
     found = _load_script_module()._find_pem_dir()
     assert found is not None
     assert found.parent == pem_root

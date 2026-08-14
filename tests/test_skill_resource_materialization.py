@@ -13,8 +13,8 @@ import stat
 from typing import Any
 from unittest.mock import MagicMock
 
-from turnstone.core.session import ChatSession
-from turnstone.core.storage._registry import get_storage
+from pebble.core.session import ChatSession
+from pebble.core.storage._registry import get_storage
 
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_skills.py)

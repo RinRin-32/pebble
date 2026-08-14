@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.oidc — OIDC authentication support."""
+"""Tests for pebble.core.oidc — OIDC authentication support."""
 
 from __future__ import annotations
 
@@ -16,8 +16,7 @@ import httpx
 import jwt as pyjwt
 import pytest
 
-from tests.conftest import make_oidc_test_config as _make_config
-from turnstone.core.oidc import (
+from pebble.core.oidc import (
     OIDCError,
     OIDCKeyNotFoundError,
     _ensure_default_role,
@@ -34,6 +33,7 @@ from turnstone.core.oidc import (
     validate_id_token,
     validate_issuer_url,
 )
+from tests.conftest import make_oidc_test_config as _make_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,13 +75,13 @@ def _mock_async_client(mock_get):
 
 class TestLoadOIDCConfig:
     def test_load_oidc_config_from_env(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_SCOPES", "openid")
-        monkeypatch.setenv("TURNSTONE_OIDC_PROVIDER_NAME", "Okta")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_SCOPES", "openid")
+        monkeypatch.setenv("PEBBLE_OIDC_PROVIDER_NAME", "Okta")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.enabled is True
@@ -92,24 +92,24 @@ class TestLoadOIDCConfig:
         assert cfg.provider_name == "Okta"
 
     def test_load_oidc_config_allow_private_network_env(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.internal.example")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_ALLOW_PRIVATE_NETWORK", "true")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.internal.example")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_ALLOW_PRIVATE_NETWORK", "true")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.allow_private_network is True
 
     def test_load_oidc_config_allow_private_network_toml(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.internal.example")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_ALLOW_PRIVATE_NETWORK", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.internal.example")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_ALLOW_PRIVATE_NETWORK", raising=False)
 
         with patch(
-            "turnstone.core.config.load_config",
+            "pebble.core.config.load_config",
             return_value={"allow_private_network": True},
         ):
             cfg = load_oidc_config()
@@ -117,35 +117,35 @@ class TestLoadOIDCConfig:
         assert cfg.allow_private_network is True
 
     def test_load_oidc_config_allow_private_network_default_off(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_ALLOW_PRIVATE_NETWORK", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_ALLOW_PRIVATE_NETWORK", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.allow_private_network is False
 
     def test_load_oidc_config_capture_user_credential_env(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_CAPTURE_USER_CREDENTIAL", "true")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_CAPTURE_USER_CREDENTIAL", "true")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.capture_user_credential is True
 
     def test_load_oidc_config_capture_user_credential_toml(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_CAPTURE_USER_CREDENTIAL", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_CAPTURE_USER_CREDENTIAL", raising=False)
 
         with patch(
-            "turnstone.core.config.load_config",
+            "pebble.core.config.load_config",
             return_value={"capture_user_credential": True},
         ):
             cfg = load_oidc_config()
@@ -153,25 +153,25 @@ class TestLoadOIDCConfig:
         assert cfg.capture_user_credential is True
 
     def test_load_oidc_config_capture_default_off(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_CAPTURE_USER_CREDENTIAL", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_CAPTURE_USER_CREDENTIAL", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.capture_user_credential is False
 
     def test_capture_appends_offline_access_to_scopes(self, monkeypatch):
         """Enabling capture requests offline_access without operator scope edits."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_SCOPES", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_SCOPES", raising=False)
 
         with patch(
-            "turnstone.core.config.load_config",
+            "pebble.core.config.load_config",
             return_value={"capture_user_credential": True},
         ):
             cfg = load_oidc_config()
@@ -180,13 +180,13 @@ class TestLoadOIDCConfig:
 
     def test_capture_scope_append_is_idempotent(self, monkeypatch):
         """An operator who already lists offline_access doesn't get it twice."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_SCOPES", "openid offline_access email")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_SCOPES", "openid offline_access email")
 
         with patch(
-            "turnstone.core.config.load_config",
+            "pebble.core.config.load_config",
             return_value={"capture_user_credential": True},
         ):
             cfg = load_oidc_config()
@@ -194,34 +194,34 @@ class TestLoadOIDCConfig:
         assert cfg.scopes == "openid offline_access email"
 
     def test_no_capture_leaves_scopes_untouched(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_SCOPES", raising=False)
-        monkeypatch.delenv("TURNSTONE_OIDC_CAPTURE_USER_CREDENTIAL", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_SCOPES", raising=False)
+        monkeypatch.delenv("PEBBLE_OIDC_CAPTURE_USER_CREDENTIAL", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.scopes == "openid email profile"
 
     def test_load_oidc_config_disabled_when_missing(self, monkeypatch):
-        monkeypatch.delenv("TURNSTONE_OIDC_ISSUER", raising=False)
-        monkeypatch.delenv("TURNSTONE_OIDC_CLIENT_ID", raising=False)
-        monkeypatch.delenv("TURNSTONE_OIDC_CLIENT_SECRET", raising=False)
+        monkeypatch.delenv("PEBBLE_OIDC_ISSUER", raising=False)
+        monkeypatch.delenv("PEBBLE_OIDC_CLIENT_ID", raising=False)
+        monkeypatch.delenv("PEBBLE_OIDC_CLIENT_SECRET", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.enabled is False
 
     def test_load_oidc_config_partial_env(self, monkeypatch):
         """Only issuer set, no client_id -> enabled=False."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.delenv("TURNSTONE_OIDC_CLIENT_ID", raising=False)
-        monkeypatch.delenv("TURNSTONE_OIDC_CLIENT_SECRET", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.delenv("PEBBLE_OIDC_CLIENT_ID", raising=False)
+        monkeypatch.delenv("PEBBLE_OIDC_CLIENT_SECRET", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.enabled is False
@@ -229,211 +229,211 @@ class TestLoadOIDCConfig:
         assert cfg.client_id == ""
 
     def test_load_oidc_config_role_map_parsing(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_ROLE_CLAIM", "roles")
-        monkeypatch.setenv("TURNSTONE_OIDC_ROLE_MAP", "admin:builtin-admin,eng:builtin-operator")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_ROLE_CLAIM", "roles")
+        monkeypatch.setenv("PEBBLE_OIDC_ROLE_MAP", "admin:builtin-admin,eng:builtin-operator")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.role_claim == "roles"
         assert cfg.role_map == {"admin": "builtin-admin", "eng": "builtin-operator"}
 
     def test_load_oidc_config_password_enabled_false(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_PASSWORD_ENABLED", "false")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_PASSWORD_ENABLED", "false")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.enabled is True
         assert cfg.password_enabled is False
 
     def test_load_oidc_config_password_enabled_true(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_PASSWORD_ENABLED", "true")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_PASSWORD_ENABLED", "true")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.password_enabled is True
 
     def test_load_oidc_config_role_map_empty_entries(self, monkeypatch):
         """Role map with empty/whitespace entries should be silently skipped."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_ROLE_MAP", "admin:builtin-admin, , :, foo:")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_ROLE_MAP", "admin:builtin-admin, , :, foo:")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.role_map == {"admin": "builtin-admin"}
 
     def test_load_oidc_config_defaults(self, monkeypatch):
         """Defaults for scopes and provider_name when not set."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_SCOPES", raising=False)
-        monkeypatch.delenv("TURNSTONE_OIDC_PROVIDER_NAME", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_SCOPES", raising=False)
+        monkeypatch.delenv("PEBBLE_OIDC_PROVIDER_NAME", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.scopes == "openid email profile"
         assert cfg.provider_name == "SSO"
 
     def test_load_oidc_config_redirect_base_from_env(self, monkeypatch):
-        """TURNSTONE_OIDC_REDIRECT_BASE populates redirect_base."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "https://app.example.com")
+        """PEBBLE_OIDC_REDIRECT_BASE populates redirect_base."""
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "https://app.example.com")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == "https://app.example.com"
 
     def test_load_oidc_config_redirect_base_strips_trailing_slash(self, monkeypatch):
         """Trailing slashes are stripped from redirect_base."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "https://app.example.com/")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "https://app.example.com/")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == "https://app.example.com"
 
     def test_load_oidc_config_redirect_base_default_empty(self, monkeypatch):
         """redirect_base defaults to empty string when not set."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_REDIRECT_BASE", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_REDIRECT_BASE", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == ""
 
     def test_load_oidc_config_redirect_base_rejects_path(self, monkeypatch):
         """redirect_base with a path component is rejected (falls back to empty)."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "https://app.example.com/subpath")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "https://app.example.com/subpath")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == ""
 
     def test_load_oidc_config_redirect_base_rejects_no_scheme(self, monkeypatch):
         """redirect_base without a scheme is rejected."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "app.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "app.example.com")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == ""
 
     def test_load_oidc_config_redirect_base_rejects_userinfo(self, monkeypatch):
         """redirect_base with userinfo (user:pass@host) is rejected."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "https://user:pass@app.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "https://user:pass@app.example.com")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == ""
 
     def test_load_oidc_config_redirect_base_rejects_invalid_port(self, monkeypatch):
         """redirect_base with non-numeric port is rejected."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "https://app.example.com:abc")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "https://app.example.com:abc")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == ""
 
     def test_load_oidc_config_redirect_base_rejects_missing_hostname(self, monkeypatch):
         """redirect_base without a hostname is rejected."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "https://")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "https://")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == ""
 
     def test_load_oidc_config_redirect_base_allows_http(self, monkeypatch):
         """http:// redirect_base is allowed (with warning) for local dev."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.setenv("TURNSTONE_OIDC_REDIRECT_BASE", "http://localhost:8000")
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("PEBBLE_OIDC_REDIRECT_BASE", "http://localhost:8000")
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.redirect_base == "http://localhost:8000"
 
     def test_load_oidc_config_parses_trusted_endpoint_hosts(self, monkeypatch):
-        """TURNSTONE_OIDC_TRUSTED_ENDPOINT_HOSTS is split, lowercased, and trimmed."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
+        """PEBBLE_OIDC_TRUSTED_ENDPOINT_HOSTS is split, lowercased, and trimmed."""
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
         monkeypatch.setenv(
-            "TURNSTONE_OIDC_TRUSTED_ENDPOINT_HOSTS",
+            "PEBBLE_OIDC_TRUSTED_ENDPOINT_HOSTS",
             "Foo.Example.com, BAR.example.com  ,, ",
         )
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.trusted_endpoint_hosts == ("foo.example.com", "bar.example.com")
 
     def test_load_oidc_config_trusted_endpoint_hosts_default_empty(self, monkeypatch):
         """trusted_endpoint_hosts defaults to () when env var is absent."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_TRUSTED_ENDPOINT_HOSTS", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_TRUSTED_ENDPOINT_HOSTS", raising=False)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             cfg = load_oidc_config()
 
         assert cfg.trusted_endpoint_hosts == ()
 
     def test_load_oidc_config_trusted_endpoint_hosts_from_toml_list(self, monkeypatch):
         """config.toml may provide trusted_endpoint_hosts as a list."""
-        monkeypatch.setenv("TURNSTONE_OIDC_ISSUER", "https://auth.example.com")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_ID", "cid")
-        monkeypatch.setenv("TURNSTONE_OIDC_CLIENT_SECRET", "csecret")
-        monkeypatch.delenv("TURNSTONE_OIDC_TRUSTED_ENDPOINT_HOSTS", raising=False)
+        monkeypatch.setenv("PEBBLE_OIDC_ISSUER", "https://auth.example.com")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_ID", "cid")
+        monkeypatch.setenv("PEBBLE_OIDC_CLIENT_SECRET", "csecret")
+        monkeypatch.delenv("PEBBLE_OIDC_TRUSTED_ENDPOINT_HOSTS", raising=False)
 
         with patch(
-            "turnstone.core.config.load_config",
+            "pebble.core.config.load_config",
             return_value={"trusted_endpoint_hosts": ["FOO.example.com", "bar.example.com"]},
         ):
             cfg = load_oidc_config()
@@ -1092,7 +1092,7 @@ class TestBuildOIDCRedirectURI:
 
     def test_build_redirect_uri_uses_redirect_base_only(self):
         """The redirect URI is built solely from ``redirect_base``."""
-        from turnstone.core.auth import _build_oidc_redirect_uri
+        from pebble.core.auth import _build_oidc_redirect_uri
 
         config = _make_config(redirect_base="https://example.com")
         result = _build_oidc_redirect_uri(config)
@@ -1536,7 +1536,7 @@ class TestFetchJWKS:
 
     def test_fetch_jwks_non_200_raises(self):
         """Non-2xx response (raise_for_status fires) -> OIDCError."""
-        from turnstone.core.oidc import fetch_jwks
+        from pebble.core.oidc import fetch_jwks
 
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -1558,7 +1558,7 @@ class TestFetchJWKS:
 
     def test_fetch_jwks_non_dict_body_raises(self):
         """Body decoded as a list rather than a JSON object -> OIDCError."""
-        from turnstone.core.oidc import fetch_jwks
+        from pebble.core.oidc import fetch_jwks
 
         mock_response = MagicMock()
         mock_response.json.return_value = [1, 2, 3]
@@ -1579,7 +1579,7 @@ class TestFetchJWKS:
 
     def test_fetch_jwks_dict_missing_keys_raises(self):
         """Body is a dict but lacks the ``keys`` array -> OIDCError."""
-        from turnstone.core.oidc import fetch_jwks
+        from pebble.core.oidc import fetch_jwks
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"not_keys": []}
@@ -1600,7 +1600,7 @@ class TestFetchJWKS:
 
     def test_fetch_jwks_keys_not_a_list_raises(self):
         """``keys`` present but not a list -> OIDCError (not iterable type)."""
-        from turnstone.core.oidc import fetch_jwks
+        from pebble.core.oidc import fetch_jwks
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"keys": "definitely-not-a-list"}
@@ -1621,7 +1621,7 @@ class TestFetchJWKS:
 
     def test_fetch_jwks_network_error_raises(self):
         """``httpx.RequestError`` from the transport -> OIDCError."""
-        from turnstone.core.oidc import fetch_jwks
+        from pebble.core.oidc import fetch_jwks
 
         async def _get(_url):
             raise httpx.ConnectError("connection refused")
@@ -1703,7 +1703,7 @@ class TestProvisionOIDCUser:
 
         claims = {"sub": "sub-456", "preferred_username": "bob", "email": "bob@example.com"}
 
-        with patch("turnstone.core.oidc.uuid") as mock_uuid:
+        with patch("pebble.core.oidc.uuid") as mock_uuid:
             mock_uuid.uuid4.return_value = MagicMock(hex="u-new-hex-00000000000000000000")
             user = provision_oidc_user(storage, config, claims)
 
@@ -1799,7 +1799,7 @@ class TestProvisionOIDCUser:
         """Username TOCTOU -> create_oidc_user raises StorageConflictError;
         provision_oidc_user wraps it as OIDCError without leaving role rows.
         """
-        from turnstone.core.storage import StorageConflictError
+        from pebble.core.storage import StorageConflictError
 
         config = _make_config()
         storage = _mock_storage()
@@ -1813,7 +1813,7 @@ class TestProvisionOIDCUser:
 
     def test_provision_oidc_user_identity_conflict_raises(self):
         """Concurrent (issuer, subject) creates -> StorageConflictError -> OIDCError."""
-        from turnstone.core.storage import StorageConflictError
+        from pebble.core.storage import StorageConflictError
 
         config = _make_config()
         storage = _mock_storage()
@@ -1845,7 +1845,7 @@ class TestProvisionOIDCUser:
         }
 
         claims = {"sub": "sub-null", "preferred_username": "bob", "oid": None, "tid": None}
-        with patch("turnstone.core.oidc.uuid") as mock_uuid:
+        with patch("pebble.core.oidc.uuid") as mock_uuid:
             mock_uuid.uuid4.return_value = MagicMock(hex="u-new-hex-00000000000000000000")
             provision_oidc_user(storage, config, claims)
 
@@ -2250,7 +2250,7 @@ class TestApplyRoleMapping:
 
         # IdP now only says "eng", not "admin"
         claims = {"sub": "u1", "groups": ["eng"]}
-        with caplog.at_level("INFO", logger="turnstone.core.oidc"):
+        with caplog.at_level("INFO", logger="pebble.core.oidc"):
             apply_role_mapping(storage, "u1", claims, config)
 
         storage.replace_oidc_roles.assert_called_once_with("u1", {"builtin-operator"})
@@ -2565,7 +2565,7 @@ class TestRuntimeRediscovery:
         or the recovered config never installs. An earlier version of this test
         mocked discover_oidc to return enabled=True and so masked exactly that
         dead-code bug."""
-        from turnstone.core.oidc import maybe_rediscover_oidc
+        from pebble.core.oidc import maybe_rediscover_oidc
 
         state = self._disabled_retryable_state()  # issuer=https://idp.example.com
         discovery_doc = {
@@ -2602,7 +2602,7 @@ class TestRuntimeRediscovery:
         SSRF/same-origin) re-probes every cooldown window forever. Drives the
         real discover_oidc: the discovered token_endpoint is on a foreign host,
         so validation rejects it as a config error."""
-        from turnstone.core.oidc import maybe_rediscover_oidc
+        from pebble.core.oidc import maybe_rediscover_oidc
 
         state = self._disabled_retryable_state()  # issuer=https://idp.example.com
         bad_doc = {
@@ -2643,12 +2643,12 @@ class TestRuntimeRediscovery:
         assert probes["n"] == 1
 
     def test_rediscover_cooldown_gates_repeat_probes(self):
-        from turnstone.core.oidc import maybe_rediscover_oidc
+        from pebble.core.oidc import maybe_rediscover_oidc
 
         state = self._disabled_retryable_state()
         still_down = state.oidc_config  # discover keeps returning disabled
         with patch(
-            "turnstone.core.oidc.discover_oidc", new=AsyncMock(return_value=still_down)
+            "pebble.core.oidc.discover_oidc", new=AsyncMock(return_value=still_down)
         ) as disc:
             asyncio.run(maybe_rediscover_oidc(state))
             asyncio.run(maybe_rediscover_oidc(state))
@@ -2658,7 +2658,7 @@ class TestRuntimeRediscovery:
         assert state.oidc_config.enabled is False
 
     def test_rediscover_noop_when_not_retryable_or_enabled(self):
-        from turnstone.core.oidc import maybe_rediscover_oidc
+        from pebble.core.oidc import maybe_rediscover_oidc
 
         # Operator-disabled (retryable False): never probes.
         state = SimpleNamespace(
@@ -2670,12 +2670,12 @@ class TestRuntimeRediscovery:
                 jwks_uri="",
             )
         )
-        with patch("turnstone.core.oidc.discover_oidc", new=AsyncMock()) as disc:
+        with patch("pebble.core.oidc.discover_oidc", new=AsyncMock()) as disc:
             asyncio.run(maybe_rediscover_oidc(state))
         disc.assert_not_awaited()
         # Already enabled: never probes.
         state2 = SimpleNamespace(oidc_config=_make_config(enabled=True))
-        with patch("turnstone.core.oidc.discover_oidc", new=AsyncMock()) as disc2:
+        with patch("pebble.core.oidc.discover_oidc", new=AsyncMock()) as disc2:
             asyncio.run(maybe_rediscover_oidc(state2))
         disc2.assert_not_awaited()
 
@@ -2708,7 +2708,7 @@ class TestInitializeOIDCState:
         async def _boom(_cfg):
             raise RuntimeError("boom")
 
-        with patch("turnstone.core.oidc.discover_oidc", side_effect=_boom):
+        with patch("pebble.core.oidc.discover_oidc", side_effect=_boom):
             asyncio.run(initialize_oidc_state(state))
 
         assert state.oidc_config.enabled is False
@@ -2728,7 +2728,7 @@ class TestInitializeOIDCState:
         async def _disabled(_cfg, *, client=None):
             return disabled_cfg
 
-        with patch("turnstone.core.oidc.discover_oidc", side_effect=_disabled):
+        with patch("pebble.core.oidc.discover_oidc", side_effect=_disabled):
             asyncio.run(initialize_oidc_state(state))
 
         assert state.oidc_config is disabled_cfg
@@ -2747,15 +2747,15 @@ class TestInitializeOIDCState:
             raise AssertionError("fetch_jwks must not be called when redirect_base is empty")
 
         with (
-            patch("turnstone.core.oidc.discover_oidc", side_effect=_ok),
-            patch("turnstone.core.oidc.fetch_jwks", side_effect=_jwks_unexpected),
-            caplog.at_level("ERROR", logger="turnstone.core.oidc"),
+            patch("pebble.core.oidc.discover_oidc", side_effect=_ok),
+            patch("pebble.core.oidc.fetch_jwks", side_effect=_jwks_unexpected),
+            caplog.at_level("ERROR", logger="pebble.core.oidc"),
         ):
             asyncio.run(initialize_oidc_state(state))
 
         assert state.oidc_config.enabled is False
         assert state.jwks_data is None
-        assert any("TURNSTONE_OIDC_REDIRECT_BASE" in record.message for record in caplog.records)
+        assert any("PEBBLE_OIDC_REDIRECT_BASE" in record.message for record in caplog.records)
 
     def test_initialize_keeps_enabled_but_no_jwks_on_jwks_failure(self):
         """JWKS fetch failure preserves enabled=True for lazy retry."""
@@ -2769,8 +2769,8 @@ class TestInitializeOIDCState:
             raise OIDCError("jwks down")
 
         with (
-            patch("turnstone.core.oidc.discover_oidc", side_effect=_ok),
-            patch("turnstone.core.oidc.fetch_jwks", side_effect=_jwks_boom),
+            patch("pebble.core.oidc.discover_oidc", side_effect=_ok),
+            patch("pebble.core.oidc.fetch_jwks", side_effect=_jwks_boom),
         ):
             asyncio.run(initialize_oidc_state(state))
 
@@ -2792,8 +2792,8 @@ class TestInitializeOIDCState:
             return jwks
 
         with (
-            patch("turnstone.core.oidc.discover_oidc", side_effect=_ok),
-            patch("turnstone.core.oidc.fetch_jwks", side_effect=_jwks),
+            patch("pebble.core.oidc.discover_oidc", side_effect=_ok),
+            patch("pebble.core.oidc.fetch_jwks", side_effect=_jwks),
         ):
             asyncio.run(initialize_oidc_state(state))
 
@@ -2811,14 +2811,14 @@ async def _async_return(value):
 class TestCloseOIDCState:
     def test_close_when_never_initialised(self):
         """close_oidc_state on bare state must not raise."""
-        from turnstone.core.oidc import close_oidc_state
+        from pebble.core.oidc import close_oidc_state
 
         state = types.SimpleNamespace()
         asyncio.run(close_oidc_state(state))
 
     def test_close_releases_long_lived_client(self):
         """The long-lived client installed by initialize_oidc_state is aclosed."""
-        from turnstone.core.oidc import close_oidc_state
+        from pebble.core.oidc import close_oidc_state
 
         client = MagicMock()
 
@@ -2855,8 +2855,8 @@ class TestLongLivedHTTPClientPassthrough:
             return {"keys": [{"kid": "k1"}]}
 
         with (
-            patch("turnstone.core.oidc.discover_oidc", side_effect=_discover),
-            patch("turnstone.core.oidc.fetch_jwks", side_effect=_jwks),
+            patch("pebble.core.oidc.discover_oidc", side_effect=_discover),
+            patch("pebble.core.oidc.fetch_jwks", side_effect=_jwks),
         ):
             asyncio.run(initialize_oidc_state(state))
 
@@ -2878,7 +2878,7 @@ class TestLongLivedHTTPClientPassthrough:
         async def _boom(_cfg, *, client=None):
             raise RuntimeError("boom")
 
-        with patch("turnstone.core.oidc.discover_oidc", side_effect=_boom):
+        with patch("pebble.core.oidc.discover_oidc", side_effect=_boom):
             asyncio.run(initialize_oidc_state(state))
 
         assert state.oidc_config.enabled is False
@@ -2893,7 +2893,7 @@ class TestLongLivedHTTPClientPassthrough:
         async def _discover(c, *, client=None):
             return c
 
-        with patch("turnstone.core.oidc.discover_oidc", side_effect=_discover):
+        with patch("pebble.core.oidc.discover_oidc", side_effect=_discover):
             asyncio.run(initialize_oidc_state(state))
 
         assert state.oidc_config.enabled is False

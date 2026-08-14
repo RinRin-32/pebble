@@ -19,9 +19,9 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
-from turnstone.core.providers import StreamChunk, ToolCallDelta
-from turnstone.core.session import ChatSession
-from turnstone.core.session_ui_base import SessionUIBase
+from pebble.core.providers import StreamChunk, ToolCallDelta
+from pebble.core.session import ChatSession
+from pebble.core.session_ui_base import SessionUIBase
 
 
 class NullUI(SessionUIBase):

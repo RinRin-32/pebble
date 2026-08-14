@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone.core.model_registry import probe_model_endpoint
-from turnstone.core.providers import list_known_models, lookup_model_capabilities
+from pebble.core.model_registry import probe_model_endpoint
+from pebble.core.providers import list_known_models, lookup_model_capabilities
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,7 +47,7 @@ def _mock_client(*models: MagicMock) -> MagicMock:
 
 
 class TestProbeModelEndpoint:
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_probe_success(self, mock_cc: MagicMock) -> None:
         m1 = _mock_model("model-a")
         m2 = _mock_model("model-b")
@@ -58,7 +58,7 @@ class TestProbeModelEndpoint:
         assert result["available_models"] == ["model-a", "model-b"]
         assert result["error"] is None
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_target_found(self, mock_cc: MagicMock) -> None:
         m1 = _mock_model("gpt-5.4")
         mock_cc.return_value = _mock_client(m1)
@@ -68,7 +68,7 @@ class TestProbeModelEndpoint:
         )
         assert result["model_found"] is True
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_target_not_found(self, mock_cc: MagicMock) -> None:
         m1 = _mock_model("model-a")
         mock_cc.return_value = _mock_client(m1)
@@ -79,7 +79,7 @@ class TestProbeModelEndpoint:
         assert result["model_found"] is False
         assert result["available_models"] == ["model-a"]
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_no_target_model_found_is_none(self, mock_cc: MagicMock) -> None:
         m1 = _mock_model("model-a")
         mock_cc.return_value = _mock_client(m1)
@@ -87,7 +87,7 @@ class TestProbeModelEndpoint:
         result = probe_model_endpoint("openai", "http://localhost:8000/v1", "key")
         assert result["model_found"] is None
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_context_window_llama_cpp(self, mock_cc: MagicMock) -> None:
         m = _mock_model("qwen-32b", meta={"n_ctx_train": 131072})
         mock_cc.return_value = _mock_client(m)
@@ -96,7 +96,7 @@ class TestProbeModelEndpoint:
         assert result["context_window"] == 131072
         assert result["server_type"] == "llama.cpp"
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_server_type_openai(self, mock_cc: MagicMock) -> None:
         m = _mock_model("gpt-5.4")
         mock_cc.return_value = _mock_client(m)
@@ -104,7 +104,7 @@ class TestProbeModelEndpoint:
         result = probe_model_endpoint("openai", "https://api.openai.com/v1", "sk-test")
         assert result["server_type"] == "openai"
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_server_type_sglang(self, mock_cc: MagicMock) -> None:
         m = _mock_model("meta-llama/Llama-3", owned_by="sglang")
         mock_cc.return_value = _mock_client(m)
@@ -112,7 +112,7 @@ class TestProbeModelEndpoint:
         result = probe_model_endpoint("openai", "http://localhost:30000/v1", "key")
         assert result["server_type"] == "sglang"
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_vllm_max_model_len(self, mock_cc: MagicMock) -> None:
         m = _mock_model("/models/nemotron", max_model_len=262144, owned_by="vllm")
         mock_cc.return_value = _mock_client(m)
@@ -121,7 +121,7 @@ class TestProbeModelEndpoint:
         assert result["context_window"] == 262144
         assert result["server_type"] == "vllm"
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_vllm_max_model_len_preferred_over_meta(self, mock_cc: MagicMock) -> None:
         m = _mock_model(
             "/models/test",
@@ -133,7 +133,7 @@ class TestProbeModelEndpoint:
         result = probe_model_endpoint("openai", "http://localhost:8000/v1", "key")
         assert result["context_window"] == 131072
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_server_type_vllm(self, mock_cc: MagicMock) -> None:
         m = _mock_model("org/model-name")
         mock_cc.return_value = _mock_client(m)
@@ -141,7 +141,7 @@ class TestProbeModelEndpoint:
         result = probe_model_endpoint("openai", "http://localhost:8000/v1", "key")
         assert result["server_type"] == "vllm"
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_server_type_generic(self, mock_cc: MagicMock) -> None:
         m = _mock_model("my-model")
         mock_cc.return_value = _mock_client(m)
@@ -149,7 +149,7 @@ class TestProbeModelEndpoint:
         result = probe_model_endpoint("openai", "http://localhost:8000/v1", "key")
         assert result["server_type"] == "openai-compatible"
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_anthropic_provider(self, mock_cc: MagicMock) -> None:
         m = _mock_model("claude-sonnet-4-6")
         mock_cc.return_value = _mock_client(m)
@@ -164,7 +164,7 @@ class TestProbeModelEndpoint:
         assert result["server_type"] == "anthropic"
         assert result["context_window"] == 1000000
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_anthropic_compatible_server_type(self, mock_cc: MagicMock) -> None:
         m = _mock_model("deepseek-ai/DeepSeek-V4-Flash")
         mock_cc.return_value = _mock_client(m)
@@ -174,7 +174,7 @@ class TestProbeModelEndpoint:
         assert result["server_type"] == "anthropic-compatible"
         assert result["context_window"] is None
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_anthropic_compatible_max_model_len(self, mock_cc: MagicMock) -> None:
         m = _mock_model("deepseek-ai/DeepSeek-V4-Flash", max_model_len=131072)
         mock_cc.return_value = _mock_client(m)
@@ -183,7 +183,7 @@ class TestProbeModelEndpoint:
         assert result["context_window"] == 131072
         assert result["server_type"] == "anthropic-compatible"
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_connection_failure(self, mock_cc: MagicMock) -> None:
         mock_cc.side_effect = OSError("Connection refused")
 
@@ -191,7 +191,7 @@ class TestProbeModelEndpoint:
         assert result["reachable"] is False
         assert "Connection refused" in (result["error"] or "")
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_empty_model_list(self, mock_cc: MagicMock) -> None:
         mock_cc.return_value = _mock_client()  # no models
 
@@ -200,7 +200,7 @@ class TestProbeModelEndpoint:
         assert result["available_models"] == []
         assert "No models found" in (result["error"] or "")
 
-    @patch("turnstone.core.providers.create_client")
+    @patch("pebble.core.providers.create_client")
     def test_context_window_openai_static_table(self, mock_cc: MagicMock) -> None:
         """When base_url is api.openai.com and model is known, use static table."""
         m = _mock_model("gpt-5.4")

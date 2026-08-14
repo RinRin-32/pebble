@@ -146,7 +146,7 @@ with TurnstoneConsole("http://localhost:8081", token="...") as client:
 ### TypeScript
 
 ```typescript
-import { TurnstoneConsole } from "@turnstone/sdk";
+import { TurnstoneConsole } from "@pebble/sdk";
 
 const client = new TurnstoneConsole({
   baseUrl: "http://localhost:8081",

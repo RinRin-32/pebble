@@ -22,14 +22,14 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_create_persona,
     admin_get_persona,
     admin_list_personas,
     admin_update_persona,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.server import list_personas_endpoint
+from pebble.core.auth import AuthResult
+from pebble.server import list_personas_endpoint
 
 
 class _InjectAuthMiddleware(BaseHTTPMiddleware):
@@ -70,7 +70,7 @@ def _client(tmp_db: Any, permissions: set[str]) -> TestClient:
     # require_storage_or_503 reads the console's app-scoped handle; the picker
     # endpoint reads the global registry (tmp_db initialized it) — point both
     # at the same backend.
-    from turnstone.core.storage import get_storage
+    from pebble.core.storage import get_storage
 
     app.state.auth_storage = get_storage()
     return TestClient(app)
@@ -81,7 +81,7 @@ _ALL = {"persona.create", "persona.read", "persona.write"}
 
 @pytest.fixture
 def seeded(tmp_db: Any) -> str:
-    from turnstone.core.storage import get_storage
+    from pebble.core.storage import get_storage
 
     # Non-seed slug/display name: the migration ships a real ``scribe``, so a
     # fixture named ``scribe`` would collide on a migrated DB.
@@ -140,7 +140,7 @@ class TestRbac:
         }
 
     def test_picker_excludes_archived(self, tmp_db: Any, seeded: str) -> None:
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         get_storage().update_persona(seeded, enabled=False)
         c = _client(tmp_db, set())
@@ -244,7 +244,7 @@ class TestArchiveAndDefaultFlipHttp:
     projection + the permless picker's enabled filter)."""
 
     def test_default_flip_demotes_incumbent(self, tmp_db: Any, seeded: str) -> None:
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         # An incumbent interactive default alongside the (non-default) seeded
         # persona; flipping the seeded one must demote the incumbent.
@@ -297,7 +297,7 @@ class TestOrgIdGuard:
     def test_create_null_org_id_stored_empty(self, tmp_db: Any) -> None:
         # An explicit JSON null org_id must persist as "" — ``str(None)`` would
         # store the literal "None" and silently scope the persona to a bogus org.
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         c = _client(tmp_db, _ALL)
         resp = c.post(
@@ -319,8 +319,8 @@ class TestProductionRoutes:
 
         from starlette.routing import Mount, Route
 
-        from turnstone.console.collector import ClusterCollector
-        from turnstone.console.server import create_app
+        from pebble.console.collector import ClusterCollector
+        from pebble.console.server import create_app
 
         app = create_app(collector=ClusterCollector(storage=MagicMock()))
 

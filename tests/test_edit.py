@@ -1,6 +1,6 @@
-"""Tests for turnstone.core.edit — find_occurrences and pick_nearest."""
+"""Tests for pebble.core.edit — find_occurrences and pick_nearest."""
 
-from turnstone.core.edit import find_occurrences, pick_nearest
+from pebble.core.edit import find_occurrences, pick_nearest
 
 
 class TestFindOccurrences:

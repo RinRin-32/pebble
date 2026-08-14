@@ -1,4 +1,4 @@
-"""Unit tests for ``turnstone.core.state_writer``.
+"""Unit tests for ``pebble.core.state_writer``.
 
 Tests cover the contract callers depend on:
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 import threading
 import time
 
-from turnstone.core.state_writer import StateWriter
+from pebble.core.state_writer import StateWriter
 
 
 class _FakeStorage:

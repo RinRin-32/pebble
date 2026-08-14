@@ -6,28 +6,30 @@ anything touching the network is exercised through a stub client.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from turnstone import client_cli as cli
+from pebble import client_cli as cli
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestConfig:
     def test_env_overrides_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         path = tmp_path / "client.toml"
         cli.save_config(cli.ClientConfig(url="http://file", token="from-file"), path)
-        monkeypatch.setenv("TURNSTONE_URL", "http://env")
-        monkeypatch.setenv("TURNSTONE_TOKEN", "from-env")
+        monkeypatch.setenv("PEBBLE_URL", "http://env")
+        monkeypatch.setenv("PEBBLE_TOKEN", "from-env")
         cfg = cli.load_config(path)
         # CI passes credentials in the environment and must never need to write
         # them to disk.
         assert cfg.url == "http://env" and cfg.token == "from-env"
 
     def test_roundtrip(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("TURNSTONE_URL", raising=False)
-        monkeypatch.delenv("TURNSTONE_TOKEN", raising=False)
+        monkeypatch.delenv("PEBBLE_URL", raising=False)
+        monkeypatch.delenv("PEBBLE_TOKEN", raising=False)
         path = tmp_path / "client.toml"
         cli.save_config(cli.ClientConfig(url="https://host:8443", token="ts_abc"), path)
         cfg = cli.load_config(path)
@@ -40,14 +42,14 @@ class TestConfig:
         assert path.stat().st_mode & 0o077 == 0, "an API token must not be group/world readable"
 
     def test_quotes_are_escaped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("TURNSTONE_TOKEN", raising=False)
-        monkeypatch.delenv("TURNSTONE_URL", raising=False)
+        monkeypatch.delenv("PEBBLE_TOKEN", raising=False)
+        monkeypatch.delenv("PEBBLE_URL", raising=False)
         path = tmp_path / "client.toml"
         cli.save_config(cli.ClientConfig(token='we"ird\\value'), path)
         assert cli.load_config(path).token == 'we"ird\\value'
 
     def test_missing_file_is_unconfigured(self, tmp_path: Path, monkeypatch) -> None:
-        monkeypatch.delenv("TURNSTONE_TOKEN", raising=False)
+        monkeypatch.delenv("PEBBLE_TOKEN", raising=False)
         assert cli.load_config(tmp_path / "nope.toml").configured is False
 
 
@@ -116,9 +118,11 @@ class TestDispatch:
 class TestApprove:
     def test_approve_and_reject(self, stub: _StubClient) -> None:
         p = cli.build_parser()
-        a = p.parse_args(["approve", "ws-1"]); a.json = False
+        a = p.parse_args(["approve", "ws-1"])
+        a.json = False
         cli.cmd_approve(a)
-        r = p.parse_args(["approve", "ws-1", "--reject"]); r.json = False
+        r = p.parse_args(["approve", "ws-1", "--reject"])
+        r.json = False
         cli.cmd_approve(r)
         assert stub.approved[0]["approved"] is True
         assert stub.approved[1]["approved"] is False
@@ -131,7 +135,7 @@ class TestGuards:
         args.json = False
         with pytest.raises(SystemExit) as exc:
             cli.cmd_ws_list(args)
-        assert "turnstone-client login" in str(exc.value)
+        assert "pebble-client login" in str(exc.value)
 
     def test_parser_requires_a_command(self) -> None:
         with pytest.raises(SystemExit):
@@ -151,9 +155,15 @@ class TestWorkstreamFieldMapping:
 
     def _rows(self, monkeypatch, rows):
         class _C:
-            def __enter__(self): return self
-            def __exit__(self, *a): return None
-            def workstreams(self): return rows
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return None
+
+            def workstreams(self):
+                return rows
+
         monkeypatch.setattr(cli, "_client", lambda cfg: _C())
         monkeypatch.setattr(cli, "load_config", lambda *a, **k: cli.ClientConfig(token="t"))
         args = cli.build_parser().parse_args(["ws", "list"])
@@ -161,17 +171,19 @@ class TestWorkstreamFieldMapping:
         return args
 
     def test_api_shape_renders_the_id(self, monkeypatch, capsys) -> None:
-        args = self._rows(monkeypatch, [
-            {"id": "e18ed14fe462401d", "name": "Spawn Bob", "state": "idle", "node": "console"}
-        ])
+        args = self._rows(
+            monkeypatch,
+            [{"id": "e18ed14fe462401d", "name": "Spawn Bob", "state": "idle", "node": "console"}],
+        )
         cli.cmd_ws_list(args)
         out = capsys.readouterr().out
         assert "e18ed14fe462" in out and "console" in out and "Spawn Bob" in out
 
     def test_storage_shape_also_renders(self, monkeypatch, capsys) -> None:
-        args = self._rows(monkeypatch, [
-            {"ws_id": "abc123456789ff", "name": "Other", "state": "running", "node_id": "node-1"}
-        ])
+        args = self._rows(
+            monkeypatch,
+            [{"ws_id": "abc123456789ff", "name": "Other", "state": "running", "node_id": "node-1"}],
+        )
         cli.cmd_ws_list(args)
         out = capsys.readouterr().out
         assert "abc123456789" in out and "node-1" in out

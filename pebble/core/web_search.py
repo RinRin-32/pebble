@@ -1,0 +1,265 @@
+"""Pluggable web search backends.
+
+``web_search`` is an abstract capability with swappable clients:
+
+* **SearXNGClient** — self-hosted `SearxNG <https://searxng.org>`_ metasearch,
+  no API key. Aggregates DuckDuckGo, Wikipedia, and ~200 other engines behind a
+  stable JSON API. Bundled into the docker-compose stack as the ``searxng``
+  service.
+* **MCPSearchClient** — delegates to a web-search tool exposed by an MCP server.
+
+Auto-detection (default): SearxNG when a base URL is configured, else ``None``
+(tool removed from the tool list). Native provider-side web search on Anthropic
+and OpenAI search models is handled at the API boundary and never reaches these
+clients.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Protocol
+
+import httpx
+
+from pebble.core.log import get_logger
+from pebble.core.mcp_crypto import is_user_scoped_auth
+
+if TYPE_CHECKING:
+    from pebble.core.mcp_client import MCPClientManager
+    from pebble.core.rerank import Reranker
+
+log = get_logger(__name__)
+
+# Max SearxNG results sent to the reranker in one request — the pool re-ordered
+# before the caller's ``max_results`` slice. bm25.py defines the same cap
+# independently (kept separate so bm25 stays httpx-free) — keep the two in sync.
+_RERANK_POOL = 50
+
+
+class WebSearchClient(Protocol):
+    """Minimal interface for a web search backend."""
+
+    def search(self, query: str, max_results: int = 5, **kwargs: Any) -> str:
+        """Run a search and return formatted markdown results."""
+        ...
+
+
+class SearXNGClient:
+    """Self-hosted SearxNG metasearch backend (no API key).
+
+    Talks to the JSON API (``GET /search?format=json``). The instance MUST have
+    ``json`` enabled in ``search.formats`` — the bundled ``deploy/searxng``
+    config does this; a stock instance returns 403/HTML otherwise.
+    """
+
+    # The web_search tool's ``category`` arg → SearxNG ``categories``.
+    # ``"general"`` is intentionally absent so the param is omitted and SearxNG
+    # uses its default category mix.
+    _CATEGORIES = {"news": "news", "it": "it", "science": "science"}
+
+    def __init__(self, base_url: str, engines: str = "", timeout: float = 120) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._engines = engines.strip()
+        self._timeout = timeout
+
+    def search(self, query: str, max_results: int = 5, **kwargs: Any) -> str:
+        params: dict[str, str] = {"q": query, "format": "json"}
+        category = self._CATEGORIES.get(str(kwargs.get("category", "general")))
+        if category:
+            params["categories"] = category
+        if self._engines:
+            params["engines"] = self._engines
+        resp = httpx.get(
+            f"{self._base_url}/search",
+            params=params,
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return _format_searxng(resp.json(), query, max_results, reranker=kwargs.get("reranker"))
+
+
+class MCPSearchClient:
+    """Delegates web_search to an MCP server tool."""
+
+    def __init__(self, mcp_client: MCPClientManager, tool_name: str, timeout: float = 120) -> None:
+        self._mcp = mcp_client
+        self._tool = tool_name
+        self._timeout = timeout
+
+    def search(self, query: str, max_results: int = 5, **kwargs: Any) -> str:
+        import math
+
+        args: dict[str, Any] = {"query": query}
+        if max_results != 5:
+            args["max_results"] = max_results
+        category = kwargs.get("category")
+        if category:
+            args["category"] = category
+        return self._mcp.call_tool_sync(self._tool, args, timeout=max(1, math.ceil(self._timeout)))
+
+
+# ---------------------------------------------------------------------------
+# Result formatters
+# ---------------------------------------------------------------------------
+
+
+def _format_searxng(
+    data: dict[str, Any],
+    query: str,
+    max_results: int = 5,
+    reranker: Reranker | None = None,
+) -> str:
+    parts: list[str] = []
+
+    # Instant answers (calculator, Wikipedia summaries, …) — engine-dependent,
+    # often absent. Each entry is a dict (``{"answer": ...}``) on modern
+    # SearxNG, a bare string on older builds.
+    answers: list[str] = []
+    for a in data.get("answers") or []:
+        raw = a.get("answer", "") if isinstance(a, dict) else a
+        text = str(raw or "").strip()  # coerce: some engines return non-str answers
+        if text:
+            answers.append(text)
+    if answers:
+        parts.append("Answer: " + " ".join(answers))
+
+    # Infoboxes (Wikipedia/Wikidata side panels). One is plenty of context.
+    for box in data.get("infoboxes") or []:
+        content = (box.get("content") or "").strip()
+        if content:
+            parts.append(content[:500])
+            break
+
+    results = data.get("results") or []
+    if results:
+        if reranker is not None and len(results) > 1:
+            results = _rerank_results(query, results, reranker)
+        lines = []
+        for i, r in enumerate(results[:max_results], 1):
+            title = r.get("title", "")
+            url = r.get("url", "")
+            content = (r.get("content") or "")[:500]
+            lines.append(f"{i}. [{title}]({url})\n   {content}")
+        parts.append("\n".join(lines))
+
+    if parts:
+        return "\n\n".join(parts)
+
+    # No usable results. Surface unresponsive engines when present — this is
+    # the tell-tale of an all-rate-limited or misconfigured instance, and a
+    # plain "no results" would otherwise hide it from the operator.
+    unresponsive = data.get("unresponsive_engines") or []
+    if unresponsive:
+        names = ", ".join(
+            str(u[0]) if isinstance(u, (list, tuple)) and u else str(u) for u in unresponsive
+        )
+        return f"No results for '{query}'. Unresponsive engines: {names}."
+    return f"No results for '{query}'."
+
+
+def _rerank_results(
+    query: str, results: list[dict[str, Any]], reranker: Reranker
+) -> list[dict[str, Any]]:
+    """Reorder SearxNG ``results`` by query relevance using ``reranker``.
+
+    Sends at most ``_RERANK_POOL`` results (title + snippet) to the reranker and
+    splices its ordering back in. Falls back to the original SearxNG order on any
+    error or if the reranker returns nothing usable — reranking must never make
+    web_search fail or silently drop results.
+    """
+    pool = results[:_RERANK_POOL]
+    tail = results[_RERANK_POOL:]
+    try:
+        docs = [f"{r.get('title', '')}\n{r.get('content') or ''}".strip() for r in pool]
+        # Materialize inside the try so a None / non-iterable / lazily-raising
+        # reranker falls back here instead of exploding the splice loop below.
+        order = list(reranker(query, docs))
+    except Exception as e:
+        log.warning("rerank failed; using native result order: %s", e)
+        return results
+    seen: set[int] = set()
+    reordered: list[dict[str, Any]] = []
+    for idx in order:
+        # bool is an int subclass — reject a stray True/False posing as index 1/0.
+        if (
+            isinstance(idx, int)
+            and not isinstance(idx, bool)
+            and 0 <= idx < len(pool)
+            and idx not in seen
+        ):
+            seen.add(idx)
+            reordered.append(pool[idx])
+    if not reordered:
+        return results
+    # Keep any pool items the reranker omitted (e.g. a top_n subset), then the
+    # un-reranked tail beyond the pool cap.
+    reordered.extend(pool[i] for i in range(len(pool)) if i not in seen)
+    return reordered + tail
+
+
+# ---------------------------------------------------------------------------
+# Resolver
+# ---------------------------------------------------------------------------
+
+
+def resolve_web_search_client(
+    backend: str,
+    searxng_url: str | None,
+    searxng_engines: str = "",
+    mcp_client: Any | None = None,
+    timeout: float = 120,
+) -> WebSearchClient | None:
+    """Return a search client based on configuration, or None if unavailable.
+
+    Args:
+        backend: ``""`` (auto), ``"searxng"``, or ``"mcp:server:tool"``
+        searxng_url: SearxNG base URL (None/empty if not configured)
+        searxng_engines: comma-separated SearxNG engine list ("" = instance default)
+        mcp_client: MCPClientManager instance (for MCP backends)
+        timeout: HTTP/tool timeout in seconds
+    """
+    url = (searxng_url or "").strip()
+
+    if backend == "searxng":
+        if url:
+            return SearXNGClient(url, engines=searxng_engines, timeout=timeout)
+        return None
+
+    if backend.startswith("mcp:"):
+        parts = backend.split(":", 2)
+        if len(parts) == 3 and mcp_client is not None:
+            _, server, tool = parts
+            prefixed = f"mcp__{server}__{tool}"
+            # Boot-time gate: ``is_mcp_tool`` without ``user_id`` returns
+            # True only for static-path catalogs. Pool-backed
+            # (``auth_type=oauth_user``) servers are NEVER reachable via
+            # the per-node web_search client because the boot-time
+            # resolver has no per-user identity to attach a bearer to —
+            # the resolved client would be shared across requests, but
+            # the bearer can't be (RFC §3, invariant 8 corollary).
+            if mcp_client.is_mcp_tool(prefixed):
+                # Defence-in-depth: even if a future change widens
+                # ``_tool_map`` to include pool-backed names by accident,
+                # refuse the backend explicitly. ``server_auth_type``
+                # is an in-memory accessor — this resolver is invoked
+                # per LLM turn, so a SQL hop here would amplify token
+                # cost on every chat round. oauth_obo is equally
+                # unusable here: minting needs a signed-in user.
+                if is_user_scoped_auth(mcp_client.server_auth_type(server)):
+                    log.warning(
+                        "web_search_backend %r points at a per-user-auth MCP server; "
+                        "per-node web search cannot use per-user tokens — disabling",
+                        backend,
+                    )
+                    return None
+                return MCPSearchClient(mcp_client, prefixed, timeout=timeout)
+        return None
+
+    if backend == "":
+        # Auto-detect: SearxNG (URL configured) > None. MCP backends are
+        # explicit-only — there is no canonical "the search tool" to pick.
+        if url:
+            return SearXNGClient(url, engines=searxng_engines, timeout=timeout)
+        return None
+
+    log.warning("Unknown web_search_backend %r — web search disabled", backend)
+    return None

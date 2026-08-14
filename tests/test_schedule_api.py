@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_create_schedule,
     admin_delete_schedule,
     admin_get_schedule,
@@ -24,8 +24,8 @@ from turnstone.console.server import (
     admin_preview_schedule,
     admin_update_schedule,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 
 
 class _InjectAuthMiddleware(BaseHTTPMiddleware):

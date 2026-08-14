@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.model_registry — model registry, loading, session integration."""
+"""Tests for pebble.core.model_registry — model registry, loading, session integration."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._session_helpers import scripted_chat_client
-from turnstone.core.model_registry import (
+from pebble.core.model_registry import (
     ModelConfig,
     ModelRegistry,
     _resolve_env_vars,
     detect_model,
     load_model_registry,
 )
-from turnstone.core.trajectory import Turn
+from pebble.core.trajectory import Turn
+from tests._session_helpers import scripted_chat_client
 
 # ---------------------------------------------------------------------------
 # ModelConfig
@@ -176,7 +176,7 @@ class TestModelRegistry:
         reg = self._make_registry()
         with (
             patch(
-                "turnstone.core.model_registry.create_client",
+                "pebble.core.model_registry.create_client",
                 side_effect=FileNotFoundError(2, "No such file", "/gone/cacert.pem"),
             ),
             pytest.raises(ValueError, match="'default'.*FileNotFoundError") as excinfo,
@@ -198,7 +198,7 @@ class TestModelRegistry:
         reg = self._make_registry()
         with (
             patch(
-                "turnstone.core.model_registry.create_client",
+                "pebble.core.model_registry.create_client",
                 side_effect=ValueError("anthropic-compatible requires base_url"),
             ),
             pytest.raises(ValueError, match="^anthropic-compatible requires base_url$"),
@@ -326,7 +326,7 @@ class TestModelRegistryValidation:
 class TestLoadModelRegistry:
     def test_single_entry_from_args(self) -> None:
         """No [models] config → single-entry registry from CLI args."""
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry(
                 base_url="http://localhost:8000/v1",
                 api_key="dummy",
@@ -353,7 +353,7 @@ class TestLoadModelRegistry:
                 "default": "openai",
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry(
                 base_url="http://localhost:8000/v1",
                 api_key="dummy",
@@ -384,7 +384,7 @@ class TestLoadModelRegistry:
             },
             "model": {"default": "local"},
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry(
                 base_url="http://localhost:8000/v1",
                 api_key="dummy",
@@ -406,7 +406,7 @@ class TestLoadModelRegistry:
                 "fallback": ["fallback1", "nonexistent"],
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         # "nonexistent" is silently dropped
         assert reg.fallback == ["fallback1"]
@@ -423,7 +423,7 @@ class TestLoadModelRegistry:
                 "agent_model": "cheap",
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.agent_model == "cheap"
 
@@ -431,7 +431,7 @@ class TestLoadModelRegistry:
         fake_cfg: dict[str, Any] = {
             "model": {"agent_model": "nonexistent"},
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.agent_model is None
 
@@ -445,7 +445,7 @@ class TestLoadModelRegistry:
                 "task_effort": "low",
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.task_model == "fast"
         assert reg.task_effort == "low"
@@ -454,7 +454,7 @@ class TestLoadModelRegistry:
         fake_cfg: dict[str, Any] = {
             "model": {"task_model": "alsonope"},
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.task_model is None
 
@@ -463,14 +463,14 @@ class TestLoadModelRegistry:
         fake_cfg: dict[str, Any] = {
             "model": {"task_effort": "extreme"},
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.task_effort is None
 
     def test_valid_effort_values_accepted(self) -> None:
         for level in ("none", "minimal", "low", "medium", "high", "xhigh", "max"):
             fake_cfg: dict[str, Any] = {"model": {"task_effort": level}}
-            with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+            with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
                 reg = load_model_registry("http://x/v1", "x", "x")
             assert reg.task_effort == level, f"level={level} not accepted"
 
@@ -479,13 +479,13 @@ class TestLoadModelRegistry:
         warning on benign empty values would be noise."""
         for value in ("", "  ", "\t"):
             fake_cfg: dict[str, Any] = {"model": {"task_effort": value}}
-            with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+            with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
                 reg = load_model_registry("http://x/v1", "x", "x")
             assert reg.task_effort is None, f"empty value {value!r} not treated as unset"
 
     def test_effort_normalised_to_lowercase(self) -> None:
         fake_cfg: dict[str, Any] = {"model": {"task_effort": " Low "}}
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.task_effort == "low"
 
@@ -493,7 +493,7 @@ class TestLoadModelRegistry:
         fake_cfg: dict[str, Any] = {
             "model": {"default": "nonexistent"},
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.default == "default"
 
@@ -505,7 +505,7 @@ class TestLoadModelRegistry:
                 "good": {"base_url": "http://good/v1", "model": "good-model"},
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert not reg.has_alias("bad")
         assert reg.has_alias("good")
@@ -517,7 +517,7 @@ class TestLoadModelRegistry:
                 "good": {"base_url": "http://g/v1", "model": "g-model"},
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x")
         assert reg.fallback == ["good"]
 
@@ -530,7 +530,7 @@ class TestLoadModelRegistry:
                 },
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://base/v1", "my-key", "default-model")
         alt_cfg = reg.get_config("alt")
         assert alt_cfg.base_url == "http://base/v1"
@@ -573,7 +573,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         assert reg.has_alias("cloud-gpt")
         cfg = reg.get_config("cloud-gpt")
@@ -605,7 +605,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         caps = reg.get_config("reranker").capabilities
         assert caps["rerank_threshold"] == 0.33
@@ -636,7 +636,7 @@ class TestLoadModelRegistryWithDB:
                 },
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         cfg = reg.get_config("shared")
         assert cfg.model == "config-model"
@@ -668,7 +668,7 @@ class TestLoadModelRegistryWithDB:
                 "config-only": {"model": "config-model"},
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         assert reg.has_alias("db-only")
         assert reg.has_alias("config-only")
@@ -694,7 +694,7 @@ class TestLoadModelRegistryWithDB:
         )
         # The CLI default shim is suppressed when the DB row populates
         # configs, so only the DB-sourced alias exists here.
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         assert reg.get_config("from-db").source == "db"
         assert not reg.has_alias("default")
@@ -715,7 +715,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         assert not reg.has_alias("disabled")
 
@@ -735,7 +735,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         assert reg.get_config("caps-model").capabilities == {"supports_vision": True}
 
@@ -758,7 +758,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         cfg = reg.get_config("hot-model")
         assert cfg.temperature == 1.5
@@ -784,7 +784,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         cfg = reg.get_config("null-model")
         assert cfg.temperature is None
@@ -809,7 +809,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         cfg = reg.get_config("anth-thinking")
         assert cfg.surface_persisted_reasoning is False
@@ -832,7 +832,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         cfg = reg.get_config("legacy-row")
         assert cfg.surface_persisted_reasoning is True
@@ -854,7 +854,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://cli/v1", "cli-key", "cli-model", storage=storage)
         cfg = reg.get_config("default")
         assert cfg.model == "db-default-model"
@@ -866,7 +866,7 @@ class TestLoadModelRegistryWithDB:
         fake_cfg: dict[str, Any] = {
             "models": {"local": {"model": "llama"}},
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             load_model_registry("http://x/v1", "x", "x", storage=storage)
         # Only list_model_definitions should be called, no create
         assert storage.calls == ["list_model_definitions"]
@@ -875,7 +875,7 @@ class TestLoadModelRegistryWithDB:
         """Storage errors don't prevent registry creation."""
         storage = MagicMock()
         storage.list_model_definitions.side_effect = RuntimeError("db down")
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "x", storage=storage)
         assert reg.has_alias("default")
 
@@ -895,7 +895,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "cli-fallback-key", "x", storage=storage)
         cfg = reg.get_config("cloud")
         assert cfg.api_key == "cli-fallback-key"
@@ -916,7 +916,7 @@ class TestLoadModelRegistryWithDB:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "cli-fallback-key", "x", storage=storage)
         cfg = reg.get_config("cloud")
         assert cfg.api_key == "sk-db-specific"
@@ -1113,7 +1113,7 @@ def _make_session(
     reasoning_effort: str = "medium",
 ) -> Any:
     """Create a ChatSession with a mock client and optional registry."""
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     client = MagicMock()
     return ChatSession(
@@ -1473,7 +1473,7 @@ class TestSessionAgentModel:
         # resolution still routes through the session wrapper.
         from unittest.mock import patch
 
-        import turnstone.core.model_turn as mt
+        import pebble.core.model_turn as mt
 
         captured_lane_alias: list[str | None] = []
         captured_resolve_alias: list[str | None] = []
@@ -1493,7 +1493,7 @@ class TestSessionAgentModel:
         session._resolve_capabilities = spy_resolve  # type: ignore[method-assign]
 
         self._capture_on(session.client)  # patch client.chat.completions.create
-        with patch("turnstone.core.session.resolve_lane", side_effect=spy_lane):
+        with patch("pebble.core.session.resolve_lane", side_effect=spy_lane):
             session._run_agent([Turn.user("x")], label="plan")
 
         assert captured_lane_alias and captured_lane_alias[-1] == "main", (
@@ -1525,8 +1525,8 @@ def _make_manager(session_factory: Any) -> Any:
     only thing the model-alias tests exercise is the factory passthrough."""
     import queue
 
-    from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-    from turnstone.core.session_manager import SessionManager
+    from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+    from pebble.core.session_manager import SessionManager
 
     adapter = InteractiveAdapter(
         global_queue=queue.Queue(maxsize=100),
@@ -1578,13 +1578,13 @@ class TestWorkstreamModelParam:
 
 class TestCreateWorkstreamRequestModel:
     def test_request_has_model(self) -> None:
-        from turnstone.api.server_schemas import CreateWorkstreamRequest
+        from pebble.api.server_schemas import CreateWorkstreamRequest
 
         req = CreateWorkstreamRequest(name="test", model="openai")
         assert req.model == "openai"
 
     def test_request_model_default(self) -> None:
-        from turnstone.api.server_schemas import CreateWorkstreamRequest
+        from pebble.api.server_schemas import CreateWorkstreamRequest
 
         req = CreateWorkstreamRequest(name="test")
         assert req.model == ""
@@ -1649,7 +1649,7 @@ class TestDetectModelTimeout:
 
 class TestExtractContextWindow:
     def test_vllm_max_model_len(self) -> None:
-        from turnstone.core.model_registry import _extract_context_window
+        from pebble.core.model_registry import _extract_context_window
 
         m = MagicMock()
         m.id = "/models/test"
@@ -1657,7 +1657,7 @@ class TestExtractContextWindow:
         assert _extract_context_window(m, "openai") == 131072
 
     def test_llama_cpp_meta(self) -> None:
-        from turnstone.core.model_registry import _extract_context_window
+        from pebble.core.model_registry import _extract_context_window
 
         m = MagicMock()
         m.id = "test"
@@ -1665,7 +1665,7 @@ class TestExtractContextWindow:
         assert _extract_context_window(m, "openai") == 8192
 
     def test_vllm_preferred_over_meta(self) -> None:
-        from turnstone.core.model_registry import _extract_context_window
+        from pebble.core.model_registry import _extract_context_window
 
         m = MagicMock()
         m.id = "test"
@@ -1673,7 +1673,7 @@ class TestExtractContextWindow:
         assert _extract_context_window(m, "openai") == 262144
 
     def test_no_metadata_returns_none(self) -> None:
-        from turnstone.core.model_registry import _extract_context_window
+        from pebble.core.model_registry import _extract_context_window
 
         m = MagicMock()
         m.id = "test"
@@ -1709,7 +1709,7 @@ class TestLoadModelRegistryDBOnly:
                 },
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry(model="", storage=storage)
         assert reg.count == 1
         assert reg.has_alias("cloud")
@@ -1743,7 +1743,7 @@ class TestLoadModelRegistryDBOnly:
             ]
         )
         fake_cfg: dict[str, Any] = {"model": {"default": "smart"}}
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry(model="", storage=storage)
         assert reg.default == "smart"
 
@@ -1758,7 +1758,7 @@ class TestLoadModelRegistryDBOnly:
                 },
             },
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry(model="")
         assert reg.count == 1
         assert reg.default == "local"
@@ -1766,7 +1766,7 @@ class TestLoadModelRegistryDBOnly:
     def test_no_models_anywhere_raises(self) -> None:
         """ValueError when no models from CLI, config, or DB."""
         with (
-            patch("turnstone.core.model_registry.load_config", return_value={}),
+            patch("pebble.core.model_registry.load_config", return_value={}),
             pytest.raises(ValueError, match="No model definitions found"),
         ):
             load_model_registry(model="")
@@ -1777,7 +1777,7 @@ class TestLoadModelRegistryDBOnly:
         This is the boot-critical path turnstone-server uses: a node starts and
         registers with no models, then picks them up live from the admin panel.
         """
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry(model="", allow_empty=True)
         assert reg.count == 0
         assert reg.default == ""
@@ -1799,7 +1799,7 @@ class TestLoadModelRegistryDBOnly:
                 },
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry(model="", storage=storage)
         assert not reg.has_alias("default")
 
@@ -1827,7 +1827,7 @@ class TestLoadModelRegistryDBOnly:
                 }
             ]
         )
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry(
                 base_url="http://flatspark:8000/v1",
                 api_key="sk-flatspark",
@@ -1842,7 +1842,7 @@ class TestLoadModelRegistryDBOnly:
         fake_cfg: dict[str, Any] = {
             "models": {"local": {"model": "qwen3-32b"}},
         }
-        with patch("turnstone.core.model_registry.load_config", return_value=fake_cfg):
+        with patch("pebble.core.model_registry.load_config", return_value=fake_cfg):
             reg = load_model_registry("http://x/v1", "x", "fallback-model")
         assert reg.has_alias("local")
         assert not reg.has_alias("default")
@@ -1850,7 +1850,7 @@ class TestLoadModelRegistryDBOnly:
     def test_cli_default_shim_still_fires_when_registry_empty(self) -> None:
         """Single-model CLI mode (no DB, no config.toml [models.*]) keeps
         the back-compat ``default`` alias."""
-        with patch("turnstone.core.model_registry.load_config", return_value={}):
+        with patch("pebble.core.model_registry.load_config", return_value={}):
             reg = load_model_registry("http://x/v1", "x", "lone-model")
         assert reg.has_alias("default")
         assert reg.get_config("default").model == "lone-model"
@@ -1882,27 +1882,27 @@ class TestEffectiveRouting:
         }
 
     def test_returns_base_when_cs_is_none(self) -> None:
-        from turnstone.server import _effective_routing
+        from pebble.server import _effective_routing
 
         result = _effective_routing(None, self._models(), "default", "fast", "low")
         assert result == ("default", "fast", "low")
 
     def test_cs_alias_overrides_base(self) -> None:
-        from turnstone.server import _effective_routing
+        from pebble.server import _effective_routing
 
         cs = _FakeCS(**{"model.task_alias": "smart"})
         result = _effective_routing(cs, self._models(), "default", "fast", "low")
         assert result == ("default", "smart", "low")
 
     def test_cs_alias_silently_dropped_when_unknown(self) -> None:
-        from turnstone.server import _effective_routing
+        from pebble.server import _effective_routing
 
         cs = _FakeCS(**{"model.task_alias": "nonexistent"})
         result = _effective_routing(cs, self._models(), "default", "smart", None)
         assert result == ("default", "smart", None)  # falls back to base
 
     def test_cs_empty_string_treated_as_unset(self) -> None:
-        from turnstone.server import _effective_routing
+        from pebble.server import _effective_routing
 
         cs = _FakeCS(
             **{
@@ -1915,7 +1915,7 @@ class TestEffectiveRouting:
         assert result == ("default", "fast", "low")
 
     def test_cs_effort_overrides_base(self) -> None:
-        from turnstone.server import _effective_routing
+        from pebble.server import _effective_routing
 
         cs = _FakeCS(**{"model.task_effort": "minimal"})
         result = _effective_routing(cs, self._models(), "default", None, "high")
@@ -1937,7 +1937,7 @@ class TestApplyRoutingOverrides:
         )
 
     def test_no_reload_when_cs_matches_registry(self) -> None:
-        from turnstone.server import _apply_routing_overrides
+        from pebble.server import _apply_routing_overrides
 
         reg = self._registry(task_model="fast")
         cs = _FakeCS(**{"model.task_alias": "fast"})
@@ -1955,7 +1955,7 @@ class TestApplyRoutingOverrides:
         assert called["count"] == 0
 
     def test_reload_when_cs_differs(self) -> None:
-        from turnstone.server import _apply_routing_overrides
+        from pebble.server import _apply_routing_overrides
 
         reg = self._registry()  # task_model=None
         cs = _FakeCS(**{"model.task_alias": "fast"})
@@ -1963,14 +1963,14 @@ class TestApplyRoutingOverrides:
         assert reg.task_model == "fast"
 
     def test_no_reload_when_cs_is_none(self) -> None:
-        from turnstone.server import _apply_routing_overrides
+        from pebble.server import _apply_routing_overrides
 
         reg = self._registry()
         assert _apply_routing_overrides(reg, None) is False
 
     def test_unknown_alias_does_not_trigger_reload(self) -> None:
         """Invalid CS aliases are silently dropped — no spurious reload."""
-        from turnstone.server import _apply_routing_overrides
+        from pebble.server import _apply_routing_overrides
 
         reg = self._registry()
         cs = _FakeCS(**{"model.task_alias": "nonexistent"})

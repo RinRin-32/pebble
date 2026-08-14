@@ -22,8 +22,8 @@ import threading
 from typing import Any
 from unittest.mock import MagicMock
 
-from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-from turnstone.core.workstream import Workstream, WorkstreamKind
+from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+from pebble.core.workstream import Workstream, WorkstreamKind
 
 
 class _StubUI:

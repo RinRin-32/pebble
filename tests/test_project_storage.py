@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from turnstone.core import auth
+from pebble.core import auth
 
 if TYPE_CHECKING:
     import pytest
@@ -211,7 +211,7 @@ class TestMemoryScopeLabels:
     (project / workstream name, username) rather than showing the raw hex id."""
 
     def test_enrich_resolves_names_and_falls_back(self, backend: Any) -> None:
-        from turnstone.console.server import _enrich_memory_scope_labels
+        from pebble.console.server import _enrich_memory_scope_labels
 
         backend.create_project("p1", "Research", "u1")
         backend.create_user("u1", "alice", "Alice", "x")

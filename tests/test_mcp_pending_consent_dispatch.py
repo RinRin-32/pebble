@@ -23,14 +23,14 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.conftest import make_mcp_token_cipher
-from turnstone.core.mcp_client import (
+from pebble.core.mcp_client import (
     _PENDING_CONSENT_PERSIST_CODES,
     MCPClientManager,
     _parse_pending_consent_envelope,
 )
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.mcp_oauth import TokenLookupResult
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.mcp_oauth import TokenLookupResult
+from tests.conftest import make_mcp_token_cipher
 
 # ---------------------------------------------------------------------------
 # Helper-level unit tests (cheap, no event loop)
@@ -163,7 +163,7 @@ def test_dispatch_persists_pending_for_non_interactive_caller(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_missing_token,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -208,7 +208,7 @@ def test_dispatch_does_not_persist_for_interactive_caller(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_missing_token,
         ),
         pytest.raises(RuntimeError),
@@ -250,7 +250,7 @@ def test_dispatch_returns_envelope_unchanged_on_storage_failure(
     try:
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_missing_token,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -285,7 +285,7 @@ def test_dispatch_does_not_persist_for_operator_actionable_code(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_decrypt_failure,
         ),
         pytest.raises(RuntimeError) as exc_info,

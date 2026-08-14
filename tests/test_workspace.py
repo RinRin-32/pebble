@@ -7,11 +7,14 @@ over ``git``, so mocking the subprocess would test nothing that matters.
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from turnstone.core import workspace
+from pebble.core import workspace
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _run(*args: str, cwd: Path) -> None:
@@ -34,7 +37,7 @@ def origin(tmp_path: Path) -> Path:
 
 @pytest.fixture(autouse=True)
 def _workspace_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TURNSTONE_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path / "workspace"))
 
 
 class TestIdValidation:
@@ -65,7 +68,7 @@ class TestMirrorAndWorktree:
         info = workspace.create_worktree("repo1", "ws0001")
         assert info.path.is_dir()
         assert (info.path / "calc.py").read_text().startswith("def add")
-        assert info.branch == "turnstone/ws0001"
+        assert info.branch == "pebble/ws0001"
 
     def test_worktree_requires_mirror(self) -> None:
         with pytest.raises(workspace.WorkspaceError):

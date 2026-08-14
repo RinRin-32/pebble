@@ -69,14 +69,14 @@ services:
 ```
 
 Then point turnstone services at PgBouncer instead of PostgreSQL
-directly by changing `TURNSTONE_DB_URL`:
+directly by changing `PEBBLE_DB_URL`:
 
 ```bash
 # Before (direct)
-TURNSTONE_DB_URL=postgresql://turnstone:secret@postgres:5432/turnstone
+PEBBLE_DB_URL=postgresql://turnstone:secret@postgres:5432/turnstone
 
 # After (via PgBouncer)
-TURNSTONE_DB_URL=postgresql://turnstone:secret@pgbouncer:6432/turnstone
+PEBBLE_DB_URL=postgresql://turnstone:secret@pgbouncer:6432/turnstone
 ```
 
 ---
@@ -138,9 +138,9 @@ PgBouncer (which then multiplexes to PostgreSQL):
 
 | Environment variable | Default | Description |
 |---------------------|---------|-------------|
-| `TURNSTONE_DB_POOL_SIZE` | 2 | Base pool size per process |
-| `TURNSTONE_DB_BACKEND` | sqlite | Set to `postgresql` for cluster deployments |
-| `TURNSTONE_DB_URL` | — | Connection URL (point at PgBouncer, not PostgreSQL directly) |
+| `PEBBLE_DB_POOL_SIZE` | 2 | Base pool size per process |
+| `PEBBLE_DB_BACKEND` | sqlite | Set to `postgresql` for cluster deployments |
+| `PEBBLE_DB_URL` | — | Connection URL (point at PgBouncer, not PostgreSQL directly) |
 
 The default pool of 2 + 3 overflow = 5 connections per process is
 intentionally small to support large clusters. You should not need to
@@ -209,13 +209,13 @@ therefore opens a **dedicated, direct-to-Postgres** connection that
 bypasses PgBouncer.
 
 Configure via `config.toml` `[database] listen_url` (preferred —
-co-located with the main `url`) or the `TURNSTONE_DB_LISTEN_URL` env var
+co-located with the main `url`) or the `PEBBLE_DB_LISTEN_URL` env var
 (config.toml wins when both are set). Defaults to the main DB URL when
 unset.
 
 | Setting | Behaviour |
 |---|---|
-| unset | Listener uses `TURNSTONE_DB_URL` as-is. Fine when PgBouncer is in **session** mode, or when there's no pooler in front of Postgres. With transaction-mode PgBouncer the listener's `LISTEN` will fail and the dispatcher retries with exponential backoff (1 s → 30 s cap) without ever succeeding. Reactive NOTIFY-driven node discovery is silently lost; the cluster collector's 60 s `_discovery_loop` is the only remaining backstop. |
+| unset | Listener uses `PEBBLE_DB_URL` as-is. Fine when PgBouncer is in **session** mode, or when there's no pooler in front of Postgres. With transaction-mode PgBouncer the listener's `LISTEN` will fail and the dispatcher retries with exponential backoff (1 s → 30 s cap) without ever succeeding. Reactive NOTIFY-driven node discovery is silently lost; the cluster collector's 60 s `_discovery_loop` is the only remaining backstop. |
 | set to direct-to-PG URL (e.g. `postgresql://…/turnstone`) | Listener bypasses PgBouncer for its one dedicated connection. Reactive discovery latency drops from up-to-60 s to ~500 ms. The rest of the storage layer continues to go through PgBouncer in transaction mode. |
 
 Set this whenever PgBouncer is in transaction mode (the recommended

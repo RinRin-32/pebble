@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.providers._anthropic import AnthropicProvider
-from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
-from turnstone.core.providers._protocol import (
+from pebble.core.providers._anthropic import AnthropicProvider
+from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from pebble.core.providers._openai_responses import OpenAIResponsesProvider
+from pebble.core.providers._protocol import (
     MAX_REASONING_DISPLAY_CHARS as _MAX_REASONING_DISPLAY_CHARS,
 )
 

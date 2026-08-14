@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_assign_role,
     admin_audit,
     admin_create_policy,
@@ -36,8 +36,8 @@ from turnstone.console.server import (
     admin_update_role,
     admin_usage,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Auth bypass middleware — injects a full-access AuthResult on every request.
@@ -253,9 +253,9 @@ class TestRoles:
         import re
         from pathlib import Path
 
-        from turnstone.console.server import _VALID_PERMISSIONS
+        from pebble.console.server import _VALID_PERMISSIONS
 
-        src = Path("turnstone/console/static/governance.js").read_text()
+        src = Path("pebble/console/static/governance.js").read_text()
         # _PERMISSION_SECTIONS is a `const X = [...]` containing nested
         # `permissions: ["a", "b", ...]` arrays.  Pull every quoted
         # string out of every permissions: [...] block; we don't need
@@ -292,7 +292,7 @@ class TestRoles:
         ``coordinator.trust.send`` was in the baseline but not the
         validator, so the very first Save through the overrides editor
         400'd."""
-        from turnstone.console.server import _VALID_PERMISSIONS
+        from pebble.console.server import _VALID_PERMISSIONS
 
         # Mirror the union the bootstrap migrations write into the baseline
         # ``permissions`` column for builtin-admin.  Keep this in sync with

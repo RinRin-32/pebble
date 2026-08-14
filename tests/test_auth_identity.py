@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from turnstone.core.auth import (
+from pebble.core.auth import (
     AUTH_COOKIE_SERVER,
     AuthResult,
     _authenticate_token,

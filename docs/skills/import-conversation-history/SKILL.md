@@ -66,14 +66,14 @@ Three options, in order of preference:
 
 ### 1. Storage protocol (recommended for full history)
 
-Use `turnstone.core.storage.Storage.save_messages_bulk(rows)`. This is the canonical bulk-insert primitive and bypasses the LLM round-trip entirely.
+Use `pebble.core.storage.Storage.save_messages_bulk(rows)`. This is the canonical bulk-insert primitive and bypasses the LLM round-trip entirely.
 
 ```python
-from turnstone.core.storage import get_storage  # construct via the same path the server uses
+from pebble.core.storage import get_storage  # construct via the same path the server uses
 
-storage = get_storage(...)  # see turnstone.core.storage.__init__ for the project's wiring
+storage = get_storage(...)  # see pebble.core.storage.__init__ for the project's wiring
 
-storage.create_workstream(  # or whatever the project's exposed creator is — check turnstone/core/storage/_protocol.py
+storage.create_workstream(  # or whatever the project's exposed creator is — check pebble/core/storage/_protocol.py
     ws_id=ws_id,
     user_id=user_id,
     name=name,
@@ -94,7 +94,7 @@ storage.save_messages_bulk([
 ])
 ```
 
-`save_messages_bulk` handles `timestamp` and the workstream's `updated` column internally, so you don't need to compute them per row. **Verify the exact creator signature** by reading `turnstone/core/storage/_protocol.py` — table layout has shifted across migrations and the Storage protocol is the source of truth.
+`save_messages_bulk` handles `timestamp` and the workstream's `updated` column internally, so you don't need to compute them per row. **Verify the exact creator signature** by reading `pebble/core/storage/_protocol.py` — table layout has shifted across migrations and the Storage protocol is the source of truth.
 
 ### 2. SDK `create_workstream(resume_ws=...)` (when the source is already a Turnstone workstream)
 
@@ -227,7 +227,7 @@ Before declaring success, verify:
 
 ## Files to read before writing the importer
 
-- `turnstone/core/storage/_schema.py` — authoritative table definitions.
-- `turnstone/core/storage/_protocol.py` — `save_message`, `save_messages_bulk`, `load_messages` signatures.
-- `turnstone/core/session.py` (around the message-save section) — how the runtime constructs in-memory message dicts; mirror this shape on import to round-trip cleanly.
+- `pebble/core/storage/_schema.py` — authoritative table definitions.
+- `pebble/core/storage/_protocol.py` — `save_message`, `save_messages_bulk`, `load_messages` signatures.
+- `pebble/core/session.py` (around the message-save section) — how the runtime constructs in-memory message dicts; mirror this shape on import to round-trip cleanly.
 - `turnstone/api/server_schemas.py` — Pydantic shapes for the SDK paths if you go through HTTP.

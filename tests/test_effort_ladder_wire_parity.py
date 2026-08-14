@@ -35,13 +35,13 @@ from typing import Any
 
 import pytest
 
-from tests._wire_capture import RecordingClient
-from turnstone.core.providers import create_provider
-from turnstone.core.providers._protocol import (
+from pebble.core.providers import create_provider
+from pebble.core.providers._protocol import (
     EFFORT_TEMPLATE_FALLBACK_PARAM,
     ModelCapabilities,
 )
-from turnstone.core.providers.effort_ladder import KNOB_VALUES, effort_ladder
+from pebble.core.providers.effort_ladder import KNOB_VALUES, effort_ladder
+from tests._wire_capture import RecordingClient
 
 # Above the largest manual-mode thinking budget (max: 65536) so the
 # request path's budget<max_tokens clamp never fires — the ladder

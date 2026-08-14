@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.skill_sources."""
+"""Tests for pebble.core.skill_sources."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from turnstone.core.skill_sources import (
+from pebble.core.skill_sources import (
     SkillNotFoundError,
     SkillSourceError,
     SkillsShClient,
@@ -109,7 +109,7 @@ class TestSkillsShClient:
             ]
         }
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -131,7 +131,7 @@ class TestSkillsShClient:
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {"skills": []}
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -145,7 +145,7 @@ class TestSkillsShClient:
 
     @pytest.mark.anyio
     async def test_search_http_error(self) -> None:
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(side_effect=httpx.ConnectTimeout("timeout"))
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -164,7 +164,7 @@ class TestSkillsShClient:
             side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=mock_response)
         )
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -182,7 +182,7 @@ class TestSkillsShClient:
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {"skills": []}
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -201,7 +201,7 @@ class TestSkillsShClient:
         # Whitespace-bearing id from /api/search must produce the same
         # source_url that download_skill persists, so the discover-UI
         # "already installed" check matches.
-        from turnstone.core.skill_sources import _skills_sh_source_url
+        from pebble.core.skill_sources import _skills_sh_source_url
 
         clean = _skills_sh_source_url("https://skills.sh", "owner/repo/leaf")
         dirty = _skills_sh_source_url("https://skills.sh", " owner/repo/leaf ")
@@ -222,7 +222,7 @@ class TestSkillsShClient:
             ]
         }
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -256,7 +256,7 @@ body
             ]
         }
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -289,7 +289,7 @@ body
         mock_response.status_code = 404
         mock_response.text = "Not Found"
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -308,7 +308,7 @@ body
             "files": [{"path": "scripts/run.sh", "contents": "x"}],
         }
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -325,7 +325,7 @@ body
         mock_response.status_code = 200
         mock_response.json.return_value = {"files": []}
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -342,7 +342,7 @@ body
         mock_response.status_code = 200
         mock_response.json.return_value = {"files": "oops"}
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -355,7 +355,7 @@ body
 
     @pytest.mark.anyio
     async def test_download_skill_oversized_skill_md(self) -> None:
-        from turnstone.core.skill_sources import _MAX_SKILL_MD_SIZE
+        from pebble.core.skill_sources import _MAX_SKILL_MD_SIZE
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -363,7 +363,7 @@ body
             "files": [{"path": "SKILL.md", "contents": "x" * (_MAX_SKILL_MD_SIZE + 1)}],
         }
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -379,7 +379,7 @@ body
         # 4-byte emoji × N: code-point count stays under the cap, but UTF-8
         # byte length is 4× higher. Catches the regression where the size
         # cap was measured in code points rather than bytes.
-        from turnstone.core.skill_sources import _MAX_SKILL_MD_SIZE
+        from pebble.core.skill_sources import _MAX_SKILL_MD_SIZE
 
         # Half the cap in code points → 2× the cap in encoded bytes.
         emoji_count = (_MAX_SKILL_MD_SIZE // 2) + 1
@@ -393,7 +393,7 @@ body
             "files": [{"path": "SKILL.md", "contents": payload}],
         }
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -406,7 +406,7 @@ body
 
     @pytest.mark.anyio
     async def test_download_skill_resource_cap(self) -> None:
-        from turnstone.core.skill_sources import _MAX_RESOURCE_FILES
+        from pebble.core.skill_sources import _MAX_RESOURCE_FILES
 
         skill_md = """---
 name: leaf
@@ -422,7 +422,7 @@ description: caps test
         mock_response.status_code = 200
         mock_response.json.return_value = {"files": files}
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -453,7 +453,7 @@ description: ext test
             ]
         }
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(return_value=mock_response)
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -476,7 +476,7 @@ class TestFetchSkillFromGithub:
 
     @pytest.mark.anyio
     async def test_skill_md_not_found(self) -> None:
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             not_found = MagicMock()
             not_found.status_code = 404
@@ -516,7 +516,7 @@ Instructions here.
                 resp.status_code = 404
             return resp
 
-        with patch("turnstone.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
+        with patch("pebble.core.skill_sources.httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
             instance.get = AsyncMock(side_effect=mock_get)
             instance.__aenter__ = AsyncMock(return_value=instance)

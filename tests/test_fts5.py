@@ -1,6 +1,6 @@
 """Tests for SQLite FTS5 query building and LIKE escaping."""
 
-from turnstone.core.storage._sqlite import _escape_like, _fts5_query
+from pebble.core.storage._sqlite import _escape_like, _fts5_query
 
 
 class TestFts5Query:

@@ -1,4 +1,4 @@
-"""Tests for turnstone.channels._routing.ChannelRouter."""
+"""Tests for pebble.channels._routing.ChannelRouter."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from turnstone.channels._routing import ChannelRouter
-from turnstone.sdk._types import TurnstoneAPIError
+from pebble.channels._routing import ChannelRouter
+from pebble.sdk._types import TurnstoneAPIError
 
 
 @pytest.fixture

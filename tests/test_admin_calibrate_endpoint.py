@@ -29,14 +29,14 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from tests._coord_test_helpers import _AuthMiddleware
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_calibrate_model_definition,
     admin_detect_model,
 )
-from turnstone.core.model_registry import ModelConfig, ModelRegistry
-from turnstone.core.rerank_calibrate import CalibrationResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.model_registry import ModelConfig, ModelRegistry
+from pebble.core.rerank_calibrate import CalibrationResult
+from pebble.core.storage._sqlite import SQLiteBackend
+from tests._coord_test_helpers import _AuthMiddleware
 
 
 @pytest.fixture
@@ -128,7 +128,7 @@ def _make_client(storage: SQLiteBackend, registry: ModelRegistry | None) -> Test
 
 def _stub_calibrate(monkeypatch: pytest.MonkeyPatch, result: CalibrationResult) -> None:
     monkeypatch.setattr(
-        "turnstone.core.rerank_calibrate.calibrate_model",
+        "pebble.core.rerank_calibrate.calibrate_model",
         lambda base_url, model, api_key, *, instruction="", timeout=60.0: result,
     )
 
@@ -193,7 +193,7 @@ def test_calibrate_failure_is_graceful(
     def _boom(base_url, model, api_key, *, instruction="", timeout=60.0):
         raise RuntimeError("connection refused")
 
-    monkeypatch.setattr("turnstone.core.rerank_calibrate.calibrate_model", _boom)
+    monkeypatch.setattr("pebble.core.rerank_calibrate.calibrate_model", _boom)
     client = _make_client(storage, _make_registry())
 
     resp = client.post("/v1/api/admin/model-definitions/r1/calibrate")
@@ -236,7 +236,7 @@ def test_calibrate_no_base_url_graceful(
 
 def _stub_probe(monkeypatch: pytest.MonkeyPatch, result: dict[str, Any]) -> None:
     monkeypatch.setattr(
-        "turnstone.core.model_registry.probe_model_endpoint",
+        "pebble.core.model_registry.probe_model_endpoint",
         lambda provider, base_url, api_key, target_model="": dict(result),
     )
 
@@ -248,7 +248,7 @@ def test_detect_reranker_calibrates_directly_skipping_probe(
     /rerank path) — it calibrates directly and autopopulates the three fields."""
     probe_called: list[Any] = []
     monkeypatch.setattr(
-        "turnstone.core.model_registry.probe_model_endpoint",
+        "pebble.core.model_registry.probe_model_endpoint",
         lambda *a, **kw: probe_called.append(a) or {"reachable": True},
     )
     _stub_calibrate(monkeypatch, _result(separated=True, threshold=0.33))
@@ -310,7 +310,7 @@ def test_detect_reranker_calibration_failure_is_unreachable(
     def _boom(base_url, model, api_key, *, instruction="", timeout=60.0):
         raise RuntimeError("not a reranker")
 
-    monkeypatch.setattr("turnstone.core.rerank_calibrate.calibrate_model", _boom)
+    monkeypatch.setattr("pebble.core.rerank_calibrate.calibrate_model", _boom)
     client = _make_client(storage, None)
 
     resp = client.post(
@@ -336,7 +336,7 @@ def test_detect_reranker_requires_base_url(
     (not a probe against some default host) and never attempts calibration."""
     called: list[Any] = []
     monkeypatch.setattr(
-        "turnstone.core.rerank_calibrate.calibrate_model",
+        "pebble.core.rerank_calibrate.calibrate_model",
         lambda *a, **kw: called.append(a) or _result(separated=True, threshold=0.5),
     )
     client = _make_client(storage, None)
@@ -371,7 +371,7 @@ def test_detect_non_reranker_skips_calibration(
     )
     called: list[Any] = []
     monkeypatch.setattr(
-        "turnstone.core.rerank_calibrate.calibrate_model",
+        "pebble.core.rerank_calibrate.calibrate_model",
         lambda *a, **kw: called.append(a) or _result(separated=True, threshold=0.5),
     )
     client = _make_client(storage, None)

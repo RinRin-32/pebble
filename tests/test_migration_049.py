@@ -19,7 +19,7 @@ from alembic import command
 from alembic.config import Config
 
 _MIGRATIONS_DIR = str(
-    Path(__file__).resolve().parent.parent / "turnstone" / "core" / "storage" / "migrations"
+    Path(__file__).resolve().parent.parent / "pebble" / "core" / "storage" / "migrations"
 )
 
 
@@ -156,7 +156,7 @@ class TestMigration049:
 
         engine = sa.create_engine(f"sqlite:///{db_path}")
         try:
-            from turnstone.core.storage._schema import mcp_servers
+            from pebble.core.storage._schema import mcp_servers
 
             inspector = sa.inspect(engine)
             actual = {c["name"] for c in inspector.get_columns("mcp_servers")}

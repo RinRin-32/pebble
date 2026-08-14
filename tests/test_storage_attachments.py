@@ -116,7 +116,7 @@ class TestSetMessageAttachments:
 
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import conversations
+        from pebble.core.storage._schema import conversations
 
         backend.register_workstream("ws-ref")
         mid = backend.save_message("ws-ref", "user", "hi")
@@ -141,7 +141,7 @@ class TestSetMessageAttachments:
         # A cross-ws message id is not written (defense-in-depth).
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import conversations
+        from pebble.core.storage._schema import conversations
 
         backend.register_workstream("ws-a")
         backend.register_workstream("ws-b")

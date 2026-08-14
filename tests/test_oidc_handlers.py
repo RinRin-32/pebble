@@ -19,12 +19,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from tests.conftest import make_oidc_test_config as _make_oidc_config
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_delete_oidc_identity,
     admin_list_oidc_identities,
 )
-from turnstone.core.auth import (
+from pebble.core.auth import (
     AUTH_COOKIE_CONSOLE,
     AUTH_COOKIE_SERVER,
     AuthResult,
@@ -32,8 +31,9 @@ from turnstone.core.auth import (
     handle_oidc_authorize,
     handle_oidc_callback,
 )
-from turnstone.core.oidc import OIDCConfig, OIDCError, OIDCKeyNotFoundError
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.oidc import OIDCConfig, OIDCError, OIDCKeyNotFoundError
+from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import make_oidc_test_config as _make_oidc_config
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -204,7 +204,7 @@ class TestOIDCAuthorize:
         app.state.oidc_config = _make_oidc_config(enabled=False, discovery_retryable=True)
         app.state.auth_storage = storage
         client = TestClient(app, raise_server_exceptions=False)
-        with patch("turnstone.core.auth.maybe_rediscover_oidc", new=AsyncMock()) as heal:
+        with patch("pebble.core.auth.maybe_rediscover_oidc", new=AsyncMock()) as heal:
             client.get("/v1/api/auth/oidc/authorize")
         heal.assert_awaited_once()
 
@@ -285,9 +285,9 @@ class TestOIDCCallback:
     ) -> None:
         storage.create_oidc_pending_state(state, nonce, code_verifier, audience)
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_happy_path(
         self,
         mock_exchange: AsyncMock,
@@ -375,7 +375,7 @@ class TestOIDCCallback:
         assert resp.status_code == 302
         assert "Login+session+expired" in resp.headers["location"]
 
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_code_exchange_failure(
         self,
         mock_exchange: AsyncMock,
@@ -392,8 +392,8 @@ class TestOIDCCallback:
         assert resp.status_code == 302
         assert "Authentication+failed" in resp.headers["location"]
 
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_token_validation_failure(
         self,
         mock_exchange: AsyncMock,
@@ -412,10 +412,10 @@ class TestOIDCCallback:
         assert resp.status_code == 302
         assert "Authentication+failed" in resp.headers["location"]
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.fetch_jwks", new_callable=AsyncMock)
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.fetch_jwks", new_callable=AsyncMock)
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_jwks_key_rotation_retry(
         self,
         mock_exchange: AsyncMock,
@@ -446,10 +446,10 @@ class TestOIDCCallback:
         mock_fetch_jwks.assert_called_once()
         assert mock_validate.call_count == 2
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.fetch_jwks", new_callable=AsyncMock)
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.fetch_jwks", new_callable=AsyncMock)
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_callback_uses_keynotfound_for_jwks_retry(
         self,
         mock_exchange: AsyncMock,
@@ -480,7 +480,7 @@ class TestOIDCCallback:
         mock_fetch_jwks.assert_called_once()
         assert mock_validate.call_count == 2
 
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_callback_returns_authentication_failed_on_missing_id_token(
         self,
         mock_exchange: AsyncMock,
@@ -498,9 +498,9 @@ class TestOIDCCallback:
         assert resp.status_code == 302
         assert "oidc_error=Authentication+failed" in resp.headers["location"]
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_no_users_after_oidc_success_redirects_setup(
         self,
         mock_exchange: AsyncMock,
@@ -555,9 +555,9 @@ class TestOIDCCallback:
         assert "oidc_error" in resp.headers["location"]
         assert "Too+many" in resp.headers["location"]
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_setup_gate_uses_count_users_not_full_scan(
         self,
         mock_exchange: AsyncMock,
@@ -592,9 +592,9 @@ class TestOIDCCallback:
         count_spy.assert_called_once_with()
         list_spy.assert_not_called()
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_state_cleanup_is_gated(
         self,
         mock_exchange: AsyncMock,
@@ -628,9 +628,9 @@ class TestOIDCCallback:
 
         assert cleanup_spy.call_count == 1
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_callback_uses_pending_audience_not_handler_audience(
         self,
         mock_exchange: AsyncMock,
@@ -703,10 +703,10 @@ class TestOIDCCallback:
         assert claims["aud"] == "turnstone-server"
         assert claims["aud"] != "turnstone-console"
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.fetch_jwks", new_callable=AsyncMock)
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.fetch_jwks", new_callable=AsyncMock)
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_jwks_refetch_dedup_when_kid_appears(
         self,
         mock_exchange: AsyncMock,
@@ -764,8 +764,8 @@ class TestOIDCCallbackCapture:
         """Client wired like ``authorize_client`` plus a real MCPTokenStore."""
         import dataclasses
 
+        from pebble.core.mcp_crypto import MCPTokenStore
         from tests.conftest import make_mcp_token_cipher
-        from turnstone.core.mcp_crypto import MCPTokenStore
 
         cfg = dataclasses.replace(oidc_config, capture_user_credential=capture)
         app = Starlette(
@@ -806,9 +806,9 @@ class TestOIDCCallbackCapture:
             follow_redirects=False,
         )
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_capture_persists_credential(
         self,
         mock_exchange: AsyncMock,
@@ -833,9 +833,9 @@ class TestOIDCCallbackCapture:
         assert plain is not None
         assert plain["refresh_token"] == "rt-1"
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_capture_success_primes_user_pools(
         self,
         mock_exchange: AsyncMock,
@@ -866,9 +866,9 @@ class TestOIDCCallbackCapture:
         assert resp.status_code == 302
         assert primed == ["test-admin"]
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_no_capture_no_prime(
         self,
         mock_exchange: AsyncMock,
@@ -896,9 +896,9 @@ class TestOIDCCallbackCapture:
         assert resp.status_code == 302
         assert primed == []
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_capture_without_live_session_does_not_prime(
         self,
         mock_exchange: AsyncMock,
@@ -929,9 +929,9 @@ class TestOIDCCallbackCapture:
         assert store.get_oidc_credential("test-admin", cfg.issuer) is not None
         assert primed == []
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_second_login_replaces_credential(
         self,
         mock_exchange: AsyncMock,
@@ -964,9 +964,9 @@ class TestOIDCCallbackCapture:
         assert plain is not None
         assert plain["refresh_token"] == "rt-new"
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_no_refresh_token_logs_and_login_succeeds(
         self,
         mock_exchange: AsyncMock,
@@ -989,9 +989,9 @@ class TestOIDCCallbackCapture:
         assert store is not None
         assert store.get_oidc_credential("test-admin", cfg.issuer) is None
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_capture_disabled_persists_nothing(
         self,
         mock_exchange: AsyncMock,
@@ -1013,9 +1013,9 @@ class TestOIDCCallbackCapture:
         assert store is not None
         assert store.get_oidc_credential("test-admin", cfg.issuer) is None
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_missing_store_login_still_succeeds(
         self,
         mock_exchange: AsyncMock,
@@ -1036,9 +1036,9 @@ class TestOIDCCallbackCapture:
         assert resp.status_code == 302
         assert "oidc_success=1" in resp.headers["location"]
 
-    @patch("turnstone.core.auth.provision_oidc_user")
-    @patch("turnstone.core.auth.validate_id_token")
-    @patch("turnstone.core.auth.exchange_code", new_callable=AsyncMock)
+    @patch("pebble.core.auth.provision_oidc_user")
+    @patch("pebble.core.auth.validate_id_token")
+    @patch("pebble.core.auth.exchange_code", new_callable=AsyncMock)
     def test_store_failure_does_not_block_login(
         self,
         mock_exchange: AsyncMock,
@@ -1122,8 +1122,8 @@ class TestAdminOIDCIdentities:
         credential AND purge the user's already-minted oauth_obo cache rows —
         deleting only the credential leaves live cached bearers authorizing
         dispatch until TTL. The response/audit report what was actually cut."""
+        from pebble.core.mcp_crypto import MCPTokenStore
         from tests.conftest import make_mcp_token_cipher
-        from turnstone.core.mcp_crypto import MCPTokenStore
 
         issuer = "https://idp.example.com"
         store = MCPTokenStore(storage, make_mcp_token_cipher(), node_id="test")

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from turnstone.core.session import ChatSession
-from turnstone.core.trajectory import turn_to_dict, turns_from_dicts
+from pebble.core.session import ChatSession
+from pebble.core.trajectory import turn_to_dict, turns_from_dicts
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -332,7 +332,7 @@ class TestHandleCommand:
 
 class TestDeleteMessagesAfter:
     def test_delete_truncates_db(self, tmp_db):
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             delete_messages_after,
             load_messages,
             register_workstream,
@@ -355,7 +355,7 @@ class TestDeleteMessagesAfter:
         assert msgs[1]["content"] == "Hi!"
 
     def test_delete_nothing(self, tmp_db):
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             delete_messages_after,
             register_workstream,
             save_message,
@@ -369,7 +369,7 @@ class TestDeleteMessagesAfter:
         assert deleted == 0
 
     def test_delete_all(self, tmp_db):
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             delete_messages_after,
             load_messages,
             register_workstream,
@@ -393,7 +393,7 @@ class TestDeleteMessagesAfter:
 
 class TestRewindDBSync:
     def test_rewind_persists_to_db(self, tmp_db):
-        from turnstone.core.memory import load_messages, register_workstream, save_message
+        from pebble.core.memory import load_messages, register_workstream, save_message
 
         session = _make_session(tmp_db)
         ws_id = session.ws_id

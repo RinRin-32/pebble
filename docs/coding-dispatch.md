@@ -173,11 +173,11 @@ Leave a key **unset** rather than empty — turnstone drops a blank
 `ANTHROPIC_API_KEY` before spawning precisely because an empty value can be
 read as "use key auth" and shadow an OAuth login.
 
-### `TURNSTONE_CLAUDE_BARE`
+### `PEBBLE_CLAUDE_BARE`
 
 `--bare` skips discovery of hooks, plugins, MCP servers and `CLAUDE.md`, but it
 **cannot read OAuth credentials**, so it forces an API key. It is therefore
-opt-in, not default. Set `TURNSTONE_CLAUDE_BARE=1` only if strict
+opt-in, not default. Set `PEBBLE_CLAUDE_BARE=1` only if strict
 reproducibility matters more than subscription billing.
 
 ## 5. Use it
@@ -334,7 +334,7 @@ shared_resource.data["epoch"].index(x)   # builtin list.index
 # → matched to an unrelated user-defined index() in another file
 ```
 
-`turnstone/core/codegraph.py` prunes exactly that class after indexing. A false
+`pebble/core/codegraph.py` prunes exactly that class after indexing. A false
 edge is worse than a missing one: an agent asked "who calls this?" follows it and
 reasons from a lie.
 

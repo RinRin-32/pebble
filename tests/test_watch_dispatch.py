@@ -21,8 +21,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from pebble.core.session import _WATCH_QUEUE_SOFT_CAP, ChatSession
 from tests._helpers import patch_session_storage
-from turnstone.core.session import _WATCH_QUEUE_SOFT_CAP, ChatSession
 
 
 class _NullUI:
@@ -74,7 +74,7 @@ def _register_runner(session: ChatSession, wake_fn: Any = None) -> tuple[Any, An
 def _reminder(text: str, **extra: Any) -> dict[str, Any]:
     """Build a structured ``watch_triggered`` reminder dict for tests.
 
-    Mirrors the shape produced by :func:`turnstone.core.watch.build_watch_reminder`
+    Mirrors the shape produced by :func:`pebble.core.watch.build_watch_reminder`
     — ``text`` is the formatted body, optional fields ride alongside.
     Tests that don't care about the optional fields can call with
     ``text`` only.
@@ -494,7 +494,7 @@ class TestResumeReRegistration:
     ``/resume`` command both hit this)."""
 
     def _saved_ws(self, ws_id: str) -> None:
-        from turnstone.core.memory import register_workstream, save_message
+        from pebble.core.memory import register_workstream, save_message
 
         register_workstream(ws_id)
         save_message(ws_id, "user", "hi")

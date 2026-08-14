@@ -1,4 +1,4 @@
-"""Unit tests for ``turnstone.core.session_worker``.
+"""Unit tests for ``pebble.core.session_worker``.
 
 The shared worker dispatch is load-bearing for both the interactive
 ``/v1/api/workstreams/{ws_id}/send`` HTTP handler and the coordinator
@@ -26,10 +26,10 @@ import queue
 import threading
 from typing import Any
 
+from pebble.core import session_worker
+from pebble.core.nudge_queue import USER_DRAIN, NudgeQueue
+from pebble.core.workstream import Workstream, WorkstreamState
 from tests._helpers import wait_until as _wait_until
-from turnstone.core import session_worker
-from turnstone.core.nudge_queue import USER_DRAIN, NudgeQueue
-from turnstone.core.workstream import Workstream, WorkstreamState
 
 
 class _SendSession:

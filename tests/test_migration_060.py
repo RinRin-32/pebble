@@ -28,7 +28,7 @@ from alembic import command
 from alembic.config import Config
 
 _MIGRATIONS_DIR = str(
-    Path(__file__).resolve().parent.parent / "turnstone" / "core" / "storage" / "migrations"
+    Path(__file__).resolve().parent.parent / "pebble" / "core" / "storage" / "migrations"
 )
 
 
@@ -423,7 +423,7 @@ class TestMigration060:
 
         mig_path = (
             Path(__file__).resolve().parent.parent
-            / "turnstone"
+            / "pebble"
             / "core"
             / "storage"
             / "migrations"
@@ -610,7 +610,7 @@ class TestMigration060AttachmentBackfill:
 
         mig_path = (
             Path(__file__).resolve().parent.parent
-            / "turnstone/core/storage/migrations/versions/060_unwrap_tool_envelopes.py"
+            / "pebble/core/storage/migrations/versions/060_unwrap_tool_envelopes.py"
         )
         spec = importlib.util.spec_from_file_location("_mig_060_batch", mig_path)
         assert spec is not None and spec.loader is not None

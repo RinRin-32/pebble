@@ -48,8 +48,8 @@ def _make_slack_event(
 
 def _make_bot() -> tuple[object, MagicMock, MagicMock]:
     """Build a TurnstoneSlackBot with fully mocked dependencies."""
-    from turnstone.channels.slack.bot import TurnstoneSlackBot
-    from turnstone.channels.slack.config import SlackConfig
+    from pebble.channels.slack.bot import TurnstoneSlackBot
+    from pebble.channels.slack.config import SlackConfig
 
     config = SlackConfig(
         bot_token="xoxb-test",
@@ -62,7 +62,7 @@ def _make_bot() -> tuple[object, MagicMock, MagicMock]:
     storage = MagicMock()
     storage.list_channel_routes_by_type = MagicMock(return_value=[])
 
-    from turnstone.channels._routing import PolicyVerdict
+    from pebble.channels._routing import PolicyVerdict
 
     router = MagicMock()
     router.get_or_create_workstream = AsyncMock(return_value=("ws-1", True))
@@ -89,9 +89,9 @@ def _make_bot() -> tuple[object, MagicMock, MagicMock]:
     # used by the SDK router (which we replace with a MagicMock below), so
     # an AsyncMock standin is enough for every test that uses this factory.
     with (
-        patch("turnstone.channels.slack.bot.AsyncApp", MagicMock()),
-        patch("turnstone.channels.slack.bot.AsyncWebClient", return_value=client),
-        patch("turnstone.channels.slack.bot.httpx.AsyncClient", return_value=AsyncMock()),
+        patch("pebble.channels.slack.bot.AsyncApp", MagicMock()),
+        patch("pebble.channels.slack.bot.AsyncWebClient", return_value=client),
+        patch("pebble.channels.slack.bot.httpx.AsyncClient", return_value=AsyncMock()),
     ):
         bot = TurnstoneSlackBot(
             config,
@@ -114,7 +114,7 @@ class TestSlackConfig:
     """Tests for SlackConfig default and custom values."""
 
     def test_defaults(self) -> None:
-        from turnstone.channels.slack.config import SlackConfig
+        from pebble.channels.slack.config import SlackConfig
 
         cfg = SlackConfig()
         assert cfg.bot_token == ""
@@ -128,7 +128,7 @@ class TestSlackConfig:
         assert cfg.auto_approve is False
 
     def test_custom_values(self) -> None:
-        from turnstone.channels.slack.config import SlackConfig
+        from pebble.channels.slack.config import SlackConfig
 
         cfg = SlackConfig(
             bot_token="xoxb-123",
@@ -159,7 +159,7 @@ class TestSlackRoute:
     """Tests for canonical Slack route parsing/formatting."""
 
     def test_parse_channel_only(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         route = SlackRoute.parse("C123")
         assert route.channel == "C123"
@@ -167,7 +167,7 @@ class TestSlackRoute:
         assert route.thread_ts is None
 
     def test_parse_channel_and_user(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         route = SlackRoute.parse("C123:U456")
         assert route.channel == "C123"
@@ -175,7 +175,7 @@ class TestSlackRoute:
         assert route.thread_ts is None
 
     def test_parse_full(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         route = SlackRoute.parse("C123:U456:111.222")
         assert route.channel == "C123"
@@ -183,7 +183,7 @@ class TestSlackRoute:
         assert route.thread_ts == "111.222"
 
     def test_to_channel_id(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         assert SlackRoute(channel="C123").to_channel_id() == "C123"
         assert SlackRoute(channel="C123", user_id="U456").to_channel_id() == "C123:U456"
@@ -194,7 +194,7 @@ class TestSlackRoute:
 
     def test_round_trip(self) -> None:
         """Every shape emitted by to_channel_id must round-trip through parse."""
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         shapes = [
             SlackRoute(channel="C123"),
@@ -206,7 +206,7 @@ class TestSlackRoute:
 
     def test_parse_trailing_colon_normalizes(self) -> None:
         """``"C123:"`` should normalize to ``SlackRoute("C123")``."""
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         assert SlackRoute.parse("C123:") == SlackRoute(channel="C123")
         assert SlackRoute.parse("C123:U456:") == SlackRoute(channel="C123", user_id="U456")
@@ -217,7 +217,7 @@ class TestSlackRoute:
         Slack IDs and timestamps never contain ``:`` so this is safe in
         practice; the test locks the documented behaviour.
         """
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         route = SlackRoute.parse("C1:U1:ts:extra")
         assert route.channel == "C1"
@@ -292,7 +292,7 @@ class TestArchiveSession:
 
 class TestPreviewSanitization:
     def test_sanitize_slack_preview_escapes_and_truncates(self) -> None:
-        from turnstone.channels.slack.bot import _sanitize_slack_preview
+        from pebble.channels.slack.bot import _sanitize_slack_preview
 
         text = "<@U123>`abc`" + ("x" * 2000)
         out = _sanitize_slack_preview(text, max_length=50)
@@ -307,14 +307,14 @@ class TestPreviewSanitization:
         """Triple backticks would close the surrounding mrkdwn fence — splice
         a zero-width space inside so Slack no longer recognizes it as a
         delimiter."""
-        from turnstone.channels.slack.bot import _sanitize_slack_preview
+        from pebble.channels.slack.bot import _sanitize_slack_preview
 
         out = _sanitize_slack_preview("inner ``` text", max_length=200)
         assert "```" not in out
         assert "``\u200b`" in out
 
     def test_sanitize_slack_preview_keeps_short_input(self) -> None:
-        from turnstone.channels.slack.bot import _sanitize_slack_preview
+        from pebble.channels.slack.bot import _sanitize_slack_preview
 
         out = _sanitize_slack_preview("short and clean", max_length=200)
         assert out == "short and clean"
@@ -329,7 +329,7 @@ class TestStreamingMessage:
     """Tests for the StreamingMessage helper."""
 
     def test_append_accumulates(self) -> None:
-        from turnstone.channels.slack.bot import StreamingMessage
+        from pebble.channels.slack.bot import StreamingMessage
 
         client = AsyncMock()
         client.chat_postMessage = AsyncMock(return_value={"ok": True, "ts": "123"})
@@ -343,7 +343,7 @@ class TestStreamingMessage:
         assert sm.accumulated_text == "hello world"
 
     def test_finalize_sends_when_no_prior_message(self) -> None:
-        from turnstone.channels.slack.bot import StreamingMessage
+        from pebble.channels.slack.bot import StreamingMessage
 
         client = AsyncMock()
         client.chat_postMessage = AsyncMock(return_value={"ok": True, "ts": "123"})
@@ -355,7 +355,7 @@ class TestStreamingMessage:
         client.chat_postMessage.assert_awaited_once()
 
     def test_finalize_edits_existing_message(self) -> None:
-        from turnstone.channels.slack.bot import StreamingMessage
+        from pebble.channels.slack.bot import StreamingMessage
 
         client = AsyncMock()
         client.chat_postMessage = AsyncMock(return_value={"ok": True, "ts": "123"})
@@ -369,7 +369,7 @@ class TestStreamingMessage:
         client.chat_update.assert_awaited()
 
     def test_finalize_chunks_long_content(self) -> None:
-        from turnstone.channels.slack.bot import StreamingMessage
+        from pebble.channels.slack.bot import StreamingMessage
 
         client = AsyncMock()
         client.chat_postMessage = AsyncMock(return_value={"ok": True, "ts": "123"})
@@ -381,7 +381,7 @@ class TestStreamingMessage:
         assert client.chat_postMessage.await_count >= 2
 
     def test_finalize_empty_is_noop(self) -> None:
-        from turnstone.channels.slack.bot import StreamingMessage
+        from pebble.channels.slack.bot import StreamingMessage
 
         client = AsyncMock()
         client.chat_postMessage = AsyncMock()
@@ -460,7 +460,7 @@ class TestOnMessage:
         router.send_message.assert_awaited_once()
 
     def test_notification_reply_routes_to_origin_workstream(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         bot, router, _ = _make_bot()
         ws_id = "ws-123"
@@ -490,8 +490,8 @@ class TestOnMessage:
         )
 
     def test_notification_reply_dead_ws_clears_tracking(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk._types import TurnstoneAPIError
 
         bot, router, client = _make_bot()
         ws_id = "ws-dead"
@@ -572,7 +572,7 @@ class TestPerUserSessionIsolation:
 
 class TestApprovalOwnership:
     def test_non_owner_cannot_approve(self) -> None:
-        from turnstone.channels.slack.bot import PendingApproval
+        from pebble.channels.slack.bot import PendingApproval
 
         bot, router, client = _make_bot()
         ws_id = "ws-1"
@@ -595,7 +595,7 @@ class TestApprovalOwnership:
         router.send_approval.assert_not_awaited()
 
     def test_non_owner_cannot_deny(self) -> None:
-        from turnstone.channels.slack.bot import PendingApproval
+        from pebble.channels.slack.bot import PendingApproval
 
         bot, router, client = _make_bot()
         ws_id = "ws-1"
@@ -618,7 +618,7 @@ class TestApprovalOwnership:
         router.send_approval.assert_not_awaited()
 
     def test_owner_can_approve(self) -> None:
-        from turnstone.channels.slack.bot import PendingApproval
+        from pebble.channels.slack.bot import PendingApproval
 
         bot, router, client = _make_bot()
         ws_id = "ws-1"
@@ -650,9 +650,9 @@ class TestWsEventDispatch:
     """Tests for SSE event handling in the Slack bot."""
 
     def _make_ws_bot(self) -> tuple[object, MagicMock]:
-        from turnstone.channels._routing import PolicyVerdict
-        from turnstone.channels.slack.bot import TurnstoneSlackBot
-        from turnstone.channels.slack.config import SlackConfig
+        from pebble.channels._routing import PolicyVerdict
+        from pebble.channels.slack.bot import TurnstoneSlackBot
+        from pebble.channels.slack.config import SlackConfig
 
         config = SlackConfig(
             bot_token="xoxb-test",
@@ -670,10 +670,10 @@ class TestWsEventDispatch:
         client.conversations_history = AsyncMock(return_value={"ok": True, "messages": []})
 
         with (
-            patch("turnstone.channels.slack.bot.AsyncApp", MagicMock()),
-            patch("turnstone.channels.slack.bot.AsyncWebClient", return_value=client),
+            patch("pebble.channels.slack.bot.AsyncApp", MagicMock()),
+            patch("pebble.channels.slack.bot.AsyncWebClient", return_value=client),
             patch(
-                "turnstone.channels.slack.bot.httpx.AsyncClient",
+                "pebble.channels.slack.bot.httpx.AsyncClient",
                 return_value=AsyncMock(),
             ),
         ):
@@ -688,8 +688,8 @@ class TestWsEventDispatch:
         return bot, client
 
     def test_content_event_creates_streaming_message(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import ContentEvent
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import ContentEvent
 
         bot, _client = self._make_ws_bot()
 
@@ -700,8 +700,8 @@ class TestWsEventDispatch:
         assert "ws-1" in bot._streaming  # type: ignore[attr-defined]
 
     def test_stream_end_finalizes_streaming(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import ContentEvent, StreamEndEvent
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import ContentEvent, StreamEndEvent
 
         bot, _client = self._make_ws_bot()
         route = SlackRoute(channel="C1", user_id="U1", thread_ts="123.456")
@@ -713,8 +713,8 @@ class TestWsEventDispatch:
         assert "ws-1" not in bot._streaming  # type: ignore[attr-defined]
 
     def test_stream_end_no_streaming_is_noop(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import StreamEndEvent
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import StreamEndEvent
 
         bot, _client = self._make_ws_bot()
         route = SlackRoute(channel="C1", user_id="U1", thread_ts="123.456")
@@ -723,8 +723,8 @@ class TestWsEventDispatch:
         assert "ws-1" not in bot._streaming  # type: ignore[attr-defined]
 
     def test_error_event_posts_message(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import ErrorEvent
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import ErrorEvent
 
         bot, client = self._make_ws_bot()
         route = SlackRoute(channel="C1", user_id="U1", thread_ts="123.456")
@@ -737,11 +737,11 @@ class TestWsEventDispatch:
         assert "Something went wrong" in text
 
     def test_approve_request_auto_approve(self) -> None:
-        from turnstone.channels._routing import PolicyVerdict
-        from turnstone.channels.slack.bot import TurnstoneSlackBot
-        from turnstone.channels.slack.config import SlackConfig
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import ApproveRequestEvent
+        from pebble.channels._routing import PolicyVerdict
+        from pebble.channels.slack.bot import TurnstoneSlackBot
+        from pebble.channels.slack.config import SlackConfig
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import ApproveRequestEvent
 
         config = SlackConfig(bot_token="xoxb-test", app_token="xapp-test", auto_approve=True)
         storage = MagicMock()
@@ -752,10 +752,10 @@ class TestWsEventDispatch:
         client.chat_postMessage = AsyncMock(return_value={"ok": True, "ts": "123"})
 
         with (
-            patch("turnstone.channels.slack.bot.AsyncApp", MagicMock()),
-            patch("turnstone.channels.slack.bot.AsyncWebClient", return_value=client),
+            patch("pebble.channels.slack.bot.AsyncApp", MagicMock()),
+            patch("pebble.channels.slack.bot.AsyncWebClient", return_value=client),
             patch(
-                "turnstone.channels.slack.bot.httpx.AsyncClient",
+                "pebble.channels.slack.bot.httpx.AsyncClient",
                 return_value=AsyncMock(),
             ),
         ):
@@ -773,8 +773,8 @@ class TestWsEventDispatch:
         router.send_approval.assert_awaited_once_with("ws-1", "", approved=True)
 
     def test_approve_request_sends_approval_buttons(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import ApproveRequestEvent
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import ApproveRequestEvent
 
         bot, client = self._make_ws_bot()
 
@@ -797,9 +797,9 @@ class TestWsEventDispatch:
         assert entry.call_ids == frozenset({"c-1"})
 
     def test_intent_verdict_updates_approval_message(self) -> None:
-        from turnstone.channels.slack.bot import PendingApproval
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import IntentVerdictEvent
+        from pebble.channels.slack.bot import PendingApproval
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import IntentVerdictEvent
 
         bot, client = self._make_ws_bot()
         client.conversations_history = AsyncMock(
@@ -828,9 +828,9 @@ class TestWsEventDispatch:
         client.chat_update.assert_awaited_once()
 
     def test_approval_resolved_clears_pending(self) -> None:
-        from turnstone.channels.slack.bot import PendingApproval
-        from turnstone.channels.slack.routes import SlackRoute
-        from turnstone.sdk.events import ApprovalResolvedEvent
+        from pebble.channels.slack.bot import PendingApproval
+        from pebble.channels.slack.routes import SlackRoute
+        from pebble.sdk.events import ApprovalResolvedEvent
 
         bot, client = self._make_ws_bot()
         bot._pending_approval[("ws-1", "cyc-9")] = PendingApproval(  # type: ignore[attr-defined]
@@ -867,7 +867,7 @@ class TestWsEventDispatch:
 
     def test_link_rate_limit_blocks_after_cap(self) -> None:
         """Sec-3: /turnstone link must throttle at _LINK_RATE_LIMIT/hour."""
-        from turnstone.channels.slack.bot import _LINK_RATE_LIMIT
+        from pebble.channels.slack.bot import _LINK_RATE_LIMIT
 
         bot, _router, client = _make_bot()
         # Make the user already linked so _handle_link skips past the
@@ -888,17 +888,17 @@ class TestNotificationTracking:
     """Tests for notification message tracking."""
 
     def test_track_notification_stores_entry(self) -> None:
-        from turnstone.channels.slack.bot import TurnstoneSlackBot
-        from turnstone.channels.slack.config import SlackConfig
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.bot import TurnstoneSlackBot
+        from pebble.channels.slack.config import SlackConfig
+        from pebble.channels.slack.routes import SlackRoute
 
         config = SlackConfig(bot_token="xoxb-test", app_token="xapp-test")
         storage = MagicMock()
         with (
-            patch("turnstone.channels.slack.bot.AsyncApp", MagicMock()),
-            patch("turnstone.channels.slack.bot.AsyncWebClient"),
+            patch("pebble.channels.slack.bot.AsyncApp", MagicMock()),
+            patch("pebble.channels.slack.bot.AsyncWebClient"),
             patch(
-                "turnstone.channels.slack.bot.httpx.AsyncClient",
+                "pebble.channels.slack.bot.httpx.AsyncClient",
                 return_value=AsyncMock(),
             ),
         ):
@@ -909,17 +909,17 @@ class TestNotificationTracking:
         assert bot._notify_ws_map["ts-123"] == ("ws-1", route)  # type: ignore[attr-defined]
 
     def test_track_notification_evicts_oldest(self) -> None:
-        from turnstone.channels.slack.bot import TurnstoneSlackBot
-        from turnstone.channels.slack.config import SlackConfig
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.bot import TurnstoneSlackBot
+        from pebble.channels.slack.config import SlackConfig
+        from pebble.channels.slack.routes import SlackRoute
 
         config = SlackConfig(bot_token="xoxb-test", app_token="xapp-test")
         storage = MagicMock()
         with (
-            patch("turnstone.channels.slack.bot.AsyncApp", MagicMock()),
-            patch("turnstone.channels.slack.bot.AsyncWebClient"),
+            patch("pebble.channels.slack.bot.AsyncApp", MagicMock()),
+            patch("pebble.channels.slack.bot.AsyncWebClient"),
             patch(
-                "turnstone.channels.slack.bot.httpx.AsyncClient",
+                "pebble.channels.slack.bot.httpx.AsyncClient",
                 return_value=AsyncMock(),
             ),
         ):
@@ -943,7 +943,7 @@ class TestNotificationTracking:
         assert len(bot._notify_ws_map) <= 3  # type: ignore[attr-defined]
 
     def test_send_notification_tracks_root_thread_ts(self) -> None:
-        from turnstone.channels.slack.routes import SlackRoute
+        from pebble.channels.slack.routes import SlackRoute
 
         bot, _router, client = _make_bot()
         client.chat_postMessage = AsyncMock(
@@ -1018,8 +1018,8 @@ class TestChannelCLI:
         # `restart: unless-stopped`).
         import sys
 
-        from turnstone.channels import cli
-        from turnstone.channels.cli import main
+        from pebble.channels import cli
+        from pebble.channels.cli import main
 
         captured: dict[str, object] = {}
 
@@ -1029,9 +1029,9 @@ class TestChannelCLI:
         with (
             patch.object(sys, "argv", ["turnstone-channel"]),
             patch.dict("os.environ", {}, clear=True),
-            patch("turnstone.core.storage._registry.init_storage"),
-            patch("turnstone.core.storage._registry.get_storage", return_value=MagicMock()),
-            patch("turnstone.channels._http.create_channel_app", return_value=MagicMock()),
+            patch("pebble.core.storage._registry.init_storage"),
+            patch("pebble.core.storage._registry.get_storage", return_value=MagicMock()),
+            patch("pebble.channels._http.create_channel_app", return_value=MagicMock()),
             patch.object(cli, "_run_gateway", _fake_gateway),
         ):
             main()  # must not raise SystemExit
@@ -1041,7 +1041,7 @@ class TestChannelCLI:
     def test_slack_requires_both_tokens(self) -> None:
         import sys
 
-        from turnstone.channels.cli import main
+        from pebble.channels.cli import main
 
         with (
             patch.object(
@@ -1067,7 +1067,7 @@ class TestChannelCLI:
     def test_slack_only_startup_creates_channel_app(self) -> None:
         import sys
 
-        from turnstone.channels.cli import main
+        from pebble.channels.cli import main
 
         created_adapters: dict[str, object] = {}
 
@@ -1117,16 +1117,14 @@ class TestChannelCLI:
                     "http://localhost:8080",
                 ],
             ),
-            patch("turnstone.core.storage._registry.init_storage"),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
-            patch(
-                "turnstone.channels._http.create_channel_app", side_effect=_fake_create_channel_app
-            ),
-            patch("turnstone.channels._http._get_service_id", return_value="channel-test"),
+            patch("pebble.core.storage._registry.init_storage"),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.channels._http.create_channel_app", side_effect=_fake_create_channel_app),
+            patch("pebble.channels._http._get_service_id", return_value="channel-test"),
             patch("asyncio.gather", side_effect=_fake_gather),
             patch("uvicorn.Config", return_value=MagicMock()),
             patch("uvicorn.Server", FakeServer),
-            patch("turnstone.channels.slack.bot.TurnstoneSlackBot", FakeSlackBot),
+            patch("pebble.channels.slack.bot.TurnstoneSlackBot", FakeSlackBot),
         ):
             main()
 
@@ -1136,7 +1134,7 @@ class TestChannelCLI:
     def test_discord_and_slack_startup_creates_both_adapters(self) -> None:
         import sys
 
-        from turnstone.channels.cli import main
+        from pebble.channels.cli import main
 
         created_adapters: dict[str, object] = {}
 
@@ -1200,17 +1198,15 @@ class TestChannelCLI:
                     "http://localhost:8080",
                 ],
             ),
-            patch("turnstone.core.storage._registry.init_storage"),
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
-            patch(
-                "turnstone.channels._http.create_channel_app", side_effect=_fake_create_channel_app
-            ),
-            patch("turnstone.channels._http._get_service_id", return_value="channel-test"),
+            patch("pebble.core.storage._registry.init_storage"),
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.channels._http.create_channel_app", side_effect=_fake_create_channel_app),
+            patch("pebble.channels._http._get_service_id", return_value="channel-test"),
             patch("asyncio.gather", side_effect=_fake_gather),
             patch("uvicorn.Config", return_value=MagicMock()),
             patch("uvicorn.Server", FakeServer),
-            patch("turnstone.channels.slack.bot.TurnstoneSlackBot", FakeSlackBot),
-            patch("turnstone.channels.discord.bot.TurnstoneBot", FakeDiscordBot),
+            patch("pebble.channels.slack.bot.TurnstoneSlackBot", FakeSlackBot),
+            patch("pebble.channels.discord.bot.TurnstoneBot", FakeDiscordBot),
         ):
             main()
 

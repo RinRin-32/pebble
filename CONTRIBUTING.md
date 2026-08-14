@@ -46,7 +46,7 @@ pytest
 
 ## Reporting Issues
 
-Open an issue at https://github.com/turnstonelabs/turnstone/issues with:
+Open an issue at https://github.com/RinRin-32/pebble/issues with:
 
 - What you expected to happen
 - What actually happened

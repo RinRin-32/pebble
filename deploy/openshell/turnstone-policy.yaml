@@ -1,6 +1,6 @@
 # OpenShell sandbox policy for Turnstone AI orchestration platform.
 #
-# This policy wraps a turnstone-server process (the primary sandbox target).
+# This policy wraps a pebble-server process (the primary sandbox target).
 # The console and channel gateway are separate processes that would each
 # need their own sandbox with a tailored policy variant.
 #
@@ -8,14 +8,14 @@
 #   openshell sandbox run \
 #     --policy deploy/openshell/turnstone-policy.yaml \
 #     --workdir /project \
-#     -- python3 -m turnstone.server --host 0.0.0.0 --port 8080
+#     -- python3 -m pebble.server --host 0.0.0.0 --port 8080
 #
 # For inference routing (keeps real API keys out of the sandbox):
 #   openshell sandbox run \
 #     --policy deploy/openshell/turnstone-policy.yaml \
 #     --inference-routes deploy/openshell/routes.yaml \
 #     --workdir /project \
-#     -- python3 -m turnstone.server --host 0.0.0.0 --port 8080 \
+#     -- python3 -m pebble.server --host 0.0.0.0 --port 8080 \
 #         --base-url https://inference.local
 #
 # Note: inference.local is intercepted by the OpenShell proxy before
@@ -108,7 +108,7 @@ network_policies:
   # the outbound calls to search engines (and is NOT governed by this policy —
   # it runs as a separate service). The host/port below is the bundled compose
   # service name; if your SearxNG runs elsewhere, set it to match
-  # TURNSTONE_SEARXNG_URL.
+  # PEBBLE_SEARXNG_URL.
 
   searxng:
     name: searxng-search
@@ -171,7 +171,7 @@ network_policies:
   #     - path: /usr/local/bin/python3*
 
   # --- Discord (channel integration) ---
-  # Uncomment if using turnstone-channel with Discord adapter.
+  # Uncomment if using pebble-channel with Discord adapter.
 
   # discord:
   #   name: discord

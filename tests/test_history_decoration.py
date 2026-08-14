@@ -1,4 +1,4 @@
-"""Unit tests for ``turnstone.core.history_decoration``.
+"""Unit tests for ``pebble.core.history_decoration``.
 
 The decoration helpers compose the single ``/history`` REST projection
 pipeline (``make_history_handler``, used by both interactive and coord):
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 
-from turnstone.core.history_decoration import (
+from pebble.core.history_decoration import (
     build_merged_output_assessment_payload,
     build_verdict_payload,
     decorate_history_messages,
@@ -387,21 +387,21 @@ class TestExtractReasoningForHistory:
         }
 
     def test_extract_thinking_surfaces_reasoning_field(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [self._anthropic_thinking_msg("let me think")]
         extract_reasoning_for_history(messages, surface_persisted_reasoning_flag=True)
         assert messages[0]["reasoning"] == "let me think"
 
     def test_strips_provider_content_after_extraction(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [self._anthropic_thinking_msg("anything")]
         extract_reasoning_for_history(messages, surface_persisted_reasoning_flag=True)
         assert "_provider_content" not in messages[0]
 
     def test_strips_provider_content_when_flag_false(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [self._anthropic_thinking_msg("anything")]
         extract_reasoning_for_history(messages, surface_persisted_reasoning_flag=False)
@@ -412,7 +412,7 @@ class TestExtractReasoningForHistory:
     def test_first_block_thinking_dispatches_to_anthropic(self) -> None:
         # Even when text and tool_use blocks follow, the first-block-type
         # discriminator routes thinking-prefixed payloads correctly.
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [
             {
@@ -434,7 +434,7 @@ class TestExtractReasoningForHistory:
         # summary[*].text concatenation.  Pre-Phase-3 this asserted
         # "" (the stub); the assertion was tightened once the wire
         # path landed.
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [
             {
@@ -450,7 +450,7 @@ class TestExtractReasoningForHistory:
         assert "_provider_content" not in messages[0]
 
     def test_unknown_first_block_type_no_op(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [
             {
@@ -464,7 +464,7 @@ class TestExtractReasoningForHistory:
         assert "_provider_content" not in messages[0]
 
     def test_skips_messages_without_provider_content(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [{"role": "assistant", "content": "plain"}]
         extract_reasoning_for_history(messages, surface_persisted_reasoning_flag=True)
@@ -472,7 +472,7 @@ class TestExtractReasoningForHistory:
         assert messages[0]["content"] == "plain"
 
     def test_user_and_tool_messages_untouched(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages: list[dict[str, object]] = [
             {"role": "user", "content": "hi"},
@@ -485,7 +485,7 @@ class TestExtractReasoningForHistory:
         assert messages[2]["reasoning"] == "only this one"
 
     def test_empty_provider_content_no_extraction(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [{"role": "assistant", "content": "x", "_provider_content": []}]
         extract_reasoning_for_history(messages, surface_persisted_reasoning_flag=True)
@@ -494,7 +494,7 @@ class TestExtractReasoningForHistory:
         assert "_provider_content" not in messages[0]
 
     def test_first_block_not_a_dict_skipped(self) -> None:
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages: list[dict[str, object]] = [
             {
@@ -512,7 +512,7 @@ class TestExtractReasoningForHistory:
         # by model_turn.synth_reasoning_block for vLLM / llama.cpp /
         # Gemini-compat conversations) dispatch to
         # OpenAIChatCompletionsProvider.extract_reasoning_text.
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [
             {
@@ -535,7 +535,7 @@ class TestExtractReasoningForHistory:
         # ordering would have silently dropped the reasoning.  Now
         # walks the list for the first recognised reasoning-bearing
         # type and dispatches the whole list to that provider.
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [
             {
@@ -569,7 +569,7 @@ class TestExtractReasoningForHistory:
         # in _BLOCK_TYPE_PROVIDER_FACTORY pointing at the Anthropic
         # factory; Anthropic's extractor's type=="thinking" filter
         # already correctly skips the redacted block.
-        from turnstone.core.history_decoration import extract_reasoning_for_history
+        from pebble.core.history_decoration import extract_reasoning_for_history
 
         messages = [
             {
@@ -613,7 +613,7 @@ class TestAttachVllmChatReasoningField:
         # reasoning_format, Gemini-compat) lands in _provider_content as
         # a synthetic reasoning_text block; helper must round-trip it
         # back onto the same model on the next turn.
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         msgs = [self._assistant_with([{"type": "reasoning_text", "text": "synth thought"}])]
         out = attach_vllm_chat_reasoning_field(msgs)
@@ -624,7 +624,7 @@ class TestAttachVllmChatReasoningField:
         # operator flipped model to a vLLM-served reasoning model.
         # Helper extracts the thinking text and discards the signature
         # (vLLM doesn't validate signatures).
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         msgs = [
             self._assistant_with(
@@ -644,7 +644,7 @@ class TestAttachVllmChatReasoningField:
         # Cross-provider switch: workstream started on gpt-5, operator
         # flipped to a vLLM-served model.  Helper extracts the
         # summary[*].text concatenation.
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         msgs = [
             self._assistant_with(
@@ -661,7 +661,7 @@ class TestAttachVllmChatReasoningField:
         assert out[0]["reasoning"] == "responses thought"
 
     def test_no_provider_content_returns_unchanged(self) -> None:
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         msgs: list[dict[str, object]] = [{"role": "assistant", "content": "plain"}]
         out = attach_vllm_chat_reasoning_field(msgs)
@@ -670,7 +670,7 @@ class TestAttachVllmChatReasoningField:
         assert out[0] is msgs[0]
 
     def test_empty_provider_content_returns_unchanged(self) -> None:
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         msgs: list[dict[str, object]] = [
             {"role": "assistant", "content": "x", "_provider_content": []}
@@ -681,7 +681,7 @@ class TestAttachVllmChatReasoningField:
 
     def test_unknown_block_type_returns_unchanged(self) -> None:
         # _provider_content has blocks but none are reasoning-bearing.
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         msgs: list[dict[str, object]] = [
             self._assistant_with([{"type": "text", "text": "no reasoning here"}])
@@ -693,7 +693,7 @@ class TestAttachVllmChatReasoningField:
     def test_does_not_touch_user_tool_system_messages(self) -> None:
         # Only assistant messages get the reasoning field.  User / tool /
         # system messages pass through by reference.
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         msgs: list[dict[str, object]] = [
             {"role": "system", "content": "sys"},
@@ -716,7 +716,7 @@ class TestAttachVllmChatReasoningField:
         # _prepare_messages) strips the ``_``-prefixed sibling key
         # before the wire payload leaves.  Helper isn't responsible for
         # that strip — composition with sanitize is the contract.
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         original_content = [{"type": "reasoning_text", "text": "kept"}]
         msgs = [self._assistant_with(original_content)]
@@ -728,7 +728,7 @@ class TestAttachVllmChatReasoningField:
     def test_does_not_mutate_input_messages(self) -> None:
         # Pure transform: input list and input dicts are untouched.
         # Callers can keep iterating the original list without surprise.
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         original = self._assistant_with([{"type": "reasoning_text", "text": "x"}])
         msgs = [original]
@@ -741,7 +741,7 @@ class TestAttachVllmChatReasoningField:
         # Realistic shape: a workstream with user, assistant-with-reasoning,
         # tool, assistant-plain, user.  Only the first assistant gets the
         # reasoning field; everything else passes through by reference.
-        from turnstone.core.history_decoration import attach_vllm_chat_reasoning_field
+        from pebble.core.history_decoration import attach_vllm_chat_reasoning_field
 
         with_reasoning = self._assistant_with([{"type": "reasoning_text", "text": "thinking"}])
         plain_assistant: dict[str, object] = {"role": "assistant", "content": "second"}

@@ -12,12 +12,12 @@ precision@k, MRR, a ranking diff, and the relevant-vs-irrelevant score
 distribution so you can pick a sensible ``tools.rerank_bm25_threshold`` default.
 
 The endpoint bearer token (for hosted providers) is read from the
-``$TURNSTONE_RERANK_API_KEY`` environment variable, never a flag, so it does not
+``$PEBBLE_RERANK_API_KEY`` environment variable, never a flag, so it does not
 land in shell history or the process listing.
 
 Example::
 
-    TURNSTONE_RERANK_API_KEY=... \
+    PEBBLE_RERANK_API_KEY=... \
         .venv/bin/python scripts/bench_bm25_rerank.py \
         --rerank-url http://localhost:8000/rerank \
         --rerank-model BAAI/bge-reranker-v2-m3 --k 3 --threshold 0.0
@@ -30,13 +30,13 @@ import os
 import statistics
 from typing import TYPE_CHECKING
 
-from turnstone.core.bm25 import BM25Index
-from turnstone.core.rerank import resolve_rerank_client
+from pebble.core.bm25 import BM25Index
+from pebble.core.rerank import resolve_rerank_client
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from turnstone.core.rerank import RerankClient
+    from pebble.core.rerank import RerankClient
 
 # (query, relevant-doc-name) labels over a handful of tool-like docs.
 TOOL_DOCS: list[dict[str, str]] = [
@@ -118,7 +118,7 @@ MEMORY_DOCS: list[dict[str, str]] = [
     {
         "name": "jwt_secret_rotation",
         "description": "auth secret",
-        "content": "TURNSTONE_JWT_SECRET in config.toml, rotate quarterly, hs256",
+        "content": "PEBBLE_JWT_SECRET in config.toml, rotate quarterly, hs256",
     },
 ]
 MEMORY_LABELS: list[tuple[str, str]] = [
@@ -240,7 +240,7 @@ def main() -> int:
 
     # Bearer token comes from the environment, not a flag, to keep it out of
     # shell history and the process listing.
-    api_key = os.environ.get("TURNSTONE_RERANK_API_KEY", "")
+    api_key = os.environ.get("PEBBLE_RERANK_API_KEY", "")
     client = resolve_rerank_client(args.rerank_url, model=args.rerank_model, api_key=api_key)
     if client is None:
         print("No rerank endpoint resolved (empty --rerank-url?). Nothing to do.")

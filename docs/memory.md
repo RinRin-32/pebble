@@ -536,7 +536,7 @@ with TurnstoneConsole("http://localhost:9090", token="tok_xxx") as admin:
 ### TypeScript
 
 ```typescript
-import { TurnstoneServer } from "@turnstone/sdk";
+import { TurnstoneServer } from "@pebble/sdk";
 
 const client = new TurnstoneServer({
   baseUrl: "http://localhost:8080",
@@ -569,7 +569,7 @@ await client.deleteMemory("api_conventions", { scope: "global" });
 Console admin SDK:
 
 ```typescript
-import { TurnstoneConsole } from "@turnstone/sdk";
+import { TurnstoneConsole } from "@pebble/sdk";
 
 const admin = new TurnstoneConsole({
   baseUrl: "http://localhost:9090",

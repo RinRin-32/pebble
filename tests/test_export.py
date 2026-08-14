@@ -14,7 +14,7 @@ import io
 import json
 import zipfile
 
-from turnstone.core.export import (
+from pebble.core.export import (
     WorkstreamNotFoundError,
     _attach_reasoning_content,
     _build_openai_json,

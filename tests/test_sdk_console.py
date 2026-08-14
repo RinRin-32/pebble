@@ -1,4 +1,4 @@
-"""Tests for turnstone.sdk.console — console client with mocked HTTP transport."""
+"""Tests for pebble.sdk.console — console client with mocked HTTP transport."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import json
 import httpx
 import pytest
 
-from turnstone.sdk._types import TurnstoneAPIError
-from turnstone.sdk.console import AsyncTurnstoneConsole
+from pebble.sdk._types import TurnstoneAPIError
+from pebble.sdk.console import AsyncTurnstoneConsole
 
 
 def _json_response(data: dict, status: int = 200) -> httpx.Response:
@@ -516,7 +516,7 @@ async def test_route_create_workstream_rejects_attachments_with_target_node():
     (which routes by ?ws_id=) — refuse the combination at the SDK boundary
     instead of silently routing to the wrong node.
     """
-    from turnstone.sdk._types import AttachmentUpload
+    from pebble.sdk._types import AttachmentUpload
 
     transport = httpx.MockTransport(
         lambda req: _json_response({"error": "should not be called"}, status=500)

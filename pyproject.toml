@@ -3,7 +3,7 @@ requires = ["hatchling>=1.29"]
 build-backend = "hatchling.build"
 
 [project]
-name = "turnstone"
+name = "pebble-orchestrator"
 version = "1.8.0a2"
 description = "Multi-node AI orchestration platform with tool use, agent routing, and cluster simulation."
 readme = "README.md"
@@ -41,7 +41,7 @@ dependencies = [
     "structlog>=24.1",
     "PyJWT>=2.8",
     "bcrypt>=4.0",
-    "cryptography>=48.0.1",  # GHSA-537c-gmf6-5ccf: PyPI wheels <48.0.1 bundle a vulnerable statically-linked OpenSSL (2026-06-09 secadv)
+    "cryptography>=50.0.0",  # GHSA-537c-gmf6-5ccf: wheels <48.0.1 bundle a vulnerable statically-linked OpenSSL; PYSEC-2026-3552: PKCS#7 decrypt leaked a Bleichenbacher oracle before 50.0.0
     "lacme>=1.0.5",
     "python-frontmatter>=1.0",
     "pypdfium2>=4",  # PDF text-extract + rasterize for models without native PDF input (core/pdf.py)
@@ -51,52 +51,63 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/turnstonelabs/turnstone"
-Repository = "https://github.com/turnstonelabs/turnstone"
-Issues = "https://github.com/turnstonelabs/turnstone/issues"
+Homepage = "https://github.com/RinRin-32/pebble"
+Repository = "https://github.com/RinRin-32/pebble"
+Issues = "https://github.com/RinRin-32/pebble/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=9.0", "pytest-cov>=6.0", "slack-bolt>=1.18", "aiohttp>=3.9"]
 dev = ["ruff>=0.9", "mypy>=1.14"]
 discord = ["discord.py>=2.4"]
 slack = ["slack-bolt>=1.18", "aiohttp>=3.9"]
-all = ["turnstone[discord,slack]"]
+all = ["pebble-orchestrator[discord,slack]"]
 
 [project.scripts]
-turnstone = "turnstone.cli:main"
-turnstone-eval = "turnstone.eval.cli:main"
-turnstone-optimizer = "turnstone.optimizer:main"
-turnstone-server = "turnstone.server:main"
-turnstone-console = "turnstone.console.server:main"
-turnstone-admin = "turnstone.admin:main"
-turnstone-client = "turnstone.client_cli:main"
-turnstone-channel = "turnstone.channels.cli:main"
-turnstone-doctor = "turnstone.doctor:main"
+pebble = "pebble.cli:main"
+pebble-eval = "pebble.eval.cli:main"
+pebble-optimizer = "pebble.optimizer:main"
+pebble-server = "pebble.server:main"
+pebble-console = "pebble.console.server:main"
+pebble-admin = "pebble.admin:main"
+pebble-client = "pebble.client_cli:main"
+pebble-channel = "pebble.channels.cli:main"
+pebble-doctor = "pebble.doctor:main"
+
+# Pre-rename spellings, kept so an existing install keeps working.
+turnstone = "pebble.cli:main"
+turnstone-eval = "pebble.eval.cli:main"
+turnstone-optimizer = "pebble.optimizer:main"
+turnstone-server = "pebble.server:main"
+turnstone-console = "pebble.console.server:main"
+turnstone-admin = "pebble.admin:main"
+turnstone-client = "pebble.client_cli:main"
+turnstone-channel = "pebble.channels.cli:main"
+turnstone-doctor = "pebble.doctor:main"
 
 [tool.hatch.build.targets.wheel]
 include = [
-  "turnstone/**/*.py",
-  "turnstone/prompts/**/*.md",
-  "turnstone/tools/*.json",
-  "turnstone/ui/static/*.html",
-  "turnstone/ui/static/*.css",
-  "turnstone/ui/static/*.js",
-  "turnstone/console/static/*.html",
-  "turnstone/console/static/*.css",
-  "turnstone/console/static/*.js",
-  "turnstone/console/static/coordinator/*.html",
-  "turnstone/console/static/coordinator/*.css",
-  "turnstone/console/static/coordinator/*.js",
-  "turnstone/shared_static/*.css",
-  "turnstone/shared_static/*.js",
-  "turnstone/shared_static/katex-0.17.0/**/*",
-  "turnstone/shared_static/hljs-11.11.1/**/*",
-  "turnstone/shared_static/mermaid-11.16.0/**/*",
-  "turnstone/shared_static/hls-1.6.16/**/*",
-  "turnstone/sdk/py.typed",
-  "turnstone/deploy/*.yaml",
-  "turnstone/deploy/Caddyfile",
-  "turnstone/deploy/searxng/settings.yml",
+  "pebble/**/*.py",
+  "pebble/prompts/**/*.md",
+  "pebble/tools/*.json",
+  "pebble/ui/static/*.html",
+  "pebble/ui/static/*.css",
+  "pebble/ui/static/*.js",
+  "pebble/console/static/*.html",
+  "pebble/console/static/*.css",
+  "pebble/console/static/*.js",
+  "pebble/console/static/coordinator/*.html",
+  "pebble/console/static/coordinator/*.css",
+  "pebble/console/static/coordinator/*.js",
+  "pebble/shared_static/*.css",
+  "pebble/shared_static/*.js",
+  "pebble/shared_static/katex-0.17.0/**/*",
+  "pebble/shared_static/hljs-11.11.1/**/*",
+  "pebble/shared_static/mermaid-11.16.0/**/*",
+  "pebble/shared_static/hls-1.6.16/**/*",
+  "pebble/sdk/py.typed",
+  "pebble/deploy/*.yaml",
+  "pebble/deploy/Caddyfile",
+  "pebble/deploy/searxng/settings.yml",
 ]
 
 [tool.pytest.ini_options]
@@ -137,9 +148,9 @@ check_untyped_defs = true
 no_implicit_optional = true
 
 [tool.coverage.run]
-source = ["turnstone"]
+source = ["pebble"]
 branch = true
-omit = ["turnstone/*/static/*"]
+omit = ["pebble/*/static/*"]
 
 [tool.coverage.report]
 show_missing = true
@@ -200,7 +211,7 @@ module = ["vl_convert", "vl_convert.*"]  # Rust wheel, ships no type stubs (alta
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["turnstone.channels.discord.*"]
+module = ["pebble.channels.discord.*"]
 disallow_subclassing_any = false
 disallow_untyped_decorators = false
 warn_unused_ignores = false

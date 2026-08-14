@@ -15,14 +15,14 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_delete_setting,
     admin_list_settings,
     admin_settings_schema,
     admin_update_setting,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Auth bypass middleware
@@ -96,7 +96,7 @@ def secret_key():
     exercises that machinery without coupling the tests to any specific
     production key.
     """
-    from turnstone.core import settings_registry as reg
+    from pebble.core import settings_registry as reg
 
     key = "tools.test_secret"
     reg.SETTINGS[key] = reg.SettingDef(
@@ -115,7 +115,7 @@ def secret_key():
 
 class TestListSettings:
     def test_returns_all_registry_entries(self, client):
-        from turnstone.core.settings_registry import SETTINGS
+        from pebble.core.settings_registry import SETTINGS
 
         r = client.get("/v1/api/admin/settings")
         assert r.status_code == 200
@@ -126,7 +126,7 @@ class TestListSettings:
             assert entry["source"] == "default"
 
     def test_stored_value_shows_source_storage(self, client, storage):
-        from turnstone.core.settings_registry import serialize_value
+        from pebble.core.settings_registry import serialize_value
 
         storage.upsert_system_setting(
             key="tools.timeout",
@@ -229,7 +229,7 @@ class TestDeleteSetting:
 
 class TestSettingsSchema:
     def test_returns_registry(self, client):
-        from turnstone.core.settings_registry import SETTINGS
+        from pebble.core.settings_registry import SETTINGS
 
         r = client.get("/v1/api/admin/settings/schema")
         assert r.status_code == 200
@@ -263,7 +263,7 @@ class TestSettingsSchema:
 
 class TestSecretMasking:
     def test_secret_masked_in_list(self, client, storage, secret_key):
-        from turnstone.core.settings_registry import serialize_value
+        from pebble.core.settings_registry import serialize_value
 
         storage.upsert_system_setting(
             key=secret_key,

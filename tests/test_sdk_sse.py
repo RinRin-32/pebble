@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from turnstone.sdk._base import _BaseClient
+from pebble.sdk._base import _BaseClient
 
 
 def _sse_response(*events: str) -> httpx.Response:

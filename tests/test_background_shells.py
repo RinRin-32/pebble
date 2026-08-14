@@ -17,20 +17,19 @@ import time
 
 import pytest
 
-from tests._proc_helpers import kill_pid as _kill_pid
-from tests._proc_helpers import pid_alive as _pid_alive
-from tests._proc_helpers import poll_until as _wait_until
-
 # Module alias (from-style, matching the symbol imports below) for tests
 # that monkeypatch module attributes (os.killpg, subprocess.Popen, ...).
-from turnstone.core import background_shells as bg_mod
-from turnstone.core.background_shells import (
+from pebble.core import background_shells as bg_mod
+from pebble.core.background_shells import (
     BackgroundShellRegistry,
     FilterExecError,
     FilterTimeoutError,
     TooManyShellsError,
     UnknownShellError,
 )
+from tests._proc_helpers import kill_pid as _kill_pid
+from tests._proc_helpers import pid_alive as _pid_alive
+from tests._proc_helpers import poll_until as _wait_until
 
 
 def _wait_status(shell, status, timeout=10.0):

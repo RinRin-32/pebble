@@ -58,16 +58,16 @@ if TYPE_CHECKING:
 REPO = Path(__file__).resolve().parents[1]
 
 CSS_FILES = [
-    "turnstone/shared_static/base.css",
-    "turnstone/shared_static/ui-base.css",
-    "turnstone/shared_static/chat.css",
-    "turnstone/shared_static/conversation.css",
-    "turnstone/shared_static/cards.css",
-    "turnstone/shared_static/shell.css",
-    "turnstone/shared_static/interactive.css",
-    "turnstone/console/static/style.css",
-    "turnstone/console/static/coordinator/coordinator.css",
-    "turnstone/ui/static/style.css",
+    "pebble/shared_static/base.css",
+    "pebble/shared_static/ui-base.css",
+    "pebble/shared_static/chat.css",
+    "pebble/shared_static/conversation.css",
+    "pebble/shared_static/cards.css",
+    "pebble/shared_static/shell.css",
+    "pebble/shared_static/interactive.css",
+    "pebble/console/static/style.css",
+    "pebble/console/static/coordinator/coordinator.css",
+    "pebble/ui/static/style.css",
 ]
 
 # Per-page stylesheet manifest — only these CSS files apply to elements found
@@ -76,32 +76,32 @@ CSS_FILES = [
 # reports false positives (e.g., a rule from console/static/style.css matching
 # an element on the UI page where that sheet is never loaded).
 PAGE_STYLESHEETS: dict[str, list[str]] = {
-    "turnstone/console/static/index.html": [
-        "turnstone/shared_static/base.css",
-        "turnstone/shared_static/ui-base.css",
-        "turnstone/shared_static/chat.css",
-        "turnstone/shared_static/cards.css",
-        "turnstone/console/static/style.css",
+    "pebble/console/static/index.html": [
+        "pebble/shared_static/base.css",
+        "pebble/shared_static/ui-base.css",
+        "pebble/shared_static/chat.css",
+        "pebble/shared_static/cards.css",
+        "pebble/console/static/style.css",
     ],
-    "turnstone/console/static/coordinator/index.html": [
-        "turnstone/shared_static/base.css",
-        "turnstone/shared_static/ui-base.css",
-        "turnstone/shared_static/chat.css",
-        "turnstone/console/static/style.css",
-        "turnstone/console/static/coordinator/coordinator.css",
+    "pebble/console/static/coordinator/index.html": [
+        "pebble/shared_static/base.css",
+        "pebble/shared_static/ui-base.css",
+        "pebble/shared_static/chat.css",
+        "pebble/console/static/style.css",
+        "pebble/console/static/coordinator/coordinator.css",
     ],
     # Standalone turnstone-server now serves the L-shell (step 6): same shared
     # sheets the console loads, in <link> order, plus the (slimmed) ui/static
     # style.css.  No coordinator sheets (orchestration off).
-    "turnstone/ui/static/index.html": [
-        "turnstone/shared_static/base.css",
-        "turnstone/shared_static/ui-base.css",
-        "turnstone/shared_static/chat.css",
-        "turnstone/shared_static/conversation.css",
-        "turnstone/shared_static/cards.css",
-        "turnstone/ui/static/style.css",
-        "turnstone/shared_static/shell.css",
-        "turnstone/shared_static/interactive.css",
+    "pebble/ui/static/index.html": [
+        "pebble/shared_static/base.css",
+        "pebble/shared_static/ui-base.css",
+        "pebble/shared_static/chat.css",
+        "pebble/shared_static/conversation.css",
+        "pebble/shared_static/cards.css",
+        "pebble/ui/static/style.css",
+        "pebble/shared_static/shell.css",
+        "pebble/shared_static/interactive.css",
     ],
 }
 
@@ -111,29 +111,29 @@ PAGE_STYLESHEETS: dict[str, list[str]] = {
 # is only reported when EVERY page that includes the JS has the conflict.
 JS_FILES: dict[str, list[str]] = {
     # Owned-per-page JS — definite stylesheet set.
-    "turnstone/console/static/admin.js": [
-        "turnstone/console/static/index.html",
+    "pebble/console/static/admin.js": [
+        "pebble/console/static/index.html",
     ],
-    "turnstone/console/static/app.js": [
-        "turnstone/console/static/index.html",
+    "pebble/console/static/app.js": [
+        "pebble/console/static/index.html",
     ],
-    "turnstone/console/static/governance.js": [
-        "turnstone/console/static/index.html",
+    "pebble/console/static/governance.js": [
+        "pebble/console/static/index.html",
     ],
-    "turnstone/console/static/coordinator/coordinator.js": [
-        "turnstone/console/static/coordinator/index.html",
+    "pebble/console/static/coordinator/coordinator.js": [
+        "pebble/console/static/coordinator/index.html",
     ],
-    "turnstone/ui/static/app.js": [
-        "turnstone/ui/static/index.html",
+    "pebble/ui/static/app.js": [
+        "pebble/ui/static/index.html",
     ],
     # Shared JS — emit elements on multiple pages; check against every page
     # that loads it (intersection of conflicts).
-    "turnstone/shared_static/auth.js": list(PAGE_STYLESHEETS),
-    "turnstone/shared_static/cards.js": list(PAGE_STYLESHEETS),
-    "turnstone/shared_static/composer.js": list(PAGE_STYLESHEETS),
-    "turnstone/shared_static/kb.js": list(PAGE_STYLESHEETS),
-    "turnstone/shared_static/renderer.js": list(PAGE_STYLESHEETS),
-    "turnstone/shared_static/toast.js": list(PAGE_STYLESHEETS),
+    "pebble/shared_static/auth.js": list(PAGE_STYLESHEETS),
+    "pebble/shared_static/cards.js": list(PAGE_STYLESHEETS),
+    "pebble/shared_static/composer.js": list(PAGE_STYLESHEETS),
+    "pebble/shared_static/kb.js": list(PAGE_STYLESHEETS),
+    "pebble/shared_static/renderer.js": list(PAGE_STYLESHEETS),
+    "pebble/shared_static/toast.js": list(PAGE_STYLESHEETS),
 }
 
 # Properties whose conflicting values are "important" — visual/layout properties

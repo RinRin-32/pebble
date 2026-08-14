@@ -27,7 +27,7 @@ Settings resolution differs between entry points:
 
 | Entry point | Chain |
 |-------------|-------|
-| **Server** (`turnstone-server`) | CLI flag > ConfigStore > registry default |
+| **Server** (`pebble-server`) | CLI flag > ConfigStore > registry default |
 | **CLI** (`turnstone`) | CLI flag > config.toml > argparse default |
 
 The server's `apply_config()` ignores config.toml sections that overlap with
@@ -392,7 +392,7 @@ with TurnstoneConsole("http://localhost:9090", token="tok_xxx") as admin:
 ### TypeScript
 
 ```typescript
-import { TurnstoneConsole } from "@turnstone/sdk";
+import { TurnstoneConsole } from "@pebble/sdk";
 
 const admin = new TurnstoneConsole({
   baseUrl: "http://localhost:9090",

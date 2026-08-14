@@ -21,10 +21,10 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.core.auth import AuthResult
-from turnstone.core.session import ChatSession
-from turnstone.core.skill_search import SkillSearchManager
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import AuthResult
+from pebble.core.session import ChatSession
+from pebble.core.skill_search import SkillSearchManager
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -428,7 +428,7 @@ class TestSkillResources:
 class TestSkillSessionRuntime:
     def test_skill_param_alone(self, tmp_db):
         """skill= works on its own."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "s1", "my-skill", "SKILL_ONLY_CONTENT")
@@ -440,7 +440,7 @@ class TestSkillSessionRuntime:
 
     def test_set_skill_method(self, tmp_db):
         """session.set_skill() activates the skill."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "s1", "dynamic-skill", "DYNAMIC_SKILL_CONTENT")
@@ -456,7 +456,7 @@ class TestSkillSessionRuntime:
 
     def test_skill_slash_command(self, tmp_db):
         """The /skill command sets the active skill."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "s1", "slash-skill", "SLASH_SKILL_CONTENT")
@@ -473,7 +473,7 @@ class TestSkillSessionRuntime:
 
     def test_skill_slash_command_clear(self, tmp_db):
         """The /skill clear command clears the active skill."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "s1", "clearable", "CLEARABLE_CONTENT")
@@ -491,7 +491,7 @@ class TestSkillSessionRuntime:
 
     def test_skill_slash_command_show(self, tmp_db):
         """The /skill command with no arg shows current skill."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "s1", "current-skill", "content")
@@ -514,8 +514,8 @@ class TestSkillSessionRuntime:
 
     def test_skill_saved_in_config(self, tmp_db):
         """_save_config() includes both 'skill' and 'template' keys."""
-        from turnstone.core.memory import load_workstream_config
-        from turnstone.core.storage import get_storage
+        from pebble.core.memory import load_workstream_config
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "s1", "persist-skill", "PERSIST_CONTENT")
@@ -526,8 +526,8 @@ class TestSkillSessionRuntime:
 
     def test_skill_resumed_from_config(self, tmp_db):
         """Resume reads 'skill' key with precedence over 'template'."""
-        from turnstone.core.memory import save_message
-        from turnstone.core.storage import get_storage
+        from pebble.core.memory import save_message
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "s1", "resume-skill", "RESUMED_SKILL_CONTENT")
@@ -716,7 +716,7 @@ def api_storage(tmp_path):
 
 @pytest.fixture()
 def api_client(api_storage):
-    from turnstone.console.server import (
+    from pebble.console.server import (
         admin_create_skill,
         admin_delete_skill,
         admin_list_skills,
@@ -1331,7 +1331,7 @@ class TestSkillAPI:
         """Console workstream creation accepts 'skill' field in request body."""
         # This test verifies the server code that reads body.get("skill", "")
         # by importing and checking the function exists with proper handling
-        from turnstone.console.server import create_workstream
+        from pebble.console.server import create_workstream
 
         # Verify the handler function is importable and callable
         assert callable(create_workstream)
@@ -1377,7 +1377,7 @@ class TestSkillAPI:
 class TestMCPSyncSkillFields:
     def test_mcp_sync_sets_activation_named(self):
         """Synced MCP prompts get activation='named'."""
-        from turnstone.core.mcp_client import MCPClientManager
+        from pebble.core.mcp_client import MCPClientManager
 
         mgr = MCPClientManager({})
         storage = MagicMock()
@@ -1404,7 +1404,7 @@ class TestMCPSyncSkillFields:
 
     def test_mcp_sync_sets_token_estimate(self):
         """Token estimate is computed from content on sync."""
-        from turnstone.core.mcp_client import MCPClientManager
+        from pebble.core.mcp_client import MCPClientManager
 
         mgr = MCPClientManager({})
         storage = MagicMock()
@@ -1435,7 +1435,7 @@ class TestMCPSyncSkillFields:
 
     def test_mcp_sync_update_sets_token_estimate(self):
         """Token estimate is recomputed on MCP sync update."""
-        from turnstone.core.mcp_client import MCPClientManager
+        from pebble.core.mcp_client import MCPClientManager
 
         mgr = MCPClientManager({})
         storage = MagicMock()
@@ -1468,7 +1468,7 @@ class TestMCPSyncSkillFields:
 
     def test_mcp_sync_does_not_set_default_activation(self):
         """MCP sync never creates with activation='default' (security)."""
-        from turnstone.core.mcp_client import MCPClientManager
+        from pebble.core.mcp_client import MCPClientManager
 
         mgr = MCPClientManager({})
         storage = MagicMock()
@@ -1736,7 +1736,7 @@ def full_api_storage(tmp_path):
 
 @pytest.fixture()
 def full_api_client(full_api_storage):
-    from turnstone.console.server import (
+    from pebble.console.server import (
         admin_create_skill,
         admin_delete_skill,
         admin_get_skill,
@@ -2030,14 +2030,14 @@ class TestSkillConfigAppliedToWorkstream:
         import queue
         import threading
 
-        import turnstone.core.storage._registry as _reg
-        from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-        from turnstone.core.session_manager import SessionManager
-        from turnstone.core.session_routes import (
+        import pebble.core.storage._registry as _reg
+        from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+        from pebble.core.session_manager import SessionManager
+        from pebble.core.session_routes import (
             SessionEndpointConfig,
             make_create_handler,
         )
-        from turnstone.server import (
+        from pebble.server import (
             WebUI,
             _interactive_create_build_kwargs,
             _interactive_create_post_install,
@@ -2208,7 +2208,7 @@ class TestSkillConfigAppliedToWorkstream:
 
     def test_auto_approve_set_on_ui(self, _ws_app):
         """Skill auto_approve=True propagates to the WebUI."""
-        from turnstone.server import WebUI
+        from pebble.server import WebUI
 
         client, mgr, storage = _ws_app
         _create_template(
@@ -2224,7 +2224,7 @@ class TestSkillConfigAppliedToWorkstream:
 
     def test_allowed_tools_set_on_ui(self, _ws_app):
         """Skill allowed_tools are parsed and set as auto_approve_tools on the UI."""
-        from turnstone.server import WebUI
+        from pebble.server import WebUI
 
         client, mgr, storage = _ws_app
         _create_template(
@@ -2258,7 +2258,7 @@ class TestSkillConfigAppliedToWorkstream:
 
     def test_all_session_config_fields_applied(self, _ws_app):
         """All session config fields from a skill are applied together."""
-        from turnstone.server import WebUI
+        from pebble.server import WebUI
 
         client, mgr, storage = _ws_app
         _create_template(
@@ -2345,7 +2345,7 @@ class TestSkillConfigAppliedToWorkstream:
         """skill_id and skill_version columns are populated in the workstreams table."""
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import workstreams
+        from pebble.core.storage._schema import workstreams
 
         client, _mgr, storage = _ws_app
         _create_template(storage, "s1", "lineage-skill", "Track me.", enabled=True)
@@ -2368,7 +2368,7 @@ class TestSkillConfigAppliedToWorkstream:
         """Workstream without a skill has empty skill_id and zero skill_version."""
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import workstreams
+        from pebble.core.storage._schema import workstreams
 
         client, _mgr, storage = _ws_app
 

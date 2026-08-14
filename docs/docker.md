@@ -5,12 +5,12 @@ Turnstone ships two Docker Compose stacks:
 | Stack | File | Use it for |
 |-------|------|------------|
 | **Dev cluster** | `compose.yaml` (repo root) | Clone-and-run. Builds locally, zero config, full 10-node cluster. |
-| **Production** | `turnstone/deploy/compose.yaml` | Pip/pipx installs. Pulls released images from ghcr.io, requires real secrets. |
+| **Production** | `pebble/deploy/compose.yaml` | Pip/pipx installs. Pulls released images from ghcr.io, requires real secrets. |
 
 ## Quick start — local cluster
 
 ```bash
-git clone https://github.com/turnstonelabs/turnstone
+git clone https://github.com/RinRin-32/pebble
 cd turnstone
 docker compose up
 ```
@@ -30,7 +30,7 @@ docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt
 Create your first admin user (any node works — they share one database):
 
 ```bash
-docker compose exec node-1 turnstone-admin create-user --username admin --name "Admin"
+docker compose exec node-1 pebble-admin create-user --username admin --name "Admin"
 ```
 
 ### Bring your own LLM
@@ -60,12 +60,12 @@ is gone. Everything goes through `https://localhost:8443`.
 ## Join a bare-metal host
 
 PostgreSQL, the console's ACME endpoint (`:8090`), and SearxNG (`:8081`) are
-published on `127.0.0.1`, so a `turnstone-server` running directly on the same
+published on `127.0.0.1`, so a `pebble-server` running directly on the same
 machine — for example to use a local GPU — can join the same cluster (enrolling
 its mTLS cert and running `web_search`) and show up in the console alongside the
 containerized nodes.
 
-Put the secret and connection settings in `~/.config/turnstone/config.toml`
+Put the secret and connection settings in `~/.config/pebble/config.toml`
 (secrets belong in this file, not the process environment — keep it `0600`,
 the loader warns otherwise):
 
@@ -86,25 +86,25 @@ Then start the server. The node identity isn't a secret, so it stays on the
 command line:
 
 ```bash
-chmod 600 ~/.config/turnstone/config.toml
-TURNSTONE_NODE_ID=host-1 \
-  TURNSTONE_ADVERTISE_URL=http://host.docker.internal:8080 \
-  TURNSTONE_CONSOLE_URL=http://localhost:8090 \
-  TURNSTONE_SEARXNG_URL=http://localhost:8081 \
-  turnstone-server --host 0.0.0.0 --port 8080
+chmod 600 ~/.config/pebble/config.toml
+PEBBLE_NODE_ID=host-1 \
+  PEBBLE_ADVERTISE_URL=http://host.docker.internal:8080 \
+  PEBBLE_CONSOLE_URL=http://localhost:8090 \
+  PEBBLE_SEARXNG_URL=http://localhost:8081 \
+  pebble-server --host 0.0.0.0 --port 8080
 ```
 
 The host server registers itself in PostgreSQL; the console reaches it back via
-`host.docker.internal`. `TURNSTONE_CONSOLE_URL` points the node at the console's
+`host.docker.internal`. `PEBBLE_CONSOLE_URL` points the node at the console's
 published ACME endpoint so it can enroll its mTLS certificate (needed only when
-the cluster runs mTLS; harmless otherwise), and `TURNSTONE_SEARXNG_URL` points
+the cluster runs mTLS; harmless otherwise), and `PEBBLE_SEARXNG_URL` points
 `web_search` at the published SearxNG. The `jwt_secret` and DB credentials above
 are the dev-stack defaults — match whatever you set in `.env` if you changed them.
 
 To let a server on a **different** machine join, start the stack with
-`TURNSTONE_HOST_IP=<this host's LAN IP>` — that binds PostgreSQL, the console
+`PEBBLE_HOST_IP=<this host's LAN IP>` — that binds PostgreSQL, the console
 ACME endpoint, and SearxNG to that interface. Then on the remote box set the
-three URLs above to that IP, and set `TURNSTONE_ADVERTISE_URL` to the **remote**
+three URLs above to that IP, and set `PEBBLE_ADVERTISE_URL` to the **remote**
 box's own IP (the address the console dials back). **Set a strong
 `POSTGRES_PASSWORD` first** — `TURNSTONE_HOST_IP` exposes the database (and every
 user account + API-token hash in it), the console API, and the unauthenticated
@@ -119,7 +119,7 @@ For a real deployment use the bundled stack, which pulls released images
 instead of building:
 
 ```bash
-docker compose -f turnstone/deploy/compose.yaml up
+docker compose -f pebble/deploy/compose.yaml up
 ```
 
 It's the same shape as the dev stack — Caddy-fronted console, channel, and a
@@ -128,14 +128,14 @@ pulls released images, runs a single server node, and has **no baked-in
 secrets**. Set these in `.env` first (generate with `openssl rand -hex 32`):
 
 ```bash
-TURNSTONE_JWT_SECRET=<python -c "import secrets; print(secrets.token_hex(32))">
+PEBBLE_JWT_SECRET=<python -c "import secrets; print(secrets.token_hex(32))">
 POSTGRES_PASSWORD=<a strong password>
 ```
 
 The dashboard is at **https://localhost:8443** (Caddy, same as the dev stack);
 the console's HTTP port isn't published. For a real domain and a publicly
-trusted cert, edit `turnstone/deploy/Caddyfile` to point Caddy at Let's Encrypt
-(see [tls.md](tls.md)). Pin the image with `TURNSTONE_IMAGE_TAG` (default:
+trusted cert, edit `pebble/deploy/Caddyfile` to point Caddy at Let's Encrypt
+(see [tls.md](tls.md)). Pin the image with `PEBBLE_IMAGE_TAG` (default:
 `latest`).
 
 ### mTLS
@@ -145,7 +145,7 @@ services. A bootstrap container creates a CA and every service auto-provisions
 certs via the console's ACME endpoint:
 
 ```bash
-docker compose -f turnstone/deploy/compose.yaml -f deploy/docker-compose.tls.yml up
+docker compose -f pebble/deploy/compose.yaml -f deploy/docker-compose.tls.yml up
 ```
 
 See [tls.md](tls.md) for details.
@@ -162,7 +162,7 @@ overrides.
 |----------|---------|-------------|
 | `LLM_BASE_URL` | `http://host.docker.internal:8000/v1` | Bootstrap OpenAI-compatible API URL (real backends go in the UI) |
 | `OPENAI_API_KEY` | `dummy` | API key (`dummy` for local servers) |
-| `TURNSTONE_SEARXNG_URL` | `http://searxng:8080` | SearxNG URL for the `web_search` tool (local/vLLM models only; Anthropic/OpenAI use native search). Defaults to the bundled `searxng` service; set to an external instance's URL. To turn web search off, clear `tools.searxng_url` in the admin Settings tab. |
+| `PEBBLE_SEARXNG_URL` | `http://searxng:8080` | SearxNG URL for the `web_search` tool (local/vLLM models only; Anthropic/OpenAI use native search). Defaults to the bundled `searxng` service; set to an external instance's URL. To turn web search off, clear `tools.searxng_url` in the admin Settings tab. |
 | `SEARXNG_IMAGE_TAG` | `latest` | Tag for the bundled `searxng/searxng` image |
 | `MODEL` | — | Override the default model alias |
 
@@ -170,9 +170,9 @@ overrides.
 
 | Variable | Default (dev / prod) | Description |
 |----------|----------------------|-------------|
-| `TURNSTONE_JWT_SECRET` | insecure default / **required** | JWT signing secret. Every service must share one value. |
-| `TURNSTONE_DB_BACKEND` | `postgresql` | `sqlite` or `postgresql`. Multi-node discovery requires `postgresql`. |
-| `TURNSTONE_DB_URL` | bundled Postgres | SQLAlchemy URL. Override to use an external database. |
+| `PEBBLE_JWT_SECRET` | insecure default / **required** | JWT signing secret. Every service must share one value. |
+| `PEBBLE_DB_BACKEND` | `postgresql` | `sqlite` or `postgresql`. Multi-node discovery requires `postgresql`. |
+| `PEBBLE_DB_URL` | bundled Postgres | SQLAlchemy URL. Override to use an external database. |
 | `POSTGRES_USER` | `turnstone` | PostgreSQL username |
 | `POSTGRES_PASSWORD` | `turnstone` / **required** | PostgreSQL password |
 | `POSTGRES_MAX_CONNECTIONS` | `300` | `max_connections` for the bundled Postgres |
@@ -200,16 +200,16 @@ Caddy or proxied by the console:
 | `POSTGRES_PORT` | `5432` | Host port for PostgreSQL (for bare-metal joins) |
 | `SEARXNG_API_PORT` | `8081` | Host port for the SearxNG API a bare-metal node's `web_search` dials (dev stack) |
 | `TURNSTONE_HOST_IP` | `127.0.0.1` | Interface PostgreSQL, the console ACME endpoint, and SearxNG bind on (dev stack). Set to this host's LAN IP so a bare-metal node on **another machine** can reach them — set a strong `POSTGRES_PASSWORD` first (it also exposes the DB and the unauthenticated SearxNG to your network). |
-| `POSTGRES_BIND` | `127.0.0.1` | Production stack (`turnstone/deploy/compose.yaml`) only: interface PostgreSQL binds on; set to the host's LAN IP for remote joins. |
+| `POSTGRES_BIND` | `127.0.0.1` | Production stack (`pebble/deploy/compose.yaml`) only: interface PostgreSQL binds on; set to the host's LAN IP for remote joins. |
 
 ### Channel gateway
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TURNSTONE_DISCORD_TOKEN` | — | Discord bot token (enables the Discord adapter) |
-| `TURNSTONE_DISCORD_GUILD` | `0` | Restrict to one guild (0 = all) |
-| `TURNSTONE_SLACK_TOKEN` | — | Slack Bot User OAuth token `xoxb-…` |
-| `TURNSTONE_SLACK_APP_TOKEN` | — | Slack App-Level token `xapp-…` (with the Slack token) |
+| `PEBBLE_DISCORD_TOKEN` | — | Discord bot token (enables the Discord adapter) |
+| `PEBBLE_DISCORD_GUILD` | `0` | Restrict to one guild (0 = all) |
+| `PEBBLE_SLACK_TOKEN` | — | Slack Bot User OAuth token `xoxb-…` |
+| `PEBBLE_SLACK_APP_TOKEN` | — | Slack App-Level token `xapp-…` (with the Slack token) |
 
 The channel runs HTTP-only with no adapters until a token is set, so it's safe
 to leave running. See [Channel Integrations](channels.md) for app setup.
@@ -220,13 +220,13 @@ The `web_search` tool for local/vLLM models is backed by a self-hosted
 [SearxNG](https://searxng.org) metasearch service, bundled into both stacks as the
 `searxng` service. The Turnstone nodes reach it over the internal docker network at
 `http://searxng:8080` — its API port is **not** published. Its config —
-[`turnstone/deploy/searxng/settings.yml`](../turnstone/deploy/searxng/settings.yml),
+[`pebble/deploy/searxng/settings.yml`](../pebble/deploy/searxng/settings.yml),
 mounted read-only — enables the JSON API and leaves the rate limiter off (the
 limiter would need a separate Valkey/Redis instance). A `searxng-cache` volume
 persists its favicon + internal cache across restarts. Commercial providers
 (Anthropic, OpenAI) use their own native search and never touch this service.
 
-Point at an existing SearxNG instead of the bundled one with `TURNSTONE_SEARXNG_URL`,
+Point at an existing SearxNG instead of the bundled one with `PEBBLE_SEARXNG_URL`,
 or narrow the engines via `tools.searxng_engines` in the admin Settings tab (e.g.
 `duckduckgo,wikipedia`).
 
@@ -254,13 +254,13 @@ interface, or anyone who can reach it can search through your instance.
 | `WORKSPACE_MOUNT` | empty volume | Host directory bind-mounted at `/workspace` for the model to read/write |
 | `SKIP_PERMISSIONS` | — | Set to any value to auto-approve all tool calls (dev only) |
 | `MCP_CONFIG` | — | Path to an MCP server config file |
-| `TURNSTONE_IMAGE_TAG` | `latest` | ghcr.io image tag — production stack |
+| `PEBBLE_IMAGE_TAG` | `latest` | ghcr.io image tag — production stack |
 
 ## Building
 
 Both stacks install all entry points into a single image (`turnstone`,
-`turnstone-server`, `turnstone-console`, `turnstone-channel`, `turnstone-admin`,
-`turnstone-eval`, `turnstone-optimizer`, `turnstone-doctor`):
+`pebble-server`, `pebble-console`, `pebble-channel`, `pebble-admin`,
+`pebble-eval`, `pebble-optimizer`, `pebble-doctor`):
 
 ```bash
 docker compose build            # build the dev image

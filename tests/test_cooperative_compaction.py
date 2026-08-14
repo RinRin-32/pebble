@@ -20,15 +20,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._session_helpers import make_session
-from turnstone.core.session import (
+from pebble.core.session import (
     COMPACTION_SOURCE,
     COMPACTION_SUMMARY_LABEL,
     GenerationCancelled,
     _CompactionIrreducibleError,
     _is_ctx_overflow,
 )
-from turnstone.core.trajectory import dicts_from_turns, turns_from_dicts
+from pebble.core.trajectory import dicts_from_turns, turns_from_dicts
+from tests._session_helpers import make_session
 
 
 @pytest.fixture
@@ -62,6 +62,7 @@ class TestEstimatedPromptTokens:
         ``TestProactiveToolDefFallback``.
         """
         session._tools = []
+        session._tool_search = None  # see _get_active_tools: tools live in the manager
         session._last_usage = None
         session._system_tokens = 500
         session._msg_tokens = [100, 200]
@@ -213,7 +214,7 @@ class TestCompactionLatch:
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
             patch.object(session, "_compact_messages"),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("hello")
 
@@ -262,7 +263,7 @@ class TestEndOfTurnAutoResume:
             patch.object(session, "_estimated_prompt_tokens", return_value=9_999),
             patch.object(session, "_do_auto_compact"),
             patch.object(session, "_append_user_turn") as resume,
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -297,7 +298,7 @@ class TestEndOfTurnAutoResume:
             patch.object(session, "_estimated_prompt_tokens", return_value=8_500),
             patch.object(session, "_do_auto_compact") as compact,
             patch.object(session, "_append_user_turn") as resume,
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -334,7 +335,7 @@ class TestEndOfTurnAutoResume:
             patch.object(session, "_estimated_prompt_tokens", return_value=9_999),
             patch.object(session, "_do_auto_compact", return_value=False),  # bailed
             patch.object(session, "_append_user_turn") as resume,
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -380,7 +381,7 @@ class TestEndOfTurnAutoResume:
             patch.object(session, "_emit_state"),
             patch.object(session, "_estimated_prompt_tokens", side_effect=est),
             patch.object(session, "_utility_completion", return_value=summary),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -470,7 +471,7 @@ class TestCompactBeforeTruncate:
             patch.object(session, "_compaction_owed", side_effect=lambda: n["i"] == 1),
             patch.object(session, "_maybe_compact_midturn"),  # isolate the pre-truncation call
             patch.object(session, "_do_auto_compact") as compact,
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -509,7 +510,7 @@ class TestCompactBeforeTruncate:
             patch.object(session, "_compaction_owed", side_effect=lambda *a, **k: n["i"] == 1),
             patch.object(session, "_do_auto_compact") as compact,
             patch.object(session, "_maybe_compact_midturn") as midturn,
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -549,7 +550,7 @@ class TestCompactBeforeTruncate:
             patch.object(session, "_compaction_owed", side_effect=lambda *a, **k: False),
             patch.object(session, "_do_auto_compact") as compact,
             patch.object(session, "_maybe_compact_midturn") as midturn,
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -802,7 +803,7 @@ class TestChunkedCompaction:
         session.compact_max_tokens = 32768
         # Pin the default-collision scenario regardless of how the fixture's
         # model happens to resolve caps.
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         caps = ModelCapabilities(context_window=32768, max_output_tokens=64000)
         with patch.object(session, "_get_capabilities", return_value=caps):
@@ -949,6 +950,7 @@ class TestProactiveToolDefFallback:
 
     def test_fallback_equals_bare_sum_without_tools(self, session):
         session._tools = []
+        session._tool_search = None  # see _get_active_tools: tools live in the manager
         session._last_usage = None
         session._system_tokens = 100
         session._msg_tokens = [10, 20]
@@ -958,8 +960,8 @@ class TestProactiveToolDefFallback:
 def test_compaction_advisory_is_registered():
     """The advisory source and template must be wired across both modules so
     ``_append_system_turn('compaction_pending', ...)`` cannot raise."""
-    from turnstone.core.metacognition import format_nudge
-    from turnstone.core.tool_advisory import SYSTEM_TURN_SOURCES, make_system_turn
+    from pebble.core.metacognition import format_nudge
+    from pebble.core.tool_advisory import SYSTEM_TURN_SOURCES, make_system_turn
 
     assert "compaction_pending" in SYSTEM_TURN_SOURCES
     text = format_nudge("compaction_pending")
@@ -1110,7 +1112,7 @@ class TestProactivePreSend:
             patch.object(session, "_update_token_table"),
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -1483,7 +1485,7 @@ class TestChunkerOverflowSplit:
             patch.object(session, "_update_token_table"),
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
 
@@ -1771,8 +1773,8 @@ class TestCompactionLifecycleEvents:
         with (
             patch.object(session, "_utility_completion", return_value=summary),
             patch.object(session.ui, "on_compaction", return_value=99) as oc,
-            patch("turnstone.core.session.get_compaction_watermark", return_value=17),
-            patch("turnstone.core.session.save_message", side_effect=fake_save),
+            patch("pebble.core.session.get_compaction_watermark", return_value=17),
+            patch("pebble.core.session.save_message", side_effect=fake_save),
         ):
             assert session._compact_messages() is True
 
@@ -2019,7 +2021,7 @@ class TestPreHookUICompat:
         the protocol default body itself must be the pre-1.8 rendering.
         With a bare ``...`` stub, exactly these embedders (the ones the
         fallback was built for) silently swallowed every lifecycle event."""
-        from turnstone.core.session import SessionUI
+        from pebble.core.session import SessionUI
 
         infos: list[str] = []
 
@@ -2049,7 +2051,7 @@ class TestPreHookUICompat:
         """A subclass that implements the hook owns the rendering: no
         classic info lines from the default body, and its return value
         reaches the marker stamp."""
-        from turnstone.core.session import SessionUI
+        from pebble.core.session import SessionUI
 
         infos: list[str] = []
         seen: list[dict] = []
@@ -2089,7 +2091,7 @@ class TestPreHookUICompat:
 
     def test_coerce_event_id_rejects_bools(self):
         """The shared coercion helper: ints pass, bools and non-ints don't."""
-        from turnstone.core.session import _coerce_event_id
+        from pebble.core.session import _coerce_event_id
 
         assert _coerce_event_id(46) == 46
         assert _coerce_event_id(0) == 0
@@ -2291,8 +2293,8 @@ class TestPreSwapQueueFlush:
             return 1
 
         with (
-            patch("turnstone.core.session.save_message", side_effect=fake_save),
-            patch("turnstone.core.memory.register_workstream"),
+            patch("pebble.core.session.save_message", side_effect=fake_save),
+            patch("pebble.core.memory.register_workstream"),
             patch.object(session, "_save_config"),
             patch.object(session, "_follow_watch_registration"),
         ):
@@ -2334,7 +2336,7 @@ class TestOrphanedCompactionRetirement:
         """Each summary attempt passes a fresh _CancelRef so cancel() can
         close the in-flight summary HTTP stream — Stop during compaction
         aborts the blocked read instead of waiting out a model call."""
-        from turnstone.core.session import _CancelRef
+        from pebble.core.session import _CancelRef
 
         seen: list[object] = []
 
@@ -2354,7 +2356,7 @@ class TestOrphanedCompactionRetirement:
     def test_cancel_ref_aborted_property_tracks_event(self, session):
         """model_turn consults cancel_ref.aborted to suppress drain retries
         — a stream our own Stop closed must not be resurrected."""
-        from turnstone.core.session import _CancelRef
+        from pebble.core.session import _CancelRef
 
         ref = _CancelRef(session)
         assert ref.aborted is False
@@ -2371,7 +2373,7 @@ class TestOrphanedCompactionRetirement:
         registered its live stream must neither overwrite _cancel_stream
         (Stop would close the zombie and hang on the live read) nor stay
         open burning tokens — it is closed on arrival."""
-        from turnstone.core.session import _CancelRef
+        from pebble.core.session import _CancelRef
 
         session._generation = 5
         live = SimpleNamespace(close=lambda: None)
@@ -2384,7 +2386,7 @@ class TestOrphanedCompactionRetirement:
         assert ref.aborted is True  # drain retries suppressed
 
     def test_current_generation_ref_still_registers(self, session):
-        from turnstone.core.session import _CancelRef
+        from pebble.core.session import _CancelRef
 
         session._generation = 3
         ref = _CancelRef(session, my_generation=3)
@@ -2399,7 +2401,7 @@ class TestOrphanedCompactionRetirement:
         """The wiring, not just the mechanism: the ref _summarize_once
         constructs must carry the compaction's my_generation, or the
         zombie gate above never engages."""
-        from turnstone.core.session import _CancelRef
+        from pebble.core.session import _CancelRef
 
         session._generation = 3
         seen: list[object] = []

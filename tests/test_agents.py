@@ -15,11 +15,11 @@ import json
 
 import pytest
 
-from turnstone.core.agents import get_adapter, run_agent
-from turnstone.core.agents.base import COST_SUM, COST_TOTAL, AgentAdapter
-from turnstone.core.agents.claude_code import ClaudeCodeAdapter
-from turnstone.core.agents.codex import CodexAdapter
-from turnstone.core.agents.opencode import OpenCodeAdapter
+from pebble.core.agents import get_adapter, run_agent
+from pebble.core.agents.base import COST_SUM, COST_TOTAL, AgentAdapter
+from pebble.core.agents.claude_code import ClaudeCodeAdapter
+from pebble.core.agents.codex import CodexAdapter
+from pebble.core.agents.opencode import OpenCodeAdapter
 
 # --- real captured opencode lines -------------------------------------------
 OC_TEXT = json.dumps(
@@ -154,16 +154,14 @@ class TestClaudeCodeParsing:
         assert cmd[cmd.index("--resume") + 1] == "abc"
         assert cmd[-1] == "go"
 
-    def test_bare_is_opt_in_so_subscriptions_work(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_bare_is_opt_in_so_subscriptions_work(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # --bare cannot read the OAuth login a Claude subscription uses, so it
         # must not be on by default or subscription auth is impossible.
-        monkeypatch.delenv("TURNSTONE_CLAUDE_BARE", raising=False)
+        monkeypatch.delenv("PEBBLE_CLAUDE_BARE", raising=False)
         assert "--bare" not in self.a.build_command("go", cwd="/w")
-        monkeypatch.setenv("TURNSTONE_CLAUDE_BARE", "1")
+        monkeypatch.setenv("PEBBLE_CLAUDE_BARE", "1")
         assert "--bare" in self.a.build_command("go", cwd="/w")
-        monkeypatch.setenv("TURNSTONE_CLAUDE_BARE", "0")
+        monkeypatch.setenv("PEBBLE_CLAUDE_BARE", "0")
         assert "--bare" not in self.a.build_command("go", cwd="/w")
 
 
@@ -222,9 +220,7 @@ class TestRunner:
         assert res.ok is False and "working directory" in res.error
 
     def test_end_to_end_aggregation(self, tmp_path) -> None:
-        res = run_agent(
-            _FakeAgent([OC_TEXT, OC_TOOL, OC_STEP_FINISH]), "go", cwd=str(tmp_path)
-        )
+        res = run_agent(_FakeAgent([OC_TEXT, OC_TOOL, OC_STEP_FINISH]), "go", cwd=str(tmp_path))
         assert res.ok is True
         assert res.final_text == "pong"
         assert res.tool_calls == 1
@@ -294,7 +290,7 @@ class TestChildEnvironment:
     """
 
     def test_normalized_path_adds_system_dirs(self) -> None:
-        from turnstone.core.agents.runner import _normalized_path
+        from pebble.core.agents.runner import _normalized_path
 
         out = _normalized_path("/app/.venv/bin:/usr/local/bin")
         parts = out.split(":")
@@ -304,13 +300,13 @@ class TestChildEnvironment:
         assert parts[0] == "/app/.venv/bin"
 
     def test_normalized_path_no_duplicates(self) -> None:
-        from turnstone.core.agents.runner import _normalized_path
+        from pebble.core.agents.runner import _normalized_path
 
         parts = _normalized_path("/usr/bin:/bin").split(":")
         assert parts.count("/usr/bin") == 1 and parts.count("/bin") == 1
 
     def test_empty_path(self) -> None:
-        from turnstone.core.agents.runner import _normalized_path
+        from pebble.core.agents.runner import _normalized_path
 
         assert "/usr/bin" in _normalized_path("").split(":")
 
@@ -318,7 +314,11 @@ class TestChildEnvironment:
         class _EnvProbe(_FakeAgent):
             def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
                 # Emit the PATH the child actually received, as a text event.
-                return ["sh", "-c", 'printf "{\\"type\\":\\"text\\",\\"part\\":{\\"text\\":\\"$PATH\\"}}\\n"']
+                return [
+                    "sh",
+                    "-c",
+                    'printf "{\\"type\\":\\"text\\",\\"part\\":{\\"text\\":\\"$PATH\\"}}\\n"',
+                ]
 
         res = run_agent(_EnvProbe([]), "go", cwd=str(tmp_path), env={"PATH": "/app/.venv/bin"})
         assert "/usr/bin" in res.final_text and "/bin" in res.final_text
@@ -349,7 +349,7 @@ class TestToolPreparesAreCallable:
     enough to catch a bad attribute reference without building a session.
     """
 
-    def _stub(self):
+    def _stub(self, denial: str = ""):
         from types import SimpleNamespace
 
         # Only what prepare() legitimately touches: the ws id and the exec
@@ -359,10 +359,14 @@ class TestToolPreparesAreCallable:
             _exec_bind_repo=lambda item: None,
             _exec_setup_env=lambda item: None,
             _exec_dispatch_agent=lambda item: None,
+            # dispatch_agent asks whether this user may spend the operator's
+            # agent credentials before it offers anything for approval. "" is
+            # the allowed answer; see test_code_dispatch_gate for the policy.
+            _code_dispatch_denied=lambda: denial,
         )
 
     def test_prepare_bind_repo(self) -> None:
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         item = ChatSession._prepare_bind_repo(self._stub(), "c1", {"repo": "myrepo"})
         assert item["func_name"] == "bind_repo"
@@ -372,25 +376,37 @@ class TestToolPreparesAreCallable:
         assert status["needs_approval"] is False
 
     def test_prepare_setup_env(self) -> None:
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         for action, expected in (("use", True), ("add", True), ("detect", False), ("list", False)):
             item = ChatSession._prepare_setup_env(self._stub(), "c1", {"action": action})
             assert item["needs_approval"] is expected, action
 
     def test_prepare_setup_env_rejects_bad_action(self) -> None:
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         item = ChatSession._prepare_setup_env(self._stub(), "c1", {"action": "nope"})
         assert item.get("error")
 
     def test_prepare_dispatch_agent(self) -> None:
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         item = ChatSession._prepare_dispatch_agent(self._stub(), "c1", {"task": "do it"})
         assert item["needs_approval"] is True and item["task"] == "do it"
         empty = ChatSession._prepare_dispatch_agent(self._stub(), "c1", {"task": "  "})
         assert empty.get("error")
+
+    def test_prepare_dispatch_agent_refuses_before_prompting(self) -> None:
+        # A user without the grant is turned away at prepare time, so no
+        # approval prompt reaches an operator for a call that would be
+        # rejected anyway.
+        from pebble.core.session import ChatSession
+
+        item = ChatSession._prepare_dispatch_agent(
+            self._stub(denial="Error: not permitted"), "c1", {"task": "do it"}
+        )
+        assert item.get("error") == "Error: not permitted"
+        assert not item.get("needs_approval")
 
 
 class TestMcpPlumbing:
@@ -422,12 +438,11 @@ class TestMcpPlumbing:
 
             def mcp_flags(self, config_path):
                 # Record that a real, readable file was produced.
-                assert open(config_path).read().startswith("{")
+                with open(config_path) as fh:
+                    assert fh.read().startswith("{")
                 return []
 
-        res = run_agent(
-            _ShowArgv([]), "go", cwd=str(tmp_path), mcp_servers={"codegraph": {}}
-        )
+        res = run_agent(_ShowArgv([]), "go", cwd=str(tmp_path), mcp_servers={"codegraph": {}})
         assert res.ok is True
 
     def test_no_servers_means_no_config_file(self, tmp_path) -> None:

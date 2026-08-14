@@ -13,12 +13,12 @@ uses short-lived service JWTs minted by `ServiceTokenManager`.
 ### API tokens
 
 Database-backed tokens prefixed with `ts_`. Created via the admin CLI
-(`turnstone-admin create-token`) or the console admin API. Stored as
+(`pebble-admin create-token`) or the console admin API. Stored as
 SHA-256 hashes — the raw token is shown exactly once at creation and
 never persisted in plaintext.
 
 ```
-$ turnstone-admin create-token --user abc123 --scopes read,write --name "CI bot"
+$ pebble-admin create-token --user abc123 --scopes read,write --name "CI bot"
 Token created: ts_a1b2c3d4e5f6...
 (save this — it will not be shown again)
 ```
@@ -41,7 +41,7 @@ Claims:
 | `scopes` | Comma-separated scope list (`read,write,approve`) |
 | `src` | Token source (`password`, `database`, `oidc`, or a service origin like `console`, `cli`, or `channel`) |
 | `iss` | Issuer — always `turnstone` |
-| `aud` | Audience — `turnstone-server` or `turnstone-console` |
+| `aud` | Audience — `pebble-server` or `pebble-console` |
 | `iat` | Issued-at timestamp |
 | `exp` | Expiry timestamp |
 
@@ -189,14 +189,14 @@ login.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TURNSTONE_OIDC_ISSUER` | Yes | OIDC issuer URL (e.g., `https://accounts.google.com`) |
-| `TURNSTONE_OIDC_CLIENT_ID` | Yes | Client ID from the identity provider |
-| `TURNSTONE_OIDC_CLIENT_SECRET` | Yes | Client secret (confidential client) |
-| `TURNSTONE_OIDC_SCOPES` | No | OIDC scopes (default: `openid email profile`) |
-| `TURNSTONE_OIDC_PROVIDER_NAME` | No | Display name for the SSO button (default: `SSO`) |
-| `TURNSTONE_OIDC_ROLE_CLAIM` | No | Claim name in the ID token for role mapping (e.g., `groups`) |
-| `TURNSTONE_OIDC_ROLE_MAP` | No | Comma-separated `claim_value:role_id` pairs (e.g., `admin:builtin-admin,eng:builtin-operator`) |
-| `TURNSTONE_OIDC_PASSWORD_ENABLED` | No | Set to `false` to hide password login and force SSO-only |
+| `PEBBLE_OIDC_ISSUER` | Yes | OIDC issuer URL (e.g., `https://accounts.google.com`) |
+| `PEBBLE_OIDC_CLIENT_ID` | Yes | Client ID from the identity provider |
+| `PEBBLE_OIDC_CLIENT_SECRET` | Yes | Client secret (confidential client) |
+| `PEBBLE_OIDC_SCOPES` | No | OIDC scopes (default: `openid email profile`) |
+| `PEBBLE_OIDC_PROVIDER_NAME` | No | Display name for the SSO button (default: `SSO`) |
+| `PEBBLE_OIDC_ROLE_CLAIM` | No | Claim name in the ID token for role mapping (e.g., `groups`) |
+| `PEBBLE_OIDC_ROLE_MAP` | No | Comma-separated `claim_value:role_id` pairs (e.g., `admin:builtin-admin,eng:builtin-operator`) |
+| `PEBBLE_OIDC_PASSWORD_ENABLED` | No | Set to `false` to hide password login and force SSO-only |
 
 OIDC is enabled when all three required variables (`ISSUER`,
 `CLIENT_ID`, `CLIENT_SECRET`) are set.
@@ -238,9 +238,9 @@ OIDC is enabled when all three required variables (`ISSUER`,
 
 #### Role mapping
 
-When `TURNSTONE_OIDC_ROLE_CLAIM` is set (e.g., `groups`), the server
+When `PEBBLE_OIDC_ROLE_CLAIM` is set (e.g., `groups`), the server
 reads that claim from the ID token and maps values to Turnstone roles
-via `TURNSTONE_OIDC_ROLE_MAP`. Roles are synced on every login:
+via `PEBBLE_OIDC_ROLE_MAP`. Roles are synced on every login:
 matching claim values are added, and stale OIDC-assigned roles are
 revoked. Roles assigned manually (not by OIDC) are never touched.
 
@@ -249,7 +249,7 @@ If no role mapping is configured, OIDC users are provisioned with the
 
 #### OIDC-only mode
 
-Setting `TURNSTONE_OIDC_PASSWORD_ENABLED=false` hides the password
+Setting `PEBBLE_OIDC_PASSWORD_ENABLED=false` hides the password
 form on the login page and blocks password-based login at the API
 level. The setup wizard always works regardless of this setting — the
 first admin user is created with a password before OIDC is relevant.
@@ -262,7 +262,7 @@ API tokens are unaffected by this setting.
 - **Single IdP** — configuration supports one issuer (the database
   schema supports multiple for future expansion)
 - **Redirect URI** — defaults to request Host header; deployments behind
-  reverse proxies should set `TURNSTONE_OIDC_REDIRECT_BASE` to the
+  reverse proxies should set `PEBBLE_OIDC_REDIRECT_BASE` to the
   externally-reachable origin to pin the redirect URI
 
 ---
@@ -304,12 +304,12 @@ deployments.
 
 | Setting | Config key | Env var | Default |
 |---------|-----------|---------|---------|
-| Signing secret | `[auth] jwt_secret` | `TURNSTONE_JWT_SECRET` | Auto-generated ephemeral (warning logged) |
+| Signing secret | `[auth] jwt_secret` | `PEBBLE_JWT_SECRET` | Auto-generated ephemeral (warning logged) |
 | Expiry | `[auth] jwt_expiry_hours` | — | 24 hours |
 | Algorithm | — | — | HS256 (not configurable) |
 | Minimum secret length | — | — | 32 characters (exits if shorter) |
 
-All services require `TURNSTONE_JWT_SECRET` and exit at startup if it is
+All services require `PEBBLE_JWT_SECRET` and exit at startup if it is
 missing or shorter than 32 characters.
 
 ---
@@ -338,14 +338,14 @@ All admin endpoints require `approve` scope.
 
 ## CLI Administration
 
-The `turnstone-admin` command provides offline user and token management:
+The `pebble-admin` command provides offline user and token management:
 
 ```
-turnstone-admin create-user --username admin --name "Admin" [--password] [--token]
-turnstone-admin create-token --user <user_id> --scopes read,write --name "CI bot"
-turnstone-admin list-users
-turnstone-admin list-tokens
-turnstone-admin revoke-token <token_id>
+pebble-admin create-user --username admin --name "Admin" [--password] [--token]
+pebble-admin create-token --user <user_id> --scopes read,write --name "CI bot"
+pebble-admin list-users
+pebble-admin list-tokens
+pebble-admin revoke-token <token_id>
 ```
 
 When `--password` is omitted, the CLI prompts interactively. When
@@ -425,9 +425,9 @@ validate session tokens.
 
 When the console proxies requests to server nodes (via `/node/{id}/...`
 routes), it mints a **short-lived user-scoped JWT** with
-`aud: turnstone-server` carrying the real user's `user_id`, `scopes`,
+`aud: pebble-server` carrying the real user's `user_id`, `scopes`,
 and `permissions`.  The user's console JWT (which has
-`aud: turnstone-console`) is **not** forwarded directly — it would be
+`aud: pebble-console`) is **not** forwarded directly — it would be
 rejected by the server's audience validation.  Instead, the console
 re-signs a new JWT targeted at the server audience.
 
@@ -455,9 +455,9 @@ JWTs when communicating with server nodes:
 
 | Service | Identity | Scope | Audience | Purpose |
 |---------|----------|-------|----------|---------|
-| Console collector | `console-collector` | `read` | `turnstone-server` | Node health polling |
-| Console proxy (fallback) | `console-proxy` | `approve` | `turnstone-server` | Proxied API calls when no user context |
-| Channel notify | `system` | `write` | `turnstone-channel` | Notification delivery to channel gateway |
+| Console collector | `console-collector` | `read` | `pebble-server` | Node health polling |
+| Console proxy (fallback) | `console-proxy` | `approve` | `pebble-server` | Proxied API calls when no user context |
+| Channel notify | `system` | `write` | `pebble-channel` | Notification delivery to channel gateway |
 
 Service tokens use 1-hour expiry with automatic refresh via
 `ServiceTokenManager`.
@@ -473,8 +473,8 @@ trusted service** — identified by `token_source` matching
 override `user_id`; the server always uses their JWT identity.
 
 Note that the channel gateway uses a distinct JWT audience
-(`turnstone-channel`) from the server (`turnstone-server`) and console
-(`turnstone-console`).  A server-scoped JWT cannot authenticate to the
+(`pebble-channel`) from the server (`pebble-server`) and console
+(`pebble-console`).  A server-scoped JWT cannot authenticate to the
 channel gateway endpoint, and vice versa.
 
 ---
@@ -491,12 +491,12 @@ jwt_expiry_hours = 24
 
 ### Environment variables
 
-Auth is always enabled. `TURNSTONE_JWT_SECRET` is required.
+Auth is always enabled. `PEBBLE_JWT_SECRET` is required.
 
 | Variable | Description |
 |----------|-------------|
-| `TURNSTONE_JWT_SECRET=xxx` | JWT signing secret (required, must match across nodes) |
-| `TURNSTONE_CORS_ORIGINS=` | CORS allowed origins (comma-separated; empty = same-origin only) |
+| `PEBBLE_JWT_SECRET=xxx` | JWT signing secret (required, must match across nodes) |
+| `PEBBLE_CORS_ORIGINS=` | CORS allowed origins (comma-separated; empty = same-origin only) |
 
 ---
 
@@ -516,14 +516,14 @@ Limits are enforced per-IP and per-username with a sliding window:
 ## CORS Policy
 
 By default, no CORS headers are sent (same-origin only). To allow
-cross-origin requests, set `TURNSTONE_CORS_ORIGINS`:
+cross-origin requests, set `PEBBLE_CORS_ORIGINS`:
 
 ```bash
 # Allow specific origins
-TURNSTONE_CORS_ORIGINS=https://app.example.com,https://admin.example.com
+PEBBLE_CORS_ORIGINS=https://app.example.com,https://admin.example.com
 
 # Allow all origins (development only)
-TURNSTONE_CORS_ORIGINS=*
+PEBBLE_CORS_ORIGINS=*
 ```
 
 When the variable is empty or unset, the CORS middleware is not added

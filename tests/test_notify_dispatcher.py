@@ -18,7 +18,7 @@ import pytest
 @pytest.fixture
 def dispatcher_factory(storage):
     """Yield a factory that constructs + tracks dispatchers for teardown."""
-    from turnstone.console.notify_dispatcher import NotifyDispatcher
+    from pebble.console.notify_dispatcher import NotifyDispatcher
 
     created: list[NotifyDispatcher] = []
 
@@ -89,7 +89,7 @@ class TestSubscribe:
         assert not any(n.payload == "second" for n in seen)
 
     def test_construction_requires_at_least_one_channel(self, storage):
-        from turnstone.console.notify_dispatcher import NotifyDispatcher
+        from pebble.console.notify_dispatcher import NotifyDispatcher
 
         with pytest.raises(ValueError, match="at least one"):
             NotifyDispatcher(storage, channels=[])
@@ -154,8 +154,8 @@ class TestReconnect:
     """
 
     def test_reconcile_fires_after_reopen_not_before(self):
-        from turnstone.console.notify_dispatcher import NotifyDispatcher
-        from turnstone.core.storage._notify import Notify, NotifyConnectionError
+        from pebble.console.notify_dispatcher import NotifyDispatcher
+        from pebble.core.storage._notify import Notify, NotifyConnectionError
 
         # State machine: open -> first poll raises NotifyConnectionError
         # -> dispatcher waits backoff then reopens -> second open's first
@@ -208,7 +208,7 @@ class TestReconnect:
                 return _cm()
 
         # Speed up backoff so the reopen happens promptly in the test.
-        import turnstone.console.notify_dispatcher as nd_mod
+        import pebble.console.notify_dispatcher as nd_mod
 
         original_backoff = nd_mod._RECONNECT_BACKOFF_INITIAL
         nd_mod._RECONNECT_BACKOFF_INITIAL = 0.05
@@ -251,7 +251,7 @@ class TestReconnect:
         translator and would hit the generic ``except Exception``
         branch.  Pre-fix, that branch emitted no reconcile.
         """
-        from turnstone.console.notify_dispatcher import NotifyDispatcher
+        from pebble.console.notify_dispatcher import NotifyDispatcher
 
         reopen_event = threading.Event()
 
@@ -294,7 +294,7 @@ class TestReconnect:
 
                 return _cm()
 
-        import turnstone.console.notify_dispatcher as nd_mod
+        import pebble.console.notify_dispatcher as nd_mod
 
         original_backoff = nd_mod._RECONNECT_BACKOFF_INITIAL
         nd_mod._RECONNECT_BACKOFF_INITIAL = 0.05

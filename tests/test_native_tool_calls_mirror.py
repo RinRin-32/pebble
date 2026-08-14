@@ -16,15 +16,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from turnstone.core.providers._anthropic import AnthropicProvider
-from turnstone.core.providers._google import GoogleProvider
-from turnstone.core.storage._utils import (
+from pebble.core.providers._anthropic import AnthropicProvider
+from pebble.core.providers._google import GoogleProvider
+from pebble.core.storage._utils import (
     normalize_native_for_save,
     reconstruct_messages,
     reconstruct_turns,
     strip_orphan_client_tool_blocks,
 )
-from turnstone.core.trajectory import dicts_from_turns
+from pebble.core.trajectory import dicts_from_turns
 
 _THINKING = {"type": "thinking", "thinking": "reasoning text", "signature": "sig-1"}
 _TOOL_USE = {"type": "tool_use", "id": "call_1", "name": "get_weather", "input": {"city": "Paris"}}

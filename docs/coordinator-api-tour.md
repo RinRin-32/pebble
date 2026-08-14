@@ -10,7 +10,7 @@ relevant SSE events at each step.
 Aimed at integrators driving a coordinator from a custom UI or SDK
 without reverse-engineering the built-in console page.  The shapes
 here match the live OpenAPI spec served at `/openapi.json` and
-rendered at `/docs` on every `turnstone-console` process.  Every
+rendered at `/docs` on every `pebble-console` process.  Every
 step references the operation id from that spec so doc updates track
 schema changes.
 
@@ -32,7 +32,7 @@ schema changes.
 > `/v1/api/workstreams/{ws_id}/<verb>` tree; coord still distinguishes
 > itself via the `kind=coordinator` row classifier rather than a
 > separate URL space. The endpoints below reflect the post-lift
-> surface served by `turnstone-console`.
+> surface served by `pebble-console`.
 
 | # | Action                       | Operation                                                   |
 |---|------------------------------|-------------------------------------------------------------|
@@ -50,7 +50,7 @@ schema changes.
 | 9 | Close                        | `POST /v1/api/workstreams/{ws_id}/close`                    |
 
 Refer to `/openapi.json` (Swagger UI at `/docs`) on any
-`turnstone-console` process for the authoritative operation ids and
+`pebble-console` process for the authoritative operation ids and
 schemas. Coordinator-only verbs (`/children`, `/trust`, `/restrict`,
 `/close_all_children`) 404 against `kind=interactive`
 rows; the shared verbs (`/send`, `/approve`, `/cancel`, `/events`,

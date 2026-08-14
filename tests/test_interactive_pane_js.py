@@ -16,11 +16,11 @@ from pathlib import Path
 import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
-_INTERACTIVE = _ROOT / "turnstone/shared_static/interactive.js"
-_COMPOSER = _ROOT / "turnstone/shared_static/composer.js"
-_AUTH = _ROOT / "turnstone/shared_static/auth.js"
-_APP = _ROOT / "turnstone/ui/static/app.js"
-_UI_INDEX = _ROOT / "turnstone/ui/static/index.html"
+_INTERACTIVE = _ROOT / "pebble/shared_static/interactive.js"
+_COMPOSER = _ROOT / "pebble/shared_static/composer.js"
+_AUTH = _ROOT / "pebble/shared_static/auth.js"
+_APP = _ROOT / "pebble/ui/static/app.js"
+_UI_INDEX = _ROOT / "pebble/ui/static/index.html"
 
 
 def _strip_comments(js: str) -> str:
@@ -413,7 +413,7 @@ def test_pane_handles_cross_user_409() -> None:
     body = _INTERACTIVE.read_text(encoding="utf-8")
     assert "r.status === 409" in body
     assert 'status: "cross_user_interjection"' in body
-    helper = (_ROOT / "turnstone/shared_static/composer_queue.js").read_text(encoding="utf-8")
+    helper = (_ROOT / "pebble/shared_static/composer_queue.js").read_text(encoding="utf-8")
     assert 'status === "cross_user_interjection"' in helper
 
 
@@ -656,13 +656,11 @@ def test_send_post_abort_machinery_is_gone() -> None:
     messages from every timeout-bounded caller (coordinator client and
     console proxy at 30s, SDKs, stock proxies)."""
     interactive = _INTERACTIVE.read_text(encoding="utf-8")
-    coordinator = (_ROOT / "turnstone/console/static/coordinator/coordinator.js").read_text(
+    coordinator = (_ROOT / "pebble/console/static/coordinator/coordinator.js").read_text(
         encoding="utf-8"
     )
-    conversation = (_ROOT / "turnstone/shared_static/conversation.js").read_text(encoding="utf-8")
-    composer_queue = (_ROOT / "turnstone/shared_static/composer_queue.js").read_text(
-        encoding="utf-8"
-    )
+    conversation = (_ROOT / "pebble/shared_static/conversation.js").read_text(encoding="utf-8")
+    composer_queue = (_ROOT / "pebble/shared_static/composer_queue.js").read_text(encoding="utf-8")
     for name, src in (
         ("interactive.js", interactive),
         ("coordinator.js", coordinator),
@@ -695,12 +693,10 @@ def test_deferred_send_settle_protocol_pins() -> None:
     messages to "sent" while the server still honors DELETE (loss
     disguised as delivery on a node restart)."""
     interactive = _INTERACTIVE.read_text(encoding="utf-8")
-    coordinator = (_ROOT / "turnstone/console/static/coordinator/coordinator.js").read_text(
+    coordinator = (_ROOT / "pebble/console/static/coordinator/coordinator.js").read_text(
         encoding="utf-8"
     )
-    composer_queue = (_ROOT / "turnstone/shared_static/composer_queue.js").read_text(
-        encoding="utf-8"
-    )
+    composer_queue = (_ROOT / "pebble/shared_static/composer_queue.js").read_text(encoding="utf-8")
     # Controller: bind() stores the options on its own dataset state...
     assert "function bind(el, msgId, opts)" in composer_queue
     assert 'el.dataset.deferred = "1"' in composer_queue
@@ -778,7 +774,7 @@ def test_settle_send_response_missed_edge_behavior(tmp_path) -> None:
 
     if shutil.which("node") is None:
         pytest.skip("node binary not available on PATH")
-    helper = _ROOT / "turnstone/shared_static/composer_queue.js"
+    helper = _ROOT / "pebble/shared_static/composer_queue.js"
     script = tmp_path / "settle_harness.mjs"
     script.write_text(
         f'const {{ settleSendResponse }} = await import("file://{helper}");\n'

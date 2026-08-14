@@ -1,11 +1,11 @@
-"""Tests for turnstone.core.audit."""
+"""Tests for pebble.core.audit."""
 
 import json
 
 import pytest
 
-from turnstone.core.audit import record_audit
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.audit import record_audit
+from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture

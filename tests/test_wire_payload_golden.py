@@ -31,16 +31,16 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
+from pebble.core.lowering import repair_wire_messages
+from pebble.core.providers._anthropic import AnthropicProvider
+from pebble.core.providers._google import GoogleProvider
+from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from pebble.core.providers._openai_responses import OpenAIResponsesProvider
+from pebble.core.providers._protocol import ModelCapabilities
 from tests._wire_capture import RecordingClient
-from turnstone.core.lowering import repair_wire_messages
-from turnstone.core.providers._anthropic import AnthropicProvider
-from turnstone.core.providers._google import GoogleProvider
-from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
-from turnstone.core.providers._protocol import ModelCapabilities
 
 if TYPE_CHECKING:
-    from turnstone.core.providers._protocol import LLMProvider
+    from pebble.core.providers._protocol import LLMProvider
 
 GOLDEN_DIR = Path(__file__).parent / "data" / "wire_payloads"
 _UPDATE = os.environ.get("UPDATE_WIRE_GOLDENS") == "1"

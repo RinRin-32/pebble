@@ -48,7 +48,7 @@ class TestSaveUpsert:
             backend.create_structured_memory("m2", "dup", "", "general", "global", "", "b")
 
     def test_save_same_key_updates_in_place(self, backend):
-        from turnstone.core.memory import save_structured_memory
+        from pebble.core.memory import save_structured_memory
 
         row1, was_update1 = save_structured_memory("upsert_key", "v1", scope="global")
         assert row1 and was_update1 is False  # inserted
@@ -61,7 +61,7 @@ class TestSaveUpsert:
         assert names.count("upsert_key") == 1
 
     def test_save_same_key_preserves_description_and_type_on_default_resave(self, backend):
-        from turnstone.core.memory import save_structured_memory
+        from pebble.core.memory import save_structured_memory
 
         save_structured_memory(
             "meta_key", "c1", description="orig desc", mem_type="fact", scope="global"

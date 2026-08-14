@@ -1,14 +1,14 @@
-"""Tests for turnstone.core.memory_relevance — scoring, formatting, context extraction."""
+"""Tests for pebble.core.memory_relevance — scoring, formatting, context extraction."""
 
 from unittest.mock import patch
 
-from turnstone.core.memory_relevance import (
+from pebble.core.memory_relevance import (
     MemoryConfig,
     build_memory_context,
     extract_recent_context,
     score_memories,
 )
-from turnstone.core.trajectory import turns_from_dicts
+from pebble.core.trajectory import turns_from_dicts
 
 # ---------------------------------------------------------------------------
 # score_memories
@@ -442,7 +442,7 @@ class TestCompositionCandidateSelection:
     def test_coord_scope_isolated_visibility(self, tmp_db):
         """Coord composition queries the coord scope alone, never the
         global/workstream/user union."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         coord = _make_session(
             fetch_limit=5,
@@ -458,7 +458,7 @@ class TestCompositionCandidateSelection:
         # And: search uses those same scopes (no global/user fan-in)
         coord.messages = turns_from_dicts([{"role": "user", "content": "anything"}])
         with patch(
-            "turnstone.core.session.search_visible_structured_memories",
+            "pebble.core.session.search_visible_structured_memories",
             return_value=[],
         ) as search_mock:
             coord._search_visible_memories("anything", limit=5)
@@ -486,7 +486,7 @@ class TestCompositionRerankFiltersWiring:
 
         mem = _make_mem("m_one", content="alpha")
         with (
-            patch("turnstone.core.session.score_memories", _fake_score),
+            patch("pebble.core.session.score_memories", _fake_score),
             patch.object(session, "_bm25_rerank_threshold", return_value=threshold),
             patch.object(session, "_bm25_reranker", return_value=None),
             patch.object(session, "_select_memory_candidates", return_value=([mem], "list")),
@@ -518,7 +518,7 @@ class TestMemorySearchToolExecution:
 
     def test_search_action_returns_or_of_terms_results(self, tmp_db):
         """Multi-word query returns rows where ANY term matches — not all."""
-        from turnstone.core.memory import save_structured_memory
+        from pebble.core.memory import save_structured_memory
 
         save_structured_memory("postgres_notes", "host=localhost port=5432")
         save_structured_memory("redis_notes", "host=redis port=6379")
@@ -543,12 +543,12 @@ class TestPerTurnSearchCache:
     """The per-turn cache spares redundant SQL across mid-turn rebuilds."""
 
     def test_repeated_search_in_same_turn_hits_cache(self, tmp_db):
-        from turnstone.core.memory import save_structured_memory
+        from pebble.core.memory import save_structured_memory
 
         save_structured_memory("hello_mem", "alpha beta gamma")
         session = _make_session()
         with patch(
-            "turnstone.core.session.search_visible_structured_memories",
+            "pebble.core.session.search_visible_structured_memories",
             return_value=[],
         ) as backend_mock:
             session._search_visible_memories("alpha beta", limit=5)
@@ -558,12 +558,12 @@ class TestPerTurnSearchCache:
         assert backend_mock.call_count == 1
 
     def test_user_turn_invalidates_cache(self, tmp_db):
-        from turnstone.core.memory import save_structured_memory
+        from pebble.core.memory import save_structured_memory
 
         save_structured_memory("hello_mem", "alpha")
         session = _make_session()
         with patch(
-            "turnstone.core.session.search_visible_structured_memories",
+            "pebble.core.session.search_visible_structured_memories",
             return_value=[],
         ) as backend_mock:
             session._search_visible_memories("alpha", limit=5)

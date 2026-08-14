@@ -7,16 +7,19 @@ a network, so that path is exercised in the container rather than here.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from turnstone.core import nixenv
+from pebble.core import nixenv
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(autouse=True)
 def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TURNSTONE_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path / "workspace"))
 
 
 class TestDetect:

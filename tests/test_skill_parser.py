@@ -1,10 +1,10 @@
-"""Tests for turnstone.core.skill_parser."""
+"""Tests for pebble.core.skill_parser."""
 
 from __future__ import annotations
 
 import pytest
 
-from turnstone.core.skill_parser import parse_skill_md, validate_skill_name
+from pebble.core.skill_parser import parse_skill_md, validate_skill_name
 
 
 class TestParseSkillMd:

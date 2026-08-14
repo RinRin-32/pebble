@@ -26,8 +26,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pebble.server import WebUI
 from tests.conftest import resolve_when_pending
-from turnstone.server import WebUI
 
 
 @pytest.fixture(autouse=True)
@@ -54,12 +54,12 @@ def _make_items(*specs: tuple[str, str]) -> list[dict[str, Any]]:
 
 
 def _patch_storage(storage: Any):
-    return patch("turnstone.core.storage._registry.get_storage", return_value=storage)
+    return patch("pebble.core.storage._registry.get_storage", return_value=storage)
 
 
 def _patch_policies(verdicts: dict[str, str]):
     return patch(
-        "turnstone.core.policy.evaluate_tool_policies_batch",
+        "pebble.core.policy.evaluate_tool_policies_batch",
         return_value=verdicts,
     )
 

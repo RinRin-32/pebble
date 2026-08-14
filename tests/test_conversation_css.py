@@ -15,12 +15,12 @@ import re
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
-_CSS = _ROOT / "turnstone/shared_static/conversation.css"
-_INTERACTIVE_CSS = _ROOT / "turnstone/shared_static/interactive.css"
+_CSS = _ROOT / "pebble/shared_static/conversation.css"
+_INTERACTIVE_CSS = _ROOT / "pebble/shared_static/interactive.css"
 _PAGES = (
-    _ROOT / "turnstone/console/static/index.html",
-    _ROOT / "turnstone/console/static/coordinator/index.html",
-    _ROOT / "turnstone/ui/static/index.html",
+    _ROOT / "pebble/console/static/index.html",
+    _ROOT / "pebble/console/static/coordinator/index.html",
+    _ROOT / "pebble/ui/static/index.html",
 )
 
 

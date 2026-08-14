@@ -41,7 +41,7 @@ def make_chat_session(**overrides: Any) -> Any:
     Caller passes any constructor arg as a kwarg to override the default —
     e.g. ``make_chat_session(memory_config=MemoryConfig(fetch_limit=5))``.
     """
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     defaults: dict[str, Any] = {
         "client": MagicMock(),
@@ -66,7 +66,7 @@ def patch_session_storage(
     returns *active* (or raises if *raise_on_is_active*).  Returns the
     list of ``watch_id``s the predicate was called with.
     """
-    from turnstone.core import session as session_mod
+    from pebble.core import session as session_mod
 
     calls: list[str] = []
 

@@ -15,9 +15,9 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
-from turnstone.core.session import ChatSession
-from turnstone.core.storage._sqlite import SQLiteBackend
-from turnstone.prompts import ClientType
+from pebble.core.session import ChatSession
+from pebble.core.storage._sqlite import SQLiteBackend
+from pebble.prompts import ClientType
 
 
 class _StubUI:
@@ -162,8 +162,8 @@ def test_coordinator_session_uses_coordinator_tools(coord_session):
         # surfacing to a human channel without spawning a child purely
         # to ship the message.  Routing is session-kind-agnostic.
         "notify",
-                "kb",
-        }
+        "kb",
+    }
     # Sub-agent tool set is zeroed on coordinator sessions.
     assert sess._task_tools == []
 
@@ -210,7 +210,7 @@ def test_spawn_prepare_denies_high_risk_skill(coord_session):
     """Review fix: the high/critical-risk gate that blocks skills(load) also
     blocks spawn_workstream(skill=…), so a child spawn can't route around it."""
     sess, _coord, _ui = coord_session
-    with patch("turnstone.core.session.get_storage") as gs:
+    with patch("pebble.core.session.get_storage") as gs:
         gs.return_value.get_prompt_template_by_name.return_value = {
             "name": "danger",
             "risk_level": "critical",
@@ -533,7 +533,7 @@ def test_wait_exec_progress_callback_observes_cancel(coord_session):
     from the heartbeat callback propagates out of the (otherwise cancel-blind)
     wait — _exec_wait_for_workstream's ``except Exception`` can't swallow it
     (GenerationCancelled is a BaseException)."""
-    from turnstone.core.session import GenerationCancelled
+    from pebble.core.session import GenerationCancelled
 
     sess, coord, _ui = coord_session
 
@@ -1831,8 +1831,8 @@ def test_notify_exec_on_coord_session_sends_via_channel_gateway(coord_session, t
         "results": [{"channel_type": "discord", "channel_id": "123", "status": "sent"}]
     }
     with (
-        patch("turnstone.core.session.get_storage", return_value=storage),
-        patch("turnstone.core.session.httpx.post", return_value=mock_resp) as mock_post,
+        patch("pebble.core.session.get_storage", return_value=storage),
+        patch("pebble.core.session.httpx.post", return_value=mock_resp) as mock_post,
     ):
         call_id, msg = sess._exec_notify(item)
 

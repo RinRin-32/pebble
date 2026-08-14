@@ -33,8 +33,7 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from tests._coord_test_helpers import _AuthMiddleware
-from turnstone.console.server import (
+from pebble.console.server import (
     _maybe_bootstrap_coord_subsystem,
     _refresh_coord_registry,
     admin_create_model_definition,
@@ -42,8 +41,9 @@ from turnstone.console.server import (
     admin_model_reload,
     admin_update_model_definition,
 )
-from turnstone.core.model_registry import ModelConfig, ModelRegistry
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.model_registry import ModelConfig, ModelRegistry
+from pebble.core.storage._sqlite import SQLiteBackend
+from tests._coord_test_helpers import _AuthMiddleware
 
 
 def _bootstrap_app(**overrides: Any) -> Any:
@@ -192,7 +192,7 @@ def test_helper_preserves_registry_when_load_fails(
     def _boom(**_kw: Any) -> ModelRegistry:
         raise RuntimeError("simulated loader failure")
 
-    monkeypatch.setattr("turnstone.core.model_registry.load_model_registry", _boom)
+    monkeypatch.setattr("pebble.core.model_registry.load_model_registry", _boom)
     _refresh_coord_registry(state, storage)
 
     assert state.coord_registry is not None
@@ -252,7 +252,7 @@ def test_bootstrap_noop_when_coord_mgr_already_built(
 ) -> None:
     """Idempotent fast-path — already-bootstrapped subsystem must not
     re-stand-up a second SessionManager / StateWriter pair."""
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     app = _bootstrap_app(coord_mgr=MagicMock())  # subsystem already built
@@ -277,7 +277,7 @@ def test_bootstrap_noop_when_prerequisites_missing(
     console_metrics) must individually short-circuit the bootstrap to a
     no-op — partial init / test harnesses don't have the full set, and a
     CRUD write that already landed mustn't 500 on a missing prereq."""
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     app = _bootstrap_app(**{missing_attr: None})
@@ -299,7 +299,7 @@ def test_bootstrap_records_error_when_no_rows(
     ValueError.  Helper records the message on app.state so the
     coord-endpoint 503 surfaces a current diagnosis instead of a stale
     one from boot."""
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     app = _bootstrap_app()
     calls: list[Any] = []
@@ -321,7 +321,7 @@ def test_bootstrap_calls_subsystem_builder_on_first_row(
     the post-build invariant the real ``_bootstrap_coord_subsystem``
     establishes (coord_registry set iff coord_mgr set) so the stale
     boot-time error string clears as part of the same commit step."""
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     app = _bootstrap_app(coord_registry_error="stale boot-time message")
@@ -352,7 +352,7 @@ def test_bootstrap_replaces_stale_error_on_builder_failure(
     diagnosis is demonstrably wrong (rows ARE present, the build failed
     for a different reason).  Replacement message must surface the
     actual exception type so operators can correlate with logs."""
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     app = _bootstrap_app(
@@ -382,7 +382,7 @@ def test_bootstrap_tears_down_partial_state_on_builder_failure(
     """If the builder partially stamps handles on app.state and then
     raises, the helper must call the teardown path so a subsequent
     retry doesn't leak a StateWriter daemon / observer subscription."""
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     app = _bootstrap_app()
@@ -428,12 +428,12 @@ def test_real_bootstrap_stands_up_subsystem_end_to_end(
     that ``_require_coord_mgr`` relies on: ``coord_mgr`` is a real
     SessionManager and ``coord_registry_error`` has been cleared.
     """
-    from turnstone.console import server as server_module
-    from turnstone.console.collector import ClusterCollector
-    from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
-    from turnstone.console.metrics import ConsoleMetrics
-    from turnstone.core.config_store import ConfigStore
-    from turnstone.core.session_manager import SessionManager
+    from pebble.console import server as server_module
+    from pebble.console.collector import ClusterCollector
+    from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+    from pebble.console.metrics import ConsoleMetrics
+    from pebble.core.config_store import ConfigStore
+    from pebble.core.session_manager import SessionManager
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     config_store = ConfigStore(storage)
@@ -519,11 +519,11 @@ def test_real_bootstrap_rolls_back_partial_state_on_side_effect_failure(
     a clean fresh-install state, (c) the started ``StateWriter`` is
     no longer alive.
     """
-    from turnstone.console import server as server_module
-    from turnstone.console.collector import ClusterCollector
-    from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
-    from turnstone.console.metrics import ConsoleMetrics
-    from turnstone.core.config_store import ConfigStore
+    from pebble.console import server as server_module
+    from pebble.console.collector import ClusterCollector
+    from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+    from pebble.console.metrics import ConsoleMetrics
+    from pebble.core.config_store import ConfigStore
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     config_store = ConfigStore(storage)
@@ -556,13 +556,13 @@ def test_real_bootstrap_rolls_back_partial_state_on_side_effect_failure(
     def _boom(*_a: Any, **_kw: Any) -> Any:
         raise RuntimeError("simulated mid-build subscription failure")
 
-    monkeypatch.setattr("turnstone.console.server.install_idle_nudge_watcher", _boom, raising=False)
+    monkeypatch.setattr("pebble.console.server.install_idle_nudge_watcher", _boom, raising=False)
     # The bootstrap helper imports install_idle_nudge_watcher locally
     # at call time (inside the function), so we need to patch the
     # source module too — server.py's import is a name lookup against
     # the module each call.
     monkeypatch.setattr(
-        "turnstone.core.idle_nudge_watcher.install_idle_nudge_watcher",
+        "pebble.core.idle_nudge_watcher.install_idle_nudge_watcher",
         _boom,
     )
 
@@ -612,11 +612,11 @@ def test_bootstrap_atomic_commit_no_partial_visibility(
     ever stamps ``coord_mgr`` before ``coord_registry``, the polling
     thread will catch it.
     """
-    from turnstone.console import server as server_module
-    from turnstone.console.collector import ClusterCollector
-    from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
-    from turnstone.console.metrics import ConsoleMetrics
-    from turnstone.core.config_store import ConfigStore
+    from pebble.console import server as server_module
+    from pebble.console.collector import ClusterCollector
+    from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+    from pebble.console.metrics import ConsoleMetrics
+    from pebble.core.config_store import ConfigStore
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     config_store = ConfigStore(storage)
@@ -692,7 +692,7 @@ def test_bootstrap_lock_serialises_concurrent_calls(
     the lock — a dependence the previous version was rightly criticised
     for.
     """
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="m")
     app = _bootstrap_app()
@@ -877,7 +877,7 @@ def test_create_endpoint_bootstraps_subsystem_on_fresh_install(
     ``coord_registry is None`` and the dashboard's 503 banner persisted
     until the user restarted.
     """
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     # Fresh-install state: registry=None, coord_mgr=None, boot-time
     # error string set by the lifespan's ValueError catch.  Build the
@@ -965,7 +965,7 @@ def test_update_endpoint_skips_refresh_on_empty_body(
     the gate down: a regression that drops the conditional would
     register a call here and trip the assertion.
     """
-    from turnstone.console import server as server_module
+    from pebble.console import server as server_module
 
     _seed_model_def(storage, definition_id="m1", alias="local", model="locked-in")
     registry = _make_registry(alias="local", model="locked-in")
@@ -1104,8 +1104,8 @@ def test_reload_endpoint_refreshes_registry(
     async def _noop_notify(_request: Any) -> dict[str, Any]:
         return {}
 
-    monkeypatch.setattr("turnstone.console.server._publish_config_change", _noop_publish)
-    monkeypatch.setattr("turnstone.console.server._notify_nodes_model_reload", _noop_notify)
+    monkeypatch.setattr("pebble.console.server._publish_config_change", _noop_publish)
+    monkeypatch.setattr("pebble.console.server._notify_nodes_model_reload", _noop_notify)
 
     resp = client.post("/v1/api/admin/model-definitions/reload")
     assert resp.status_code == 200, resp.text

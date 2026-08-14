@@ -1,6 +1,6 @@
-"""Tests for turnstone.core.safety — is_command_blocked and sanitize_command."""
+"""Tests for pebble.core.safety — is_command_blocked and sanitize_command."""
 
-from turnstone.core.safety import is_command_blocked, sanitize_command
+from pebble.core.safety import is_command_blocked, sanitize_command
 
 
 class TestIsCommandBlocked:

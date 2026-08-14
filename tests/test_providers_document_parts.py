@@ -13,15 +13,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from turnstone.core.providers._anthropic import AnthropicProvider
-from turnstone.core.providers._openai_common import (
+from pebble.core.providers._anthropic import AnthropicProvider
+from pebble.core.providers._openai_common import (
     inline_document_parts,
     sanitize_messages,
 )
-from turnstone.core.providers._openai_responses import (
+from pebble.core.providers._openai_responses import (
     OpenAIResponsesProvider,
 )
-from turnstone.core.providers._openai_responses import (
+from pebble.core.providers._openai_responses import (
     convert_content_parts as _responses_convert_content_parts,
 )
 
@@ -513,7 +513,7 @@ class TestProviderPdfCapabilities:
         assert caps.supports_audio_input is False
 
     def test_openai_chat_supports_pdf_default_does_not(self) -> None:
-        from turnstone.core.providers._openai_common import (
+        from pebble.core.providers._openai_common import (
             OPENAI_DEFAULT,
             lookup_openai_capabilities,
         )
@@ -523,6 +523,6 @@ class TestProviderPdfCapabilities:
         assert OPENAI_DEFAULT.supports_pdf is False
 
     def test_anthropic_compat_default_no_pdf(self) -> None:
-        from turnstone.core.providers._anthropic import _ANTHROPIC_COMPAT_DEFAULT
+        from pebble.core.providers._anthropic import _ANTHROPIC_COMPAT_DEFAULT
 
         assert _ANTHROPIC_COMPAT_DEFAULT.supports_pdf is False

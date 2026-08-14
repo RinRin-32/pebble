@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from turnstone.core.storage import get_storage, init_storage, reset_storage
+from pebble.core.storage import get_storage, init_storage, reset_storage
 
 
 @pytest.fixture(autouse=True)
@@ -146,7 +146,7 @@ def test_delete_cert_missing():
 @pytest.fixture
 def store_adapter():
     """Create a StorageStore backed by the test database."""
-    from turnstone.core.tls_store import StorageStore
+    from pebble.core.tls_store import StorageStore
 
     return StorageStore(get_storage())
 

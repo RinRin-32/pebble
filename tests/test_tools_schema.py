@@ -1,6 +1,6 @@
-"""Tests for turnstone.core.tools — JSON auto-loading and schema validation."""
+"""Tests for pebble.core.tools — JSON auto-loading and schema validation."""
 
-from turnstone.core.tools import (
+from pebble.core.tools import (
     _META,
     PRIMARY_KEY_MAP,
     TASK_AGENT_TOOLS,
@@ -68,7 +68,7 @@ class TestToolsMetadata:
         assert len(TASK_AGENT_TOOLS) == 15
 
     def test_coordinator_tools_count(self):
-        from turnstone.core.tools import COORDINATOR_TOOLS
+        from pebble.core.tools import COORDINATOR_TOOLS
 
         assert len(COORDINATOR_TOOLS) == 16
         assert {t["function"]["name"] for t in COORDINATOR_TOOLS} == {
@@ -100,7 +100,7 @@ class TestToolsMetadata:
             # failed, phase done) without spawning a child purely to
             # ship a message.  Routing logic is session-kind-agnostic.
             "notify",
-                    "kb",
+            "kb",
         }
 
     def test_auto_approve_sets_match(self):

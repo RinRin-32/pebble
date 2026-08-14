@@ -26,8 +26,8 @@ from unittest.mock import patch
 
 import pytest
 
+from pebble.core.mcp_client import MCPClientManager
 from tests.conftest import _free_port, _popen_mcp_server, _wait_session_live, _wait_tcp_ready
-from turnstone.core.mcp_client import MCPClientManager
 
 if TYPE_CHECKING:
     import subprocess
@@ -124,7 +124,7 @@ class TestFlakyServerNoSpin:
         try:
             proc = _spawn_server(initial=True)
             with patch(
-                "turnstone.core.mcp_client.load_config",
+                "pebble.core.mcp_client.load_config",
                 return_value={"static_health_check_seconds": 0.4},
             ):
                 mgr = MCPClientManager(

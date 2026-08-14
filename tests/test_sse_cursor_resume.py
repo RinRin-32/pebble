@@ -23,12 +23,12 @@ import os
 import tempfile
 from typing import TYPE_CHECKING, Any
 
-os.environ.setdefault("TURNSTONE_JWT_SECRET", "x" * 32)
+os.environ.setdefault("PEBBLE_JWT_SECRET", "x" * 32)
 
+from pebble.core.session_routes import _resume_cursor_and_trim
+from pebble.core.session_ui_base import SessionUIBase
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests._session_helpers import make_session
-from turnstone.core.session_routes import _resume_cursor_and_trim
-from turnstone.core.session_ui_base import SessionUIBase
-from turnstone.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     import pytest
@@ -227,7 +227,7 @@ def test_append_system_turn_stamps_row_with_its_sse_event_id(
     ui = session.ui  # NullUI is a real SessionUIBase → increments _event_id
     captured: dict[str, Any] = {}
     monkeypatch.setattr(
-        "turnstone.core.session.save_message",
+        "pebble.core.session.save_message",
         lambda *a, **k: captured.update(event_id=k.get("event_id")),
     )
     ui._enqueue({"type": "content"})  # advance past the prior turn
@@ -248,7 +248,7 @@ def test_system_turn_bool_hook_return_falls_back_to_counter(
     session = make_session()
     captured: dict[str, Any] = {}
     monkeypatch.setattr(
-        "turnstone.core.session.save_message",
+        "pebble.core.session.save_message",
         lambda *a, **k: captured.update(event_id=k.get("event_id")),
     )
     session.ui.on_system_turn = lambda *_a, **_k: True
@@ -292,9 +292,7 @@ def test_event_id_seeded_on_ui_construction(monkeypatch: Any) -> None:
         def get_max_event_id(self, ws_id: str) -> int | None:
             return 99
 
-    monkeypatch.setattr(
-        "turnstone.core.storage._registry.get_storage", lambda: _Stub(), raising=True
-    )
+    monkeypatch.setattr("pebble.core.storage._registry.get_storage", lambda: _Stub(), raising=True)
     ui = _ConcreteUI(ws_id="ws-reopen", user_id="u")
     assert ui._event_id == 99
     # Next emitted event continues strictly above the seed (no collision).

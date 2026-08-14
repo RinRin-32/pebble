@@ -14,10 +14,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.console.coordinator_idle_observer import CoordinatorIdleObserver
-from turnstone.core.nudge_queue import NudgeQueue
-from turnstone.core.trajectory import Turn, turns_from_dicts
-from turnstone.core.workstream import WorkstreamKind, WorkstreamState
+from pebble.console.coordinator_idle_observer import CoordinatorIdleObserver
+from pebble.core.nudge_queue import NudgeQueue
+from pebble.core.trajectory import Turn, turns_from_dicts
+from pebble.core.workstream import WorkstreamKind, WorkstreamState
 
 
 class _FakeRow:
@@ -455,7 +455,7 @@ class TestValidUntilPredicate:
 
         # Drain at the user seam — predicate re-queries, finds 0 active,
         # drops the entry without delivering.
-        from turnstone.core.nudge_queue import USER_DRAIN
+        from pebble.core.nudge_queue import USER_DRAIN
 
         delivered = ws.session._nudge_queue.drain(USER_DRAIN)
         assert delivered == []
@@ -476,7 +476,7 @@ class TestValidUntilPredicate:
         mgr.fire_state(ws.id, WorkstreamState.IDLE)
 
         # Children still active → predicate returns True → entry delivers.
-        from turnstone.core.nudge_queue import USER_DRAIN
+        from pebble.core.nudge_queue import USER_DRAIN
 
         delivered = ws.session._nudge_queue.drain(USER_DRAIN)
         assert len(delivered) == 1
@@ -501,7 +501,7 @@ class TestValidUntilPredicate:
         # exception handling.
         storage.count_raises = True
 
-        from turnstone.core.nudge_queue import USER_DRAIN
+        from pebble.core.nudge_queue import USER_DRAIN
 
         delivered = ws.session._nudge_queue.drain(USER_DRAIN)
         assert delivered == []

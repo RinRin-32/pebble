@@ -110,7 +110,7 @@ def test_background_ignores_timeout(session):
 
 
 def test_background_spawn_failure_reports_error(session, monkeypatch):
-    from turnstone.core import background_shells as bg_mod
+    from pebble.core import background_shells as bg_mod
 
     def _boom(*args, **kwargs):
         raise OSError("cannot fork")
@@ -287,7 +287,7 @@ def test_close_drops_pending_exit_notice_via_valid_until(session):
         lambda: any(t == "background_shell_exit" for t, _ in session._nudge_queue.pending())
     )
     session.close()
-    from turnstone.core.nudge_queue import USER_DRAIN
+    from pebble.core.nudge_queue import USER_DRAIN
 
     drained = session._nudge_queue.drain(USER_DRAIN)
     assert not any(t == "background_shell_exit" for t, _text, _m in drained)
@@ -348,7 +348,7 @@ def test_exit_notice_survives_generation_abandon_without_waking(session):
     server.  It survives DEMOTED to 'quiet': still deliverable, but no
     longer wake-eligible, so the workstream the user just stopped cannot
     resume itself over it."""
-    from turnstone.core.nudge_queue import USER_DRAIN, WAKE_PENDING
+    from pebble.core.nudge_queue import USER_DRAIN, WAKE_PENDING
 
     _start_background(session, "echo done")
     assert _wait_until(
@@ -384,7 +384,7 @@ def test_bash_output_non_string_filter_errors_without_consuming(session):
 
 
 def test_filter_timeout_reports_error_without_consuming(session, monkeypatch):
-    from turnstone.core.background_shells import FilterTimeoutError
+    from pebble.core.background_shells import FilterTimeoutError
 
     _start_background(session, "sleep 30")
     shell = _only_shell(session)
@@ -511,7 +511,7 @@ def test_failed_wake_reenqueue_preserves_valid_until(session, monkeypatch):
     """The re-enqueued notice keeps its staleness predicate — a stale
     notice re-queued by a failed wake must still be droppable at its next
     drain, not delivered against a gone shell."""
-    from turnstone.core.nudge_queue import USER_DRAIN
+    from pebble.core.nudge_queue import USER_DRAIN
 
     alive = {"value": True}
 
@@ -584,7 +584,7 @@ def test_failed_wake_preserves_chronology_and_stays_wake_quiescent(session, monk
     advisories are dropped outright, because a re-armed WAKE_PENDING gate
     plus the zero-backoff worker-exit retry would respawn wake workers in
     an unbounded hot loop against a persistent failure."""
-    from turnstone.core.nudge_queue import WAKE_PENDING
+    from pebble.core.nudge_queue import WAKE_PENDING
 
     calls = {"n": 0}
     seen = {}
@@ -623,7 +623,7 @@ def test_exit_notice_emits_end_to_end_as_system_turn(session):
     assert _wait_until(
         lambda: any(t == "background_shell_exit" for t, _ in session._nudge_queue.pending())
     )
-    from turnstone.core.trajectory import Role
+    from pebble.core.trajectory import Role
 
     before = len(session.messages)
     session._emit_pending_user_nudges()  # must not raise
@@ -638,7 +638,7 @@ def test_cli_exit_closes_every_loaded_session():
     the active one — a server started before /new must not outlive /exit."""
     from unittest.mock import MagicMock
 
-    from turnstone.cli import _close_all_sessions
+    from pebble.cli import _close_all_sessions
 
     ws_a, ws_b, ws_never_loaded = MagicMock(), MagicMock(), MagicMock()
     ws_never_loaded.session = None
@@ -659,7 +659,7 @@ def test_cli_exit_ctrl_c_does_not_abort_the_reap():
     KeyboardInterrupt would also skip MCP/registry shutdown in main()."""
     from unittest.mock import MagicMock
 
-    from turnstone.cli import _close_all_sessions
+    from pebble.cli import _close_all_sessions
 
     ws_a, ws_b = MagicMock(), MagicMock()
     ws_a.session.close.side_effect = KeyboardInterrupt
@@ -722,7 +722,7 @@ def test_non_dict_watch_reminder_drops_silently(session):
 def test_truthy_flag_dialect_is_unified():
     """One coercion dialect file-wide — 'on' and nonzero numbers count, so a
     provider quirk honored on coordinator tools is honored on bash too."""
-    from turnstone.core.session import _is_truthy_flag
+    from pebble.core.session import _is_truthy_flag
 
     assert _is_truthy_flag(True)
     assert _is_truthy_flag("on")

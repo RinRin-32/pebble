@@ -6,7 +6,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from turnstone.core.storage._sqlite import SQLiteBackend
+    from pebble.core.storage._sqlite import SQLiteBackend
 
 
 def _make_id() -> str:

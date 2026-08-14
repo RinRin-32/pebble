@@ -38,11 +38,11 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from pebble.core.mcp_client import MCPClientManager
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.mcp_oauth import TokenLookupResult
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests.conftest import make_mcp_token_cipher, serve_until_exit, stop_loop_thread
-from turnstone.core.mcp_client import MCPClientManager
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.mcp_oauth import TokenLookupResult
-from turnstone.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -360,7 +360,7 @@ def test_integration_401_refresh_and_retry_succeeds(
         return TokenLookupResult(kind="token", token="access-aaa")
 
     with patch(
-        "turnstone.core.mcp_client.get_user_access_token_classified",
+        "pebble.core.mcp_client.get_user_access_token_classified",
         side_effect=_fake_classified,
     ):
         result = mgr.call_tool_sync(
@@ -409,7 +409,7 @@ def test_integration_401_with_refresh_failure_emits_consent_required(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -455,7 +455,7 @@ def test_integration_403_insufficient_scope_emits_structured_error(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -501,7 +501,7 @@ def test_integration_403_no_insufficient_scope_emits_generic_forbidden(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -576,7 +576,7 @@ def test_integration_403_multi_www_authenticate_drops_injected_scopes(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -629,7 +629,7 @@ def test_integration_401_retry_ceiling(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -675,7 +675,7 @@ def test_integration_breaker_unaffected_by_auth_failures(
         return TokenLookupResult(kind="token", token="access-aaa")
 
     with patch(
-        "turnstone.core.mcp_client.get_user_access_token_classified",
+        "pebble.core.mcp_client.get_user_access_token_classified",
         side_effect=_fake_classified,
     ):
         for _ in range(50):
@@ -859,7 +859,7 @@ def test_integration_pool_reuse_401_refresh_and_retry_succeeds(
         return TokenLookupResult(kind="token", token="access-aaa")
 
     with patch(
-        "turnstone.core.mcp_client.get_user_access_token_classified",
+        "pebble.core.mcp_client.get_user_access_token_classified",
         side_effect=_fake_classified,
     ):
         # Dispatch 1: passthrough success. Establishes the pooled session.

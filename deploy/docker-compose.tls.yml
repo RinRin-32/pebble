@@ -2,7 +2,7 @@
 #
 # Layers on the production stack (it patches the `server`, `console`, and
 # `channel` services that file defines):
-#   docker compose -f turnstone/deploy/compose.yaml -f deploy/docker-compose.tls.yml up
+#   docker compose -f pebble/deploy/compose.yaml -f deploy/docker-compose.tls.yml up
 #
 # The tls-init service bootstraps a CA and issues certs.
 # All turnstone services auto-provision their own certs via the
@@ -13,14 +13,14 @@ services:
   # Runs as root to create directories in the volume, then chowns
   # to turnstone:turnstone with restrictive perms (keys 0600).
   tls-init:
-    image: ghcr.io/turnstonelabs/turnstone:${TURNSTONE_IMAGE_TAG:-latest}
+    image: ghcr.io/turnstonelabs/turnstone:${PEBBLE_IMAGE_TAG:-latest}
     user: root
     command:
       - sh
       - -c
       - |
         set -e
-        turnstone-admin tls-bootstrap --out /certs
+        pebble-admin tls-bootstrap --out /certs
         chown -R turnstone:turnstone /certs
         find /certs -type d -exec chmod 750 {} +
         find /certs -type f -name '*key.pem' -exec chmod 600 {} +
@@ -39,11 +39,11 @@ services:
     volumes:
       - tls-certs:/certs:ro
     environment:
-      TURNSTONE_TLS_ENABLED: "true"
-      TURNSTONE_TLS_SANS: "console"
-      TURNSTONE_CONSOLE_URL: "http://console:8090"
+      PEBBLE_TLS_ENABLED: "true"
+      PEBBLE_TLS_SANS: "console"
+      PEBBLE_CONSOLE_URL: "http://console:8090"
     command:
-      - turnstone-console
+      - pebble-console
       - --host=0.0.0.0
       - --port=8090
       - --poll-interval=${CONSOLE_POLL_INTERVAL:-10}
@@ -56,8 +56,8 @@ services:
     volumes:
       - tls-certs:/certs:ro
     environment:
-      TURNSTONE_TLS_ENABLED: "true"
-      TURNSTONE_TLS_SANS: "server"
+      PEBBLE_TLS_ENABLED: "true"
+      PEBBLE_TLS_SANS: "server"
     # Disable healthcheck — server serves HTTPS with mTLS which the
     # stdlib healthcheck script can't satisfy. The base compose
     # healthcheck uses plain HTTP which won't work on an HTTPS listener.
@@ -72,15 +72,15 @@ services:
     volumes:
       - tls-certs:/certs:ro
     environment:
-      TURNSTONE_TLS_ENABLED: "true"
-      TURNSTONE_TLS_SANS: "channel"
+      PEBBLE_TLS_ENABLED: "true"
+      PEBBLE_TLS_SANS: "channel"
     command:
       - sh
       - -c
       - >-
-        turnstone-channel
+        pebble-channel
         --http-host=0.0.0.0
-        $${TURNSTONE_DISCORD_GUILD:+--discord-guild $$TURNSTONE_DISCORD_GUILD}
+        $${PEBBLE_DISCORD_GUILD:+--discord-guild $$PEBBLE_DISCORD_GUILD}
 
 volumes:
   tls-certs:

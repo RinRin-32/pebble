@@ -1,0 +1,111 @@
+/* ==========================================================================
+   turnstone — coordinator.css
+   Coordinator-specific chrome.  Loaded only by coordinator/index.html;
+   not part of console/static/style.css (the admin dashboard sheet).
+   ==========================================================================
+   Tokens (--panel, --hair, --ok, --warn, etc.) come from shared_static/
+   base.css.  Form controls + .btn / .ghost / .appbar primitives come
+   from shared_static/ui-base.css.  This file holds the patterns specific
+   to the coordinator view: the right-rail sidebar, the inline tool-batch
+   construct (paired tool calls + approval flow + results), and the
+   drag-and-drop overlay.
+   ========================================================================== */
+
+/* ==========================================================================
+   Sidebar — coordinator right-rail container.  The .sidebar rule defines
+   the visual chrome (panel bg, hair border, padding); the coord page's
+   inline <style> overrides position/top/height/border-right to flex the
+   rail into its grid column.  Section labels are 10px uppercase.
+   ========================================================================== */
+.sidebar {
+  position: sticky;
+  top: 48px;
+  align-self: start;
+  height: calc(100vh - 48px);
+  padding: 16px 10px;
+  background: var(--panel);
+  border-right: 1px solid var(--hair);
+  overflow: auto;
+}
+
+.side-section {
+  margin-bottom: 18px;
+}
+
+.side-label {
+  padding: 0 8px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* ==========================================================================
+   Drag-and-drop overlay — applied to #coord-main while the user is
+   dragging files from the OS over the chat pane. Composer wires this on
+   construction (dragDrop.targetEl=coord-main, dropClass=coord-drop-target).
+   The dashed outline + "Drop file to attach" overlay mirror the interactive
+   pane's pattern so the affordance reads the same in both surfaces.
+   ========================================================================== */
+#coord-main {
+  position: relative; /* anchors the ::after overlay */
+}
+#coord-main.coord-drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+#coord-main.coord-drop-target::after {
+  content: "Drop file to attach";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* User-message attachment pills — rendered beneath the bubble for
+   live sends and on history replay.  Mirrors the .msg-user-attach*
+   rules in pebble/ui/static/style.css so coord and interactive
+   surfaces show the same affordance for attached files. */
+.msg-user-attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.msg-user-attach-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* --panel (not --panel-2) — the .msg bubble is already --panel-2,
+     so pulling the pill onto the alternate surface keeps it visible
+     against the bubble in both themes (WCAG 1.4.11 non-text contrast).
+     Mirrors the interactive UI's --bg-surface vs .msg --panel-2 split. */
+  background: var(--panel);
+  color: var(--ink-2);
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.msg-user-attach-icon {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.msg-user-attach-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

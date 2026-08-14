@@ -19,17 +19,17 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
+from pebble.console.server import (
+    cluster_ws_live_bulk,
+    coordinator_metrics,
+)
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests._coord_test_helpers import (
     _AuthMiddleware,
     _build_mgr,
     _fake_registry,
     _FakeConfigStore,
 )
-from turnstone.console.server import (
-    cluster_ws_live_bulk,
-    coordinator_metrics,
-)
-from turnstone.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def _seed_workstream(
         # spawns_last_hour boundary.
         import sqlalchemy as sa
 
-        from turnstone.core.storage._sqlite import workstreams
+        from pebble.core.storage._sqlite import workstreams
 
         with storage._conn() as conn:
             conn.execute(
@@ -285,7 +285,7 @@ def test_bulk_live_coordinator_row_includes_pending_approval_details(storage):
     equivalent of the dashboard test in test_server_authz, but for
     the console live-bulk endpoint that the coord tree UI actually
     consumes."""
-    from turnstone.core.session_ui_base import ApprovalCycle
+    from pebble.core.session_ui_base import ApprovalCycle
 
     mgr = _build_mgr(storage)
     ws = mgr.create(user_id="user-1")

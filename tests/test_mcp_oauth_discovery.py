@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from turnstone.core.mcp_oauth import (
+from pebble.core.mcp_oauth import (
     ASMetadata,
     MCPOAuthDiscoveryError,
     _parse_prm_url_from_www_authenticate,

@@ -1,0 +1,1843 @@
+/* ==========================================================================
+   turnstone — chat.css
+   Shared chat-view vocabulary.  Used by the per-node server UI
+   (pebble/ui/static/) and the coordinator page
+   (pebble/console/static/coordinator/).  Tokens come from base.css;
+   chat.css layers component classes on top.
+   Sizing scale follows the 11/12/13px established elsewhere so
+   components slot into existing layouts without dominating them.
+   ========================================================================== */
+
+/* ==========================================================================
+   Composer — shared form shell.
+   Slots: optional attachment chips row, optional paperclip, textarea,
+   send button.  Coordinator omits chips + paperclip; interactive
+   includes both.  Same wrapper, same textarea + send styling.
+   ========================================================================== */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  /* Recessed wrapper — the textarea inside reads as the prominent
+     input surface above this background.  In light mode --bg
+     (#f7f7f4) on --bg-surface (#ffffff) gave near-identical contrast
+     and made the textarea invisible; the inversion fixes both modes. */
+  background: var(--bg);
+  border-top: 1px solid var(--border-strong);
+}
+
+.composer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.composer-chips:empty {
+  display: none;
+}
+
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  max-width: 340px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+}
+.composer-chip-size {
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.composer-chip-remove {
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+}
+.composer-chip-remove:hover {
+  color: var(--red);
+}
+
+/* --- attachment previews — image/pdf thumbnail + lazy text snippet in the
+   chip; audio plays on the sent message, not the composer chip (see
+   composer_attachments.js).  Shared layout (filename clamp, width caps, the
+   snippet/player dropping to their own row) lives here; per-surface theming of
+   the chip/pill chrome stays in each surface's stylesheet. --- */
+.composer-chip-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attach-preview-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  flex: 0 0 auto;
+}
+/* Fallback when a thumbnail fails to load: the kind glyph in the same slot the
+   thumbnail would have occupied (so layout doesn't jump and no blank gap). */
+.attach-preview-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  font-size: 16px;
+  line-height: 1;
+}
+.attach-preview-audio {
+  height: 30px;
+  max-width: min(240px, 100%);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.attach-preview-snippet {
+  flex: 1 1 100%;
+  order: 1;
+  margin-top: 2px;
+  max-width: 100%;
+  color: var(--fg-dim);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msg-user-attach-pill {
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
+}
+.msg-user-attach-pill .attach-preview-thumb {
+  width: 44px;
+  height: 44px;
+}
+.msg-user-attach-pill .attach-preview-icon {
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+}
+.msg-user-attach-pill .attach-preview-audio {
+  height: 32px;
+  max-width: min(280px, 100%);
+  flex: 1 1 100%;
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.composer-attach {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  line-height: 1;
+  height: 32px;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
+}
+.composer-attach:hover {
+  background: var(--bg-highlight);
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+.composer-attach:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.composer-attach:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.composer-attach:disabled:hover {
+  background: transparent;
+  color: var(--fg-dim);
+  border-color: var(--border-strong);
+}
+
+/* Voice I/O — mic dictation button (composer row) mirrors .composer-attach,
+   plus a recording-pulse state and the per-message TTS playback states. */
+.composer-mic-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  height: 32px;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
+}
+.composer-mic-btn:hover {
+  background: var(--bg-highlight);
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+.composer-mic-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.composer-mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.composer-mic-btn.is-recording {
+  color: var(--red, #f87171);
+  border-color: var(--red, #f87171);
+  animation: ts-mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ts-mic-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.msg-tts-btn.is-playing {
+  color: var(--accent);
+}
+.msg-tts-btn.is-busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-mic-btn.is-recording {
+    /* No pulse — keep an unmistakable static cue instead of the only signal
+       being a subtle icon swap. */
+    animation: none;
+    background: var(--red-glow);
+  }
+}
+/* Coarse-pointer touch target (WCAG 2.5.5) — matches the .msg-action-btn rule. */
+@media (hover: none) and (pointer: coarse) {
+  .composer-mic-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* Monochrome currentColor glyphs for the voice controls (CSS-mask technique),
+   so they theme and sit beside the line-art .icon-retry set rather than reading
+   as full-color, OS-dependent emoji. */
+.composer-mic-icon,
+.icon-mic,
+.icon-speaker {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.icon-mic {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z'/%3E%3Cpath d='M19 10v1a7 7 0 0 1-14 0v-1'/%3E%3Cline x1='12' y1='19' x2='12' y2='22'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z'/%3E%3Cpath d='M19 10v1a7 7 0 0 1-14 0v-1'/%3E%3Cline x1='12' y1='19' x2='12' y2='22'/%3E%3C/svg%3E");
+}
+.icon-speaker {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/%3E%3Cpath d='M15.54 8.46a5 5 0 0 1 0 7.07'/%3E%3Cpath d='M19.07 4.93a10 10 0 0 1 0 14.14'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5'/%3E%3Cpath d='M15.54 8.46a5 5 0 0 1 0 7.07'/%3E%3Cpath d='M19.07 4.93a10 10 0 0 1 0 14.14'/%3E%3C/svg%3E");
+}
+/* Recording: a solid stop square (no mask) in place of the mic glyph. */
+.composer-mic-icon.icon-stop {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.composer-input {
+  flex: 1;
+  /* Allow the textarea to shrink below its content width so a long unbroken
+     token can't push the fixed-width row buttons (attach/mic/send) past the
+     edge of a narrow split pane. */
+  min-width: 0;
+  min-height: 32px;
+  max-height: 160px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  /* resize: none — max-height + auto-resize handlers in app.js /
+     coordinator.js cap growth; letting the user drag-resize pushes
+     the messages pane off-screen on small viewports. */
+  resize: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.composer-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.composer-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.composer-input::placeholder {
+  color: var(--fg-dim);
+  opacity: 0.7;
+}
+
+.composer-send {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 16px;
+  background: var(--accent);
+  color: var(--on-color);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  height: 32px;
+  transition: filter 0.12s;
+  letter-spacing: 0.02em;
+}
+.composer-send:hover {
+  filter: brightness(1.08);
+}
+.composer-send:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+.composer-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
+.composer-send--queue {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.composer-send--queue:hover {
+  background: var(--accent-dim);
+  filter: none;
+}
+/* Glyph send (chat composers): a square button showing the send glyph instead
+   of the word "Send"; the textual label lives in aria-label only. */
+.composer-send--glyph {
+  width: 32px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Stop button — only rendered when the composer was constructed with
+   stopBtn=true.  Distinct red colour signals "interrupt the in-flight
+   generation" rather than "send another message". */
+.composer-stop {
+  background: var(--red, #c94040);
+  min-width: 120px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--on-color);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  padding: 6px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  height: 32px;
+}
+.composer-stop:focus-visible {
+  outline: 2px solid var(--fg-bright, #e8ecf4);
+  outline-offset: 2px;
+}
+[data-theme="light"] .composer-stop {
+  color: #fff;
+}
+
+/* ============================================================
+   Queued-message bubble — optimistic UI when the user sends
+   while the worker is still mid-turn (queueWhileBusy=true).
+   The bubble dims, gains a dashed border, and carries a
+   "queued" badge + dismiss button until the shared queue
+   controller observes the busy → idle edge via
+   ``queue.onIdleEdge()`` and promotes it to a normal user
+   message. The "important" variant is the !!! priority
+   prefix path.
+   ============================================================ */
+.msg-queued {
+  opacity: 0.65;
+  border-style: dashed;
+}
+.msg-queued-important {
+  opacity: 0.8;
+  border-color: var(--yellow, var(--warn));
+}
+.queued-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-dim, var(--ink-3));
+  margin-right: 4px;
+}
+.msg-queued-important .queued-badge {
+  color: var(--yellow, var(--warn));
+}
+.queued-dismiss {
+  background: none;
+  border: none;
+  color: var(--fg-dim, var(--ink-3));
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  margin-left: 8px;
+  float: right;
+  line-height: 1;
+}
+.queued-dismiss:hover {
+  color: var(--red, var(--err));
+}
+.queued-dismiss[aria-disabled="true"] {
+  cursor: default;
+  color: var(--fg-dim, var(--ink-3));
+  opacity: 0.5;
+}
+/* In-flight dequeue (× clicked, awaiting the server's confirm): dim the
+   card so the "dismissing" state is visible to sighted users, not just
+   exposed via aria-busy to assistive tech. */
+.msg-queued[aria-busy="true"] {
+  opacity: 0.4;
+}
+
+/* ============================================================
+   Stacked layout — textarea above, actions row below.
+   Used by creation forms (coordinator-create, future dashboard
+   migration) where the input is visually dominant and the action
+   row pairs an attach / options cluster on the left with a
+   primary "Create" / "Start" button on the right.
+   ============================================================ */
+.composer--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.composer--stacked .composer-text {
+  display: flex;
+}
+.composer--stacked .composer-input {
+  flex: 1;
+  min-height: 72px;
+  /* Blend the textarea into its enclosing panel in stacked layout —
+     the container already provides the bordered frame; doubling the
+     border inside reads as chrome.  Hairline bottom border so the
+     input zone is still identifiable pre-focus. */
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 6px 8px;
+  resize: vertical;
+}
+.composer--stacked .composer-input:focus-visible {
+  box-shadow: none;
+  border-bottom-color: var(--accent);
+}
+.composer--stacked .composer-row {
+  align-items: center;
+}
+/* Space the primary action button away from the left-clustered
+   attach + options buttons in the stacked layout.  The send
+   button is always the LAST element in the action row; push it
+   to the right edge via margin-left:auto. */
+.composer--stacked .composer-send {
+  margin-left: auto;
+}
+
+/* Chat composers (interactive + coordinator) = the mock's compact rounded
+   "composer box": one bordered surface holding the borderless textarea on top
+   and the [+] / model-chip / send row below.  Scoped to .composer--chat (the
+   model-chip hosts) so the home launcher's taller stacked composer is untouched. */
+.composer--chat {
+  margin: 0 12px 10px;
+  padding: 8px 11px;
+  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+.composer--chat.composer--stacked .composer-input {
+  /* Borderless — the box is the frame; the textarea is a compact 1-line input
+     that auto-grows (no 72px form-style min-height). */
+  min-height: 30px;
+  border: none;
+  background: none;
+  padding: 2px 0;
+}
+.composer--chat.composer--stacked .composer-input:focus-visible {
+  box-shadow: none;
+  border: none;
+  outline: none;
+}
+/* Plain "+" attach glyph (mock) — no button chrome. */
+.composer--chat .composer-attach {
+  border: none;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 18px;
+  padding: 0 3px;
+  height: auto;
+}
+.composer--chat .composer-attach:hover {
+  background: none;
+  color: var(--accent);
+  border: none;
+}
+/* STT enabled: the mic button leads the right-aligned action cluster (mic +
+   send) rather than stranding on the left next to the model chip.  The action
+   row gets .has-mic when the STT role is confirmed (interactive.js); without it,
+   send keeps its own margin-left:auto and sits alone on the right. */
+.composer-row.has-mic .composer-mic-btn {
+  margin-left: auto;
+}
+.composer-row.has-mic .composer-send {
+  margin-left: 0;
+}
+
+/* ============================================================
+   Options disclosure — toggle button + collapsible panel.
+   Rendered when the composer is constructed with opts.options.
+   ============================================================ */
+.composer-options-btn {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 10px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+.composer-options-btn:hover {
+  background: var(--bg-highlight);
+  border-color: var(--accent-dim);
+}
+.composer-options-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.composer-options-btn[aria-expanded="true"] .composer-options-caret {
+  /* Flip ▾ to ▴ via transform so the glyph file stays single-char. */
+  display: inline-block;
+  transform: rotate(180deg);
+}
+.composer-options-summary {
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+/* Live "model · effort" read-out chip (composer row, between [+] and the
+   textarea).  Deliberately quiet: a compact mono read-out, not a button —
+   no hover/focus affordance because it isn't interactive (a per-session
+   model picker is a separate, deferred task). */
+.composer-model-chip {
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+}
+/* "Has a project" badge — sits right of the model chip.  Accent border + ink
+   (vs the model chip's recessive --hair / --ink-4) plus the ▣ glyph in the
+   text mark it as a distinct, attention-worthy state (chip-contrast rule:
+   colour paired with a glyph, full-opacity border, not a washed tint).  Long
+   names ellipsize so the composer row never blows out. */
+.composer-project-chip {
+  /* Shrinks before the row overflows (the chip already ellipsizes), so on a
+     narrow pane the chip yields rather than pushing the send button out of the
+     composer box.  Floors at ~3ch to keep the ▣ glyph legible. */
+  flex-shrink: 1;
+  min-width: 3ch;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 2px 7px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+.composer-options-panel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 8px;
+  /* Most recessed surface — sits below the wrapper (--bg) and
+     well below the textarea (--bg-surface) in the depth hierarchy
+     so the options zone reads as its own settings tier. */
+  background: var(--bg-highlight);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+/* Explicit [hidden] override — the class rule's display:grid has
+   equal specificity to the UA [hidden] { display: none } default
+   and comes later in the cascade, so a bare [hidden] attribute
+   alone doesn't hide the panel.  Override here so toggleOptions()
+   works via the standard hidden attribute. */
+.composer-options-panel[hidden] {
+  display: none;
+}
+.composer-options-field {
+  display: contents;
+}
+.composer-options-field > label {
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.composer-options-control {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  width: 100%;
+}
+.composer-options-control:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+/* Active-state flip on the toggle button itself (mirrors the
+   dashboard composer's affordance). */
+.composer-options-btn[aria-expanded="true"] {
+  color: var(--fg);
+  background: var(--bg);
+}
+
+/* ==========================================================================
+   Header — shared page-header shell.
+   Pages that want it add .ts-header to their existing #header wrapper.
+   Structure: logo + status region + actions region.  Already matches
+   the shape used by ui/static/index.html and console/static/index.html;
+   coordinator migrates into the same pattern.
+   ========================================================================== */
+.ts-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-strong);
+  flex-shrink: 0;
+  position: relative;
+}
+.ts-header::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent-dim),
+    transparent
+  );
+}
+/* Suppress the accent gradient when the header is immediately followed
+   by a #tab-bar (server UI) — the tab-bar already carries its own
+   border-bottom and the two decorative lines stack visually otherwise. */
+.ts-header:has(+ #tab-bar)::after {
+  display: none;
+}
+.ts-header-title {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+.ts-header-title-dim {
+  color: var(--fg-dim);
+  font-weight: 400;
+}
+.ts-header-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+  letter-spacing: 0.03em;
+}
+.ts-header-status--ok {
+  color: var(--green);
+}
+.ts-header-status--err {
+  color: var(--red);
+}
+.ts-header-spacer {
+  flex: 1;
+}
+
+/* Back-to-console navigation — shared affordance used by the
+   coordinator page header and by the console's redirect banner
+   injected into the interactive UI proxy pages at /node/{id}/. */
+.ts-header-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-decoration: none;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+.ts-header-back-link:hover {
+  color: var(--accent);
+  background: var(--bg-highlight);
+  border-color: var(--accent-dim);
+}
+.ts-header-back-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ts-header-back-link-arrow {
+  font-family: var(--font-mono);
+}
+.ts-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   Sidebar — shared right-sidebar shell.
+   Currently only used by the coordinator page; extracted so other
+   pages can adopt.  Section headings reuse .ui-section-heading from
+   ui-base.css.
+   ========================================================================== */
+.ts-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: clamp(260px, 22vw, 420px);
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.ts-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 30%;
+  overflow: hidden;
+}
+.ts-sidebar-section + .ts-sidebar-section {
+  border-top: 1px solid var(--border);
+}
+.ts-sidebar-section-heading {
+  margin: 0;
+  padding: 6px 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ts-sidebar-section-count {
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.ts-sidebar-section-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 4px 8px;
+}
+.ts-sidebar-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-style: italic;
+}
+
+/* ==========================================================================
+   Mobile (<700px) — chat.css components stack vertically.
+   ========================================================================== */
+@media (max-width: 700px) {
+  .msg {
+    padding: 6px 10px;
+  }
+  .msg-body pre {
+    margin: 4px -6px;
+    border-radius: 0;
+  }
+  .composer {
+    padding: 6px 10px;
+  }
+  .composer-input {
+    min-height: 40px;
+    max-height: 120px;
+    resize: none;
+  }
+  .composer-send {
+    height: 40px;
+    padding: 6px 14px;
+  }
+  .ts-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* ==========================================================================
+   Reduced motion — disable chat.css transitions.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .msg-actions,
+  .msg-action-btn,
+  .composer-attach,
+  .composer-input,
+  .composer-send {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Message primitive — chat-style single-column message block.  Semantic
+   variant carries via 3px left-border colour (and text colour for
+   error/info).  Shared by the coordinator chat view and the per-node
+   server chat UI; both render pure .msg classes.
+
+   Variants:
+     .msg                 base (assistant / generic)
+     .msg.user            user-authored turn (accent left-border)
+     .msg.assistant       explicit assistant (same as base, clarity class)
+     .msg.reasoning       <thinking> / reasoning trace — dashed left-border
+     .msg.tool            tool output / tool response — accent-tinted
+     .msg.error           error states — err red
+     .msg.info            transient info — think indigo, smaller
+     .msg.system          system-injected turns (policy notices, etc.)
+
+   Content sub-elements:
+     .msg-meta            author / timestamp / model label (optional);
+                          placed above .msg-body in mono 11px --ink-3
+     .msg-body            markdown target — styles code, pre, headings,
+                          lists, blockquotes, strong/em
+     .msg-actions         hover-revealed action buttons (copy / regenerate)
+
+   Streaming indicator: add `data-streaming="true"` to the .msg and a
+   blinking caret appears at the end of .msg-body. Avoids per-view
+   reinvention.
+   ========================================================================== */
+.msg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--hair);
+  border-left-width: 3px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Variant left-borders */
+.msg.user {
+  border-left-color: var(--accent);
+}
+/* First-class operator-context system turn (role="system" in the
+   trajectory) — the consolidation of the metacognition reminder /
+   user-interjection / output-guard bubbles into one turn type that FOLLOWS
+   the turn it advises.  Shared so the interactive UI and the console coord
+   viewer render the bubble identically (the visible kind label is
+   interactive-only — see ``.msg-system-context-label`` below).  Yellow accent
+   reads as "operator metadata"
+   against the amber user colour and the cyan tool cards; deliberately quieter
+   so it doesn't compete for attention.  The ``watch_triggered`` kind carries
+   structured per-kind meta and branches into the richer ``.msg.watch-result``
+   card below instead of this plain bubble. */
+.msg.system-context {
+  border-left-color: var(--yellow);
+  color: var(--fg-dim);
+  font-size: 12px;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+}
+/* The visible kind label is built ONLY by the interactive pane
+   (app.js ``addSystemContext`` → a ``.msg-system-context-label`` span).  The
+   coord viewer (coordinator.js ``appendMsg``) renders the kind via
+   border-colour + ``data-ts-role``/``aria-label`` with no visible label for
+   ANY role, so this rule (and its ``.important`` variant below) is inert on the
+   coord pane by design — not dead CSS. */
+.msg.system-context .msg-system-context-label {
+  color: var(--yellow);
+  font-weight: 600;
+  margin-right: 6px;
+  text-transform: lowercase;
+}
+.msg.system-context .msg-body {
+  white-space: pre-wrap;
+}
+
+/* Structured watch-result card — the ``watch_triggered`` operator-context
+   system turn renders here (command-preview header / shell-output body / poll
+   counter footer) rather than as the plain ``.msg.system-context`` bubble,
+   because it carries structured per-kind meta.  Cyan accent ties it to the
+   tool-surface vocabulary (it IS shell output).  Built by
+   ``_buildWatchResultBubble`` (interactive) / ``appendWatchResult`` (coord). */
+.msg.watch-result {
+  border-left-color: var(--cyan);
+  background: var(--panel);
+  padding: 8px 12px;
+  margin: 6px 0;
+  width: 100%;
+}
+.msg.watch-result .msg-watch-header {
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-transform: lowercase;
+}
+.msg.watch-result .msg-watch-cmd {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.msg.watch-result .msg-watch-body {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 0;
+  white-space: pre-wrap;
+  /* Shell output can be wide (URLs, JSON, file lists) — break inside
+     long words so the off-canvas mobile drawer doesn't blow horizontal
+     layout. */
+  word-break: break-word;
+}
+.msg.watch-result .msg-watch-footer {
+  color: var(--ink-3);
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+/* Compaction card — both the in-progress state (``.compaction-running``, with
+   the progress bar) and the settled result (token delta + summary fold).
+   Built by ``buildCompactionProgressCard`` / ``buildCompactionCard``
+   (shared conversation.js) for the interactive pane AND the coord viewer.
+   Blue accent: a system/infrastructure-info operation — distinct from the
+   cyan tool surface, the yellow operator bubbles, and the amber user turns.
+   NOT magenta: that accent is reserved for the MCP surface (.scope-mcp and
+   the admin scope chips); blue's other uses are admin-surface only (model
+   status dots, provider chips) and never co-render with transcript cards. */
+.msg.compaction-card {
+  border-left-color: var(--blue);
+  background: var(--panel);
+  padding: 8px 12px;
+  margin: 6px 0;
+  width: 100%;
+}
+.msg.compaction-card .msg-compaction-header {
+  color: var(--blue);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+.msg.compaction-card .msg-compaction-detail {
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.msg.compaction-card .msg-compaction-note {
+  color: var(--ink-3);
+  font-size: 11px;
+  margin-top: 6px;
+}
+.msg.compaction-card .msg-compaction-bar {
+  position: relative;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: var(--blue-glow);
+  overflow: hidden;
+}
+.msg.compaction-card .msg-compaction-bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--blue);
+  transition: width 300ms ease;
+}
+/* Indeterminate state — a single-batch summarization emits no part-k/N
+   progress, so the bar sweeps until the end event settles it. */
+.msg.compaction-card .msg-compaction-bar.indeterminate .msg-compaction-bar-fill {
+  width: 40%;
+  animation: compaction-sweep 1.4s ease-in-out infinite;
+}
+@keyframes compaction-sweep {
+  0% {
+    margin-left: -40%;
+  }
+  100% {
+    margin-left: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg.compaction-card .msg-compaction-bar.indeterminate .msg-compaction-bar-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+  .msg.compaction-card .msg-compaction-bar-fill {
+    transition: none;
+  }
+}
+.msg.compaction-card .msg-compaction-fold {
+  margin-top: 6px;
+}
+.msg.compaction-card .msg-compaction-fold > summary {
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  text-transform: lowercase;
+}
+.msg.compaction-card .msg-compaction-body {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg-dim);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Slash-command echo — control-plane input, not a conversational turn.
+   Prompt-styled mono line (the leading "/" is the glyph), quieter than a
+   user bubble so command chatter doesn't read as trajectory. */
+.msg.command-echo {
+  border-left-color: var(--fg-dim);
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+/* Guard-finding card — the ``output_guard`` operator-context system turn.  The
+   inner warning element (``.output-warning`` interactive / ``.coord-tool-row-
+   warning`` coord) carries the risk colour + flags + redaction; this wrapper
+   hosts it as a standalone message row and styles the annotation detail lines
+   the terse inline tool chip omits.  Built by ``_buildGuardFindingBubble``
+   (interactive) / ``appendGuardFinding`` (coord). */
+.msg.guard-finding {
+  border-left-color: var(--yellow);
+  padding: 6px 10px;
+}
+.msg.guard-finding .msg-guard-annotation {
+  color: var(--ink-3);
+  font-size: 11px;
+  margin-top: 4px;
+  margin-left: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Idle-children card — the coordinator-only ``idle_children`` operator-context
+   system turn lists the child workstreams still running while the coordinator
+   went idle.  Built by ``appendIdleChildren`` (coord). */
+.msg.idle-children {
+  border-left-color: var(--yellow);
+  padding: 6px 10px;
+}
+.msg.idle-children .msg-idle-header {
+  color: var(--yellow);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: lowercase;
+  margin-bottom: 4px;
+}
+.msg.idle-children .msg-idle-list {
+  margin: 0;
+  padding-left: 16px;
+}
+.msg.idle-children .msg-idle-child {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.msg.idle-children .msg-idle-child-state {
+  color: var(--ink-4);
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+/* Important user interjection — a ``!!!``-prefixed queued message that drained
+   mid-turn.  Brighter accent + heavier weight so an urgent operator interjection
+   doesn't read as a quiet metadata note.  ``notice`` interjections keep the
+   default ``.system-context`` styling. */
+.msg.system-context.important {
+  border-left-color: var(--accent);
+}
+.msg.system-context.important .msg-system-context-label {
+  color: var(--accent);
+}
+
+/* System-nudge marker — visible-but-thin replacement for the wake's
+   synthetic empty user turn, so the operator-context `system` turns that
+   follow it have a visible anchor instead of trailing an old user message.
+   Today only `_source = "system_nudge"` triggers it; future producers
+   can add their own thin marker via the same pattern. */
+.msg.user.system-nudge {
+  border-left-color: var(--yellow);
+  color: var(--ink-3);
+  font-size: 11px;
+  padding: 2px 10px;
+  background: transparent;
+  text-transform: lowercase;
+}
+.msg.assistant {
+  border-left-color: var(--hair-2);
+}
+.msg.reasoning {
+  border-left-style: dashed;
+  border-left-color: var(--ink-4);
+  color: var(--ink-3);
+  font-style: italic;
+}
+.msg.tool {
+  background: var(--panel);
+  /* Cyan for tool-role surfaces — shared with .ts-approval borders so
+     user (amber) / assistant (neutral) / tool (cyan) read distinctly. */
+  border-left-color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.msg.error {
+  border-left-color: var(--err);
+  color: var(--err);
+}
+.msg.info {
+  border-left-color: var(--think);
+  color: color-mix(in srgb, var(--think) 70%, var(--ink));
+  font-size: 12px;
+}
+.msg.system {
+  border-left-color: var(--ink-4);
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* Author / timestamp slot — optional label row above the body. Use
+   this for "assistant · 10:42:18 · claude-opus-4-7" style headers. */
+.msg-meta {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* Markdown body — renderer.js writes innerHTML here; trust boundary
+   lives there, not in CSS. Keep styles tight so streamed content
+   doesn't jitter layout as tokens arrive.
+
+   ``white-space: normal`` is intentional (and explicit so a future edit
+   doesn't "simplify" by reaching for ``pre-wrap``).  The markdown
+   converter leaves ``\n`` text nodes between block siblings (headings →
+   paragraphs → katex-display → ...).  ``pre-wrap`` rendered every one
+   of those as visible vertical space, stacking 20-30px gaps between
+   every section.  ``<pre>`` blocks have ``white-space: pre`` built in
+   so fenced code still preserves formatting; mid-stream partial fences
+   before the closing ``\`\`\`` arrives render as collapsed text for a
+   frame and then snap back when the next render tick wraps them in
+   ``<pre>``.  User-typed messages render through ``.msg-user-text`` (a
+   separate path that preserves its own newlines), so this default only
+   affects assistant markdown output. */
+.msg-body {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* Streaming caret — append to the end of .msg-body when the message is
+   still being streamed. Opt in via `data-streaming="true"` on the .msg. */
+.msg[data-streaming="true"] .msg-body::after {
+  content: "▍";
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--accent);
+  animation: ts-caret 1s steps(2, start) infinite;
+}
+
+@keyframes ts-caret {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg[data-streaming="true"] .msg-body::after {
+    animation: none;
+  }
+}
+
+.msg-body > *:first-child {
+  margin-top: 0;
+}
+.msg-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.msg-body pre {
+  margin: 6px 0;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+}
+
+.msg-body code {
+  padding: 1px 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--hair-2);
+  border-radius: 3px;
+  /* Preserve internal whitespace + allow wrapping.  The body's
+     ``white-space: normal`` (above) would otherwise collapse multiple
+     spaces inside backtick spans; ``<pre>`` blocks rely on the
+     user-agent ``pre { white-space: pre }`` rule and don't need this. */
+  white-space: pre-wrap;
+}
+
+.msg-body pre code {
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+/* Tool messages have a --panel background, same colour as the default
+   .msg-body pre bg — shift the pre/code inside tool blocks to --panel-2
+   so the inline code stands out from the message surface. */
+.msg.tool .msg-body pre,
+.msg.tool .msg-body code {
+  background: var(--panel-2);
+}
+
+/* Syntax highlighting — highlight.js theme (instrument panel).
+   Lives here (shared) rather than in a per-surface style.css so the
+   server UI, the console, AND the coordinator all colour hljs token
+   spans identically.  highlight.js emits the <span class="hljs-*">
+   markup on every surface (postRenderHljs in renderer.js); without
+   these rules the spans render in the default --fg and code blocks
+   look unhighlighted.  Colours resolve against the palette variables
+   in base.css (also shared). */
+.msg.assistant pre code.hljs {
+  /* No background here on purpose — the <pre> carries the code-surface colour
+     on every surface (--code-bg on the server UI via .msg.assistant pre, --panel
+     on the console/coordinator via the shared .msg-body pre).  Painting it on
+     the inner <code> too made a darker box inside a lighter pad band wherever
+     the two differ (the console/coordinator seam).  Let the code stay
+     transparent and show the pre. */
+  color: var(--fg);
+  padding: 0;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-type {
+  color: var(--magenta);
+}
+.hljs-string,
+.hljs-attr,
+.hljs-template-tag,
+.hljs-template-variable {
+  color: var(--green);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--cyan);
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: var(--accent);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--fg-dim);
+  font-style: italic;
+}
+.hljs-meta {
+  color: var(--fg-dim);
+}
+.hljs-doctag {
+  color: var(--cyan);
+  font-weight: 500;
+}
+.hljs-char.escape_ {
+  color: var(--cyan);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: bold;
+  color: var(--fg-bright);
+}
+.hljs-attribute {
+  color: var(--yellow);
+}
+.hljs-regexp,
+.hljs-link {
+  color: var(--cyan);
+}
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--yellow);
+}
+.hljs-section {
+  color: var(--accent);
+  font-weight: bold;
+}
+.hljs-tag {
+  color: var(--fg-dim);
+}
+.hljs-name {
+  color: var(--magenta);
+}
+.hljs-params {
+  color: var(--fg);
+}
+.hljs-addition {
+  color: var(--green);
+  background: rgba(52, 211, 153, 0.08);
+  display: inline-block;
+  width: 100%;
+}
+.hljs-deletion {
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.08);
+  display: inline-block;
+  width: 100%;
+}
+.msg.assistant pre.code-terminal {
+  border-left: 2px solid var(--green);
+}
+[data-theme="light"] .hljs-addition {
+  background: rgba(4, 120, 87, 0.06);
+}
+[data-theme="light"] .hljs-deletion {
+  background: rgba(220, 38, 38, 0.06);
+}
+
+/* KaTeX math wrappers — shared for the same reason as the hljs theme above:
+   the console + coordinator load /static/style.css from their own directory
+   (and do NOT load preview.css), so the app-level frame for rendered math has
+   to live here.  The vendored katex.min.css draws the glyphs; this gives block
+   equations a horizontal scroll container (wide equations overflow without it)
+   and colours parse errors. */
+.msg.assistant .katex-display {
+  margin: 8px 0;
+  padding: 8px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.msg.assistant .katex-error {
+  color: var(--red) !important;
+  font-size: 12px;
+}
+
+/* Mermaid diagram wrappers — shared for the same reason.  mermaid.js draws a
+   self-contained SVG, so diagrams appear even with these missing; but without
+   them the SVG isn't centred or width-clamped (a wide diagram overflows the
+   pane) and the loading/error states render unstyled. */
+.msg.assistant .mermaid-container {
+  margin: 8px 0;
+  text-align: center;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  min-height: 40px;
+}
+.msg.assistant .mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+.msg.assistant .mermaid-loading {
+  padding: 16px;
+  color: var(--fg-dim);
+  font-size: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+.msg.assistant .mermaid-error {
+  text-align: left;
+}
+.msg.assistant .mermaid-error-msg {
+  padding: 8px 12px;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg.assistant .mermaid-container svg * {
+    animation: none !important;
+  }
+}
+
+.msg-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.msg-body h1,
+.msg-body h2,
+.msg-body h3,
+.msg-body h4,
+.msg-body h5,
+.msg-body h6 {
+  margin: 10px 0 4px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.msg-body h1 {
+  font-size: 16px;
+}
+.msg-body h2 {
+  font-size: 14px;
+}
+.msg-body h3 {
+  font-size: 13px;
+}
+.msg-body h4,
+.msg-body h5,
+.msg-body h6 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.msg-body p {
+  margin: 6px 0;
+}
+
+.msg-body ul,
+.msg-body ol {
+  margin: 4px 0 4px 20px;
+  padding: 0;
+}
+.msg-body li {
+  margin: 2px 0;
+}
+
+.msg-body strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.msg-body em {
+  font-style: italic;
+}
+
+.msg-body blockquote {
+  margin: 6px 0;
+  padding: 4px 10px;
+  border-left: 2px solid var(--hair);
+  color: var(--ink-3);
+}
+
+/* Hover-revealed action row — copy / regenerate / feedback buttons.
+   pointer-events toggles alongside opacity so the invisible toolbar
+   doesn't intercept clicks in the top-right corner of the message
+   (would otherwise break text selection on the last word of a short
+   one-line msg). */
+.msg-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.msg:hover .msg-actions,
+.msg:focus-within .msg-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.msg-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.msg-action-btn:hover {
+  background: var(--hair-2);
+  color: var(--ink);
+}
+
+.msg-action-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Touch-only: keep actions visible; hover-reveal isn't reachable.
+   `(pointer: coarse)` narrows the match to true touch devices —
+   `(hover: none)` alone fires on stylus and some laptops too. Matches
+   the `@media (hover: none) and (pointer: coarse)` convention above.
+   Keyboard users are handled by :focus-within on .msg above. */
+@media (hover: none) and (pointer: coarse) {
+  .msg-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* WCAG 2.5.5 — 24×24 minimum touch target; we go to 36×36 to match
+     the previously-shipped ui/static/style.css override that the merge
+     replaced. */
+  .msg-action-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+/* ==========================================================================
+   Per-message rewind / edit / retry affordance (#549)
+   Icon glyphs rendered inside the .msg-action-btn toolbar above, plus the
+   inline edit-in-place form. Shared by the interactive pane (ui/static) and
+   the coordinator dashboard (console/static/coordinator); both load this file
+   before their page stylesheet, so this is the single source of truth.
+   Vars resolve from shared/base.css (loaded by both panes).
+   ========================================================================== */
+
+/* Icon: retry (circular arrow) */
+.icon-retry {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  border-bottom-color: transparent;
+  position: relative;
+}
+.icon-retry::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 0;
+  height: 0;
+  border-left: 2px solid transparent;
+  border-right: 2px solid transparent;
+  border-top: 3px solid currentColor;
+  transform: rotate(-30deg);
+}
+
+/* Icon: edit (pencil) */
+.icon-edit {
+  width: 12px;
+  height: 12px;
+  position: relative;
+  transform: rotate(-45deg);
+}
+.icon-edit::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 3px;
+  width: 6px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 1px 1px 0 0;
+  box-sizing: border-box;
+}
+.icon-edit::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 3px;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 3px solid currentColor;
+}
+
+/* Icon: rewind (chevrons pointing left) */
+.icon-rewind {
+  width: 14px;
+  height: 12px;
+  position: relative;
+}
+.icon-rewind::before,
+.icon-rewind::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  border-left: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.icon-rewind::before {
+  left: 1px;
+}
+.icon-rewind::after {
+  left: 6px;
+}
+
+/* Edit-in-place form */
+.msg-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.msg-edit-textarea {
+  width: 100%;
+  min-height: 40px;
+  max-height: 200px;
+  background: var(--bg);
+  color: var(--fg-bright);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.12s ease;
+  box-sizing: border-box;
+}
+.msg-edit-textarea:focus {
+  border-color: var(--accent);
+}
+.msg-edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.msg-edit-btn {
+  padding: 4px 14px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--fg);
+  transition:
+    background 0.1s ease,
+    border-color 0.1s ease,
+    color 0.1s ease;
+}
+.msg-edit-btn:hover {
+  background: var(--bg-highlight);
+}
+.msg-edit-btn-send {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.msg-edit-btn-send:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Edit-in-place active state */
+.msg-editing {
+  background: var(--bg-surface);
+  border-color: var(--accent-dim);
+}
+.msg-editing .msg-actions {
+  display: none;
+}
+
+/* Busy-state disables action buttons */
+[data-busy="true"] .msg-action-btn {
+  opacity: 0.3;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .msg-edit-textarea,
+  .msg-edit-btn {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Per-workstream status bar — pinned above the composer.
+   Rendered by both the interactive pane (ui/static/app.js) and the
+   coordinator dashboard (console/static/coordinator/coordinator.js).
+   Both consume the same on_status SSE event shape (see
+   pebble/core/session_ui_base.py SessionUI.on_status).
+   ========================================================================== */
+.ws-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 16px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-dim);
+  flex-shrink: 0;
+  min-height: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  transition:
+    background 0.3s,
+    border-color 0.3s;
+}
+.ws-sb-tokens {
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+.ws-sb-tools {
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+.ws-sb-turns {
+  color: var(--fg-dim);
+  white-space: nowrap;
+  margin-left: auto;
+}
+.ws-status-bar.ws-sb-warn .ws-sb-tokens {
+  color: var(--yellow);
+  font-weight: 600;
+}
+.ws-status-bar.ws-sb-danger .ws-sb-tokens {
+  color: var(--red);
+  font-weight: 600;
+  text-shadow: 0 0 4px var(--red-glow);
+}
+[data-theme="light"] .ws-status-bar.ws-sb-danger .ws-sb-tokens {
+  text-shadow: none;
+}
+.ws-status-bar.ws-sb-disconnected {
+  border-top: 2px solid var(--red);
+  background: rgba(248, 113, 113, 0.04);
+}
+.ws-status-bar.ws-sb-disconnected .ws-sb-tokens {
+  color: var(--red);
+}
+.ws-status-bar.ws-sb-disconnected .ws-sb-tools,
+.ws-status-bar.ws-sb-disconnected .ws-sb-turns {
+  opacity: 0.4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-status-bar {
+    transition: none;
+  }
+}

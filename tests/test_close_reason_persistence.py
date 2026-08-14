@@ -13,11 +13,11 @@ from unittest.mock import MagicMock
 import pytest
 from starlette.testclient import TestClient
 
-import turnstone.server as srv_mod
-from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
-from turnstone.core.metrics import MetricsCollector
-from turnstone.core.storage._sqlite import SQLiteBackend
-from turnstone.core.workstream import WorkstreamState
+import pebble.server as srv_mod
+from pebble.core.auth import JWT_AUD_SERVER, create_jwt
+from pebble.core.metrics import MetricsCollector
+from pebble.core.storage._sqlite import SQLiteBackend
+from pebble.core.workstream import WorkstreamState
 
 _JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
@@ -35,12 +35,12 @@ def _full_hdr() -> dict[str, str]:
 
 @pytest.fixture(autouse=True)
 def _isolate_metrics(monkeypatch):
-    """Swap ``turnstone.server._metrics`` for a fresh collector
+    """Swap ``pebble.server._metrics`` for a fresh collector
     per-test, with auto-restore.
 
     Bare ``srv_mod._metrics = MetricsCollector()`` (the prior
     pattern) leaks into any test file that already bound the name
-    via ``from turnstone.server import _metrics`` at import time —
+    via ``from pebble.server import _metrics`` at import time —
     those tests' patches then operate on a different instance from
     the one the live ``_publish_models_metadata`` reads, and the
     monkeypatch silently no-ops.  ``monkeypatch.setattr`` restores

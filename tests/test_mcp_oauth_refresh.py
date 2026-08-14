@@ -25,10 +25,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.mcp_oauth import get_user_access_token
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests.conftest import make_mcp_token_cipher
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.mcp_oauth import get_user_access_token
-from turnstone.core.storage._sqlite import SQLiteBackend
 
 # Generous CI ceiling — cancel/drain is sub-millisecond on a healthy loop.
 _CANCEL_WAIT_S = 5.0
@@ -187,7 +187,7 @@ def _public_addr_patch():
 
 class TestRefreshFailureClassification:
     def _lookup(self, state: SimpleNamespace) -> Any:
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         async def _run() -> Any:
             with _public_addr_patch():
@@ -257,7 +257,7 @@ class TestRefreshFailureClassification:
         assert result.kind == "refresh_failed_transient"
         # Kept (TRANSIENT), not revoked — and the ambiguous streak did not advance.
         assert state.mcp_token_store.get_user_token("user-1", "srv-oauth") is not None
-        from turnstone.core.mcp_oauth import _refresh_backoff_state
+        from pebble.core.mcp_oauth import _refresh_backoff_state
 
         assert _refresh_backoff_state(state, "user-1", "srv-oauth").ambiguous_streak == 0
 
@@ -378,8 +378,8 @@ class TestRefreshFailureClassification:
         _seed_token(state, expires_in_seconds=-1000)
 
         with (
-            patch("turnstone.core.mcp_oauth._AMBIGUOUS_ESCALATION_THRESHOLD", 3),
-            patch("turnstone.core.mcp_oauth._REFRESH_TRANSIENT_COOLDOWN_SECONDS", 0.0),
+            patch("pebble.core.mcp_oauth._AMBIGUOUS_ESCALATION_THRESHOLD", 3),
+            patch("pebble.core.mcp_oauth._REFRESH_TRANSIENT_COOLDOWN_SECONDS", 0.0),
         ):
             # Below threshold: the token survives each attempt.
             for _ in range(2):
@@ -405,8 +405,8 @@ class TestRefreshFailureClassification:
         _seed_token(state, expires_in_seconds=-1000)
 
         with (
-            patch("turnstone.core.mcp_oauth._AMBIGUOUS_ESCALATION_THRESHOLD", 2),
-            patch("turnstone.core.mcp_oauth._REFRESH_TRANSIENT_COOLDOWN_SECONDS", 0.0),
+            patch("pebble.core.mcp_oauth._AMBIGUOUS_ESCALATION_THRESHOLD", 2),
+            patch("pebble.core.mcp_oauth._REFRESH_TRANSIENT_COOLDOWN_SECONDS", 0.0),
         ):
             for _ in range(5):
                 assert self._lookup(state).kind == "refresh_failed_transient"
@@ -471,7 +471,7 @@ class TestObserveOnlyLookup:
     the row INTACT; an ambiguous one as transient with the streak untouched."""
 
     def _lookup(self, state: SimpleNamespace) -> Any:
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         async def _run() -> Any:
             with _public_addr_patch():
@@ -511,7 +511,7 @@ class TestObserveOnlyLookup:
         state = _make_app_state(storage, http_client=client)
         _seed_token(state, expires_in_seconds=-1000)
 
-        with patch("turnstone.core.mcp_oauth._AMBIGUOUS_ESCALATION_THRESHOLD", 2):
+        with patch("pebble.core.mcp_oauth._AMBIGUOUS_ESCALATION_THRESHOLD", 2):
             for _ in range(5):
                 assert self._lookup(state).kind == "refresh_failed_transient"
 
@@ -601,7 +601,7 @@ class TestUnchangedToken:
         the consent flow) rather than propagating the exception up to
         the dispatch caller.
         """
-        from turnstone.core.mcp_crypto import MCPTokenDecryptError
+        from pebble.core.mcp_crypto import MCPTokenDecryptError
 
         _seed_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -690,7 +690,7 @@ class TestRefresh:
         emitted: list[str] = []
 
         async def _run():
-            from turnstone.core import mcp_oauth as mod
+            from pebble.core import mcp_oauth as mod
 
             real_record_audit = mod.record_audit
 
@@ -1009,7 +1009,7 @@ class TestExpiresInParsing:
         assert token == "access-NEW"
 
     def test_expires_in_garbage_returns_none(self) -> None:
-        from turnstone.core.mcp_oauth import _expires_at_from_response
+        from pebble.core.mcp_oauth import _expires_at_from_response
 
         assert _expires_at_from_response({}) is None
         assert _expires_at_from_response({"expires_in": "abc"}) is None
@@ -1105,7 +1105,7 @@ class TestPgRefreshLock:
         the same thread (psycopg2 thread-affinity) without globally
         serializing the spin loop.
         """
-        from turnstone.core.mcp_oauth import _PgRefreshLock
+        from pebble.core.mcp_oauth import _PgRefreshLock
 
         in_flight = 0
         max_in_flight = 0
@@ -1171,7 +1171,7 @@ class TestPgRefreshLock:
 
         Returns the single cm the factory created.
         """
-        from turnstone.core.mcp_oauth import _pg_refresh_drain_tasks, _PgRefreshLock
+        from pebble.core.mcp_oauth import _pg_refresh_drain_tasks, _PgRefreshLock
 
         enter_started = threading.Event()
         enter_release = threading.Event()
@@ -1280,7 +1280,7 @@ class TestClassifiedGetter:
     """
 
     def test_returns_token_on_happy_path(self, storage: SQLiteBackend) -> None:
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         _seed_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -1297,7 +1297,7 @@ class TestClassifiedGetter:
         assert result.token == "access-aaa"
 
     def test_missing_token_returns_missing(self, storage: SQLiteBackend) -> None:
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         _seed_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -1318,8 +1318,8 @@ class TestClassifiedGetter:
         "row present but undecryptable" so it can avoid emitting fake
         ``mcp_consent_required`` events on every operator misconfig.
         """
-        from turnstone.core.mcp_crypto import MCPTokenDecryptError
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_crypto import MCPTokenDecryptError
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         _seed_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -1344,7 +1344,7 @@ class TestClassifiedGetter:
         assert result.decrypt_fingerprints == ("aabbccdd",)
 
     def test_refresh_failure_returns_refresh_failed(self, storage: SQLiteBackend) -> None:
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         _seed_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -1365,7 +1365,7 @@ class TestClassifiedGetter:
         assert state.mcp_token_store.get_user_token("user-1", "srv-oauth") is None
 
     def test_no_refresh_token_returns_refresh_failed(self, storage: SQLiteBackend) -> None:
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         _seed_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)

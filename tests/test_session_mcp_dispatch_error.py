@@ -3,8 +3,8 @@
 The Phase 7b pool dispatcher signals user-actionable failures (consent
 required, insufficient scope) via ``RuntimeError(json_str)`` where
 ``json_str`` is the structured-error payload built by
-:func:`turnstone.core.mcp_client._structured_error`. The exec sites in
-:mod:`turnstone.core.session` previously wrapped that JSON in
+:func:`pebble.core.mcp_client._structured_error`. The exec sites in
+:mod:`pebble.core.session` previously wrapped that JSON in
 ``f"MCP X error: {e}"``, destroying the structured shape the dashboard
 renderer keys on. The helper preserves the JSON when the exception
 text decodes to a structured-error envelope and prefixes otherwise.
@@ -19,8 +19,8 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
+from pebble.core.session import _format_mcp_dispatch_error
 from tests.test_session import _make_session
-from turnstone.core.session import _format_mcp_dispatch_error
 
 # ---------------------------------------------------------------------------
 # Unit tests for the helper
@@ -173,7 +173,7 @@ class TestExecReadResourceDispatchError:
         # invariant) on failure. Patch the logger so the test doesn't emit
         # noise to the captured stderr — assertions don't depend on log
         # output.
-        with patch("turnstone.core.session.log"):
+        with patch("pebble.core.session.log"):
             session._exec_read_resource(item)
 
         assert len(captures) == 1
@@ -192,7 +192,7 @@ class TestExecReadResourceDispatchError:
             "call_id": "rc_2",
             "resource_uri": "https://example.com/r",
         }
-        with patch("turnstone.core.session.log"):
+        with patch("pebble.core.session.log"):
             session._exec_read_resource(item)
 
         assert captures[0][2] == "MCP resource error: connection lost"
@@ -213,7 +213,7 @@ class TestExecUsePromptDispatchError:
             "prompt_name": "mcp__srv-oauth__greet",
             "prompt_arguments": {},
         }
-        with patch("turnstone.core.session.log"):
+        with patch("pebble.core.session.log"):
             session._exec_use_prompt(item)
 
         assert len(captures) == 1
@@ -233,7 +233,7 @@ class TestExecUsePromptDispatchError:
             "prompt_name": "mcp__srv-oauth__greet",
             "prompt_arguments": {},
         }
-        with patch("turnstone.core.session.log"):
+        with patch("pebble.core.session.log"):
             session._exec_use_prompt(item)
 
         assert captures[0][2] == "MCP prompt error: connection lost"

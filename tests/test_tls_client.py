@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.core.storage import get_storage, init_storage, reset_storage
+from pebble.core.storage import get_storage, init_storage, reset_storage
 
 lacme = pytest.importorskip("lacme")
 
@@ -27,7 +27,7 @@ def _storage(tmp_path):
 
 def test_discover_console_url():
     """TLSClient discovers console URL from services table."""
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     storage = get_storage()
     storage.register_service("console", "console", "http://console:8080")
@@ -39,7 +39,7 @@ def test_discover_console_url():
 
 def test_discover_console_url_missing():
     """TLSClient raises if no console registered."""
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(storage=get_storage(), hostnames=["node-1"])
     with pytest.raises(RuntimeError, match="No console service found"):
@@ -48,7 +48,7 @@ def test_discover_console_url_missing():
 
 def test_explicit_console_url_skips_discovery():
     """When console_url is provided, discovery is skipped."""
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(
         storage=get_storage(),
@@ -64,7 +64,7 @@ def test_explicit_console_url_skips_discovery():
 @pytest.mark.anyio
 async def test_ssl_contexts_none_before_init():
     """SSL contexts are None before init()."""
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(
         storage=get_storage(),
@@ -81,7 +81,7 @@ async def test_ssl_contexts_none_before_init():
 
 def test_collector_tls_defaults():
     """Collector with default TLS params works without changes."""
-    from turnstone.console.collector import ClusterCollector
+    from pebble.console.collector import ClusterCollector
 
     storage_mock = MagicMock()
     collector = ClusterCollector(storage=storage_mock)
@@ -98,7 +98,7 @@ def _make_flaky_client(monkeypatch, failures: int):
     Returns (client, calls, sleeps) — mutable lists recording each CA-fetch
     attempt and each backoff delay (the client's backoff sleep is stubbed).
     """
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(
         storage=get_storage(),
@@ -131,7 +131,7 @@ def _make_flaky_client(monkeypatch, failures: int):
 @pytest.mark.anyio
 async def test_init_rejects_invalid_retry_params():
     """attempts < 1 would make init() a silent no-op; fail fast instead."""
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(
         storage=get_storage(),
@@ -176,7 +176,7 @@ async def test_init_retries_exhausted_raises(monkeypatch):
 @pytest.mark.anyio
 async def test_init_retries_discovery_failure(monkeypatch):
     """Console discovery (not-yet-registered console) is retried too."""
-    from turnstone.core.tls import TLSClient
+    from pebble.core.tls import TLSClient
 
     client = TLSClient(storage=get_storage(), hostnames=["node-1"])
     attempts: list[int] = []
@@ -207,10 +207,10 @@ async def test_init_retries_discovery_failure(monkeypatch):
 
 
 def test_pem_runtime_dir_env_override(monkeypatch, tmp_path):
-    """TURNSTONE_TLS_PEM_DIR overrides the default location."""
-    from turnstone.core.tls import tls_pem_runtime_dir
+    """PEBBLE_TLS_PEM_DIR overrides the default location."""
+    from pebble.core.tls import tls_pem_runtime_dir
 
-    monkeypatch.setenv("TURNSTONE_TLS_PEM_DIR", str(tmp_path / "custom"))
+    monkeypatch.setenv("PEBBLE_TLS_PEM_DIR", str(tmp_path / "custom"))
     assert tls_pem_runtime_dir() == tmp_path / "custom"
 
 
@@ -218,18 +218,18 @@ def test_pem_runtime_dir_default(monkeypatch):
     """Default lives under the system tempdir."""
     import tempfile
 
-    from turnstone.core.tls import tls_pem_runtime_dir
+    from pebble.core.tls import tls_pem_runtime_dir
 
-    monkeypatch.delenv("TURNSTONE_TLS_PEM_DIR", raising=False)
+    monkeypatch.delenv("PEBBLE_TLS_PEM_DIR", raising=False)
     assert tls_pem_runtime_dir() == Path(tempfile.gettempdir()) / "turnstone-tls"
 
 
 def test_prepare_pem_runtime_dir_clears_stale(monkeypatch, tmp_path):
     """Boot prep creates the dir 0700 and removes stale lacme-pem-* dirs."""
-    from turnstone.core.tls import prepare_pem_runtime_dir
+    from pebble.core.tls import prepare_pem_runtime_dir
 
     root = tmp_path / "tls"
-    monkeypatch.setenv("TURNSTONE_TLS_PEM_DIR", str(root))
+    monkeypatch.setenv("PEBBLE_TLS_PEM_DIR", str(root))
     stale = root / "lacme-pem-stale"
     stale.mkdir(parents=True)
     (stale / "key.pem").write_text("old")
@@ -249,13 +249,13 @@ def test_prepare_pem_runtime_dir_rejects_symlink(monkeypatch, tmp_path):
     On bare metal the default root sits in shared /tmp; following a
     planted symlink would land key material under an attacker-chosen
     path."""
-    from turnstone.core.tls import prepare_pem_runtime_dir
+    from pebble.core.tls import prepare_pem_runtime_dir
 
     target = tmp_path / "elsewhere"
     target.mkdir()
     link = tmp_path / "tls-link"
     link.symlink_to(target)
-    monkeypatch.setenv("TURNSTONE_TLS_PEM_DIR", str(link))
+    monkeypatch.setenv("PEBBLE_TLS_PEM_DIR", str(link))
 
     with pytest.raises(RuntimeError, match="symlink or not owned"):
         prepare_pem_runtime_dir()
@@ -265,9 +265,9 @@ def test_refresh_runtime_pems_rotates_dir(monkeypatch, tmp_path):
     """Renewal writes a fresh complete PEM dir, then drops the old one."""
     from lacme import CertificateAuthority, MemoryStore
 
-    from turnstone.core.tls import prepare_pem_runtime_dir, refresh_runtime_pems
+    from pebble.core.tls import prepare_pem_runtime_dir, refresh_runtime_pems
 
-    monkeypatch.setenv("TURNSTONE_TLS_PEM_DIR", str(tmp_path / "tls"))
+    monkeypatch.setenv("PEBBLE_TLS_PEM_DIR", str(tmp_path / "tls"))
     root = prepare_pem_runtime_dir()
 
     ca = CertificateAuthority(store=MemoryStore())

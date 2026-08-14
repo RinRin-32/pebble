@@ -199,13 +199,13 @@ $KC create clients -r spike -s clientId=mcp-b -s enabled=true -s publicClient=fa
 $KC create users -r spike -s username=alice -s enabled=true -s email=a@s.test \
   -s emailVerified=true -s firstName=A -s lastName=S
 $KC set-password -r spike --username alice --new-password alice-pw
-TURNSTONE_UUID=$($KC get clients -r spike -q clientId=turnstone --fields id --format csv --noquotes)
+PEBBLE_UUID=$($KC get clients -r spike -q clientId=turnstone --fields id --format csv --noquotes)
 for t in mcp-a mcp-b; do
   SID=$($KC create client-scopes -r spike -s name=aud-$t -s protocol=openid-connect -i)
   $KC create client-scopes/$SID/protocol-mappers/models -r spike -s name=aud-$t \
     -s protocol=openid-connect -s protocolMapper=oidc-audience-mapper \
     -s "config={\"included.client.audience\":\"$t\",\"access.token.claim\":\"true\"}"
-  $KC update clients/$TURNSTONE_UUID/optional-client-scopes/$SID -r spike
+  $KC update clients/$PEBBLE_UUID/optional-client-scopes/$SID -r spike
 done
 # then: password grant -> refresh grant -> token-exchange with
 # grant_type=urn:ietf:params:oauth:grant-type:token-exchange,

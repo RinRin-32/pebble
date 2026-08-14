@@ -72,7 +72,7 @@ jobs:
           for lib in katex hljs mermaid hls; do
             version=$(grep -oE "${lib}-[0-9.]+" pyproject.toml | head -1 | sed "s/${lib}-//")
             [[ -z "$version" ]] && continue
-            [[ -d "turnstone/shared_static/${lib}-${version}" ]] && continue
+            [[ -d "pebble/shared_static/${lib}-${version}" ]] && continue
             updates+=("${lib}:${version}")
           done
           if [[ ${#updates[@]} -eq 0 ]]; then

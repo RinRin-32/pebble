@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.settings_registry import (
+from pebble.core.settings_registry import (
     BOOTSTRAP_SECTIONS,
     SETTINGS,
     deserialize_value,

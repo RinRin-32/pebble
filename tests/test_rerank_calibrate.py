@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from turnstone.core.rerank import RerankHit
-from turnstone.core.rerank_calibrate import _GAP_FRACTION, _PROBE_SET, _build_result, calibrate
+from pebble.core.rerank import RerankHit
+from pebble.core.rerank_calibrate import _GAP_FRACTION, _PROBE_SET, _build_result, calibrate
 
 
 class _ScriptedClient:

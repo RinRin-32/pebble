@@ -17,9 +17,9 @@ import httpx
 import pytest
 from starlette.testclient import TestClient
 
-from turnstone.console.collector import ClusterCollector
-from turnstone.console.router import ConsoleRouter, NodeRef
-from turnstone.core.auth import JWT_AUD_CONSOLE, create_jwt
+from pebble.console.collector import ClusterCollector
+from pebble.console.router import ConsoleRouter, NodeRef
+from pebble.core.auth import JWT_AUD_CONSOLE, create_jwt
 
 _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
@@ -77,7 +77,7 @@ def _make_mock_router(node_id: str = "node-a", url: str = "http://a:8080") -> Ma
 
 
 def _make_app(router: Any = None) -> Any:
-    from turnstone.console.server import _load_static, create_app
+    from pebble.console.server import _load_static, create_app
 
     _load_static()
     return create_app(

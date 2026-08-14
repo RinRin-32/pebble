@@ -26,11 +26,11 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from pebble.core.mcp_client import MCPClientManager
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.mcp_oauth import TokenLookupResult
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests.conftest import make_mcp_token_cipher, serve_until_exit, stop_loop_thread
-from turnstone.core.mcp_client import MCPClientManager
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.mcp_oauth import TokenLookupResult
-from turnstone.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -324,7 +324,7 @@ def test_resource_read_401_refresh_and_retry_succeeds(
         return TokenLookupResult(kind="token", token="access-aaa")
 
     with patch(
-        "turnstone.core.mcp_client.get_user_access_token_classified",
+        "pebble.core.mcp_client.get_user_access_token_classified",
         side_effect=_fake_classified,
     ):
         result = mgr.read_resource_sync("res://hello", user_id="user-1", timeout=15)
@@ -367,7 +367,7 @@ def test_resource_read_persistent_401_emits_consent_required(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -405,7 +405,7 @@ def test_resource_read_403_insufficient_scope_emits_structured_error(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -446,7 +446,7 @@ def test_resource_read_403_generic_forbidden(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -495,7 +495,7 @@ def test_resource_read_breaker_unaffected_by_auth_failures(
         _seed_pool_resource_map(mgr, "user-1", "pool-srv", "res://hello")
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_fake_classified,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -527,7 +527,7 @@ def test_resource_read_missing_token_emits_consent_required(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -554,7 +554,7 @@ def test_resource_read_decrypt_failure_emits_token_undecryptable(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -584,7 +584,7 @@ def test_resource_read_http_url_emits_url_insecure(
 
     with (
         patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ),
         pytest.raises(RuntimeError) as exc_info,
@@ -659,7 +659,7 @@ def test_resource_read_e2e_discovery_then_dispatch_succeeds(
         return TokenLookupResult(kind="token", token="access-aaa")
 
     with patch(
-        "turnstone.core.mcp_client.get_user_access_token_classified",
+        "pebble.core.mcp_client.get_user_access_token_classified",
         side_effect=_fake_classified,
     ):
         # Step 1: trigger the connect via prefix-parsed tool dispatch.

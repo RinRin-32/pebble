@@ -1,4 +1,4 @@
-"""Tests for the persona snapshot codec (turnstone.core.personas).
+"""Tests for the persona snapshot codec (pebble.core.personas).
 
 The stamp is the load-bearing seam of the feature: it must round-trip the
 tri-state tool set byte-stably, treat a missing stamp as legacy, and treat a
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.personas import (
+from pebble.core.personas import (
     PERSONA_CONFIG_KEYS,
     PersonaSnapshot,
     snapshot_from_config,
@@ -46,7 +46,7 @@ class TestSnapshotFromPersona:
     def test_file_backed_prompt_resolves_from_file(self) -> None:
         # A built-in row (base_prompt NULL, base_prompt_file set) resolves its
         # BASE from prompts/personas/<file> and freezes it into the stamp.
-        from turnstone.prompts import load_persona_prompt
+        from pebble.prompts import load_persona_prompt
 
         snap = snapshot_from_persona(
             {"name": "scribe", "base_prompt": None, "base_prompt_file": "scribe.md"}
@@ -180,7 +180,7 @@ class TestForgivingResolution:
     """
 
     def _resolve(self, name: str, kind: str = "interactive", rows: list[dict] | None = None):
-        from turnstone.core.personas import resolve_persona_for_kind
+        from pebble.core.personas import resolve_persona_for_kind
 
         return resolve_persona_for_kind(_FakeStorage(rows or _rows()), name, kind)
 
@@ -298,7 +298,7 @@ class TestForgivingResolution:
             assert "not found or disabled" in err
 
     def test_storage_none_is_a_distinct_error(self) -> None:
-        from turnstone.core.personas import resolve_persona_for_kind
+        from pebble.core.personas import resolve_persona_for_kind
 
         row, err = resolve_persona_for_kind(None, "writer", "interactive")
         assert row is None and err == "persona storage unavailable"
@@ -308,7 +308,7 @@ class TestForgivingResolution:
             def list_personas(self, include_disabled: bool = False) -> list[dict]:
                 raise RuntimeError("db gone")
 
-        from turnstone.core.personas import resolve_persona_for_kind
+        from pebble.core.personas import resolve_persona_for_kind
 
         row, err = resolve_persona_for_kind(_Broken(_rows()), "nope", "interactive")
         assert row is None

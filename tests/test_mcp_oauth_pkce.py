@@ -13,7 +13,7 @@ import base64
 import hashlib
 import string
 
-from turnstone.core.mcp_oauth import generate_pkce_pair
+from pebble.core.mcp_oauth import generate_pkce_pair
 
 _URLSAFE_CHARS = set(string.ascii_letters + string.digits + "-_")
 

@@ -28,14 +28,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pebble.core import session_worker
+from pebble.core.idle_nudge_watcher import IdleNudgeWatcher, wake_workstream_if_pending
+from pebble.core.session import ChatSession
+from pebble.core.session_manager import SessionManager
+from pebble.core.trajectory import dicts_from_turns, turn_from_dict
+from pebble.core.workstream import Workstream, WorkstreamKind, WorkstreamState
 from tests._helpers import wait_until as _wait_until
 from tests.test_session_manager import FakeStorage
-from turnstone.core import session_worker
-from turnstone.core.idle_nudge_watcher import IdleNudgeWatcher, wake_workstream_if_pending
-from turnstone.core.session import ChatSession
-from turnstone.core.session_manager import SessionManager
-from turnstone.core.trajectory import dicts_from_turns, turn_from_dict
-from turnstone.core.workstream import Workstream, WorkstreamKind, WorkstreamState
 
 # ---------------------------------------------------------------------------
 # Minimal fake adapter / UI for this integration test.  Storage reuses
@@ -233,7 +233,7 @@ def test_idle_event_through_real_session_manager_drives_wake_send(real_mgr, tmp_
             patch.object(ws.session, "_update_token_table"),
             patch.object(ws.session, "_print_status_line"),
             patch.object(ws.session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             # Suppress the auto-title side-thread; orthogonal to wake.
             ws.session._title_generated = True
@@ -294,7 +294,7 @@ def test_idle_event_with_empty_queue_does_not_dispatch_wake(real_mgr, tmp_db):
     try:
         ws = mgr.create(user_id="u1", name="empty-int", skill=None)
         # No enqueue.
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             mgr.set_state(ws.id, WorkstreamState.IDLE)
             assert mock_send.call_count == 0, "wake must not dispatch for an empty queue"
     finally:
@@ -341,7 +341,7 @@ def test_watch_fire_on_already_idle_session_drives_wake_send(real_mgr, tmp_db):
         patch.object(ws.session, "_update_token_table"),
         patch.object(ws.session, "_print_status_line"),
         patch.object(ws.session, "_visible_memory_count", return_value=0),
-        patch("turnstone.core.session.save_message"),
+        patch("pebble.core.session.save_message"),
     ):
         ws.session._title_generated = True
         # Idle all along — no worker, and no state transition coming.
@@ -399,8 +399,8 @@ def test_coord_idle_with_active_children_emits_envelope_via_real_managers(coord_
     ``console/server.py``'s lifespan does at production startup; if
     the install order is ever reversed, this test fails.
     """
-    from turnstone.console.coordinator_idle_observer import CoordinatorIdleObserver
-    from turnstone.core.workstream import WorkstreamKind as _Kind
+    from pebble.console.coordinator_idle_observer import CoordinatorIdleObserver
+    from pebble.core.workstream import WorkstreamKind as _Kind
 
     mgr, adapter, storage = coord_mgr
     # Observer FIRST, then watcher.  Same order as
@@ -451,7 +451,7 @@ def test_coord_idle_with_active_children_emits_envelope_via_real_managers(coord_
             patch.object(coord.session, "_update_token_table"),
             patch.object(coord.session, "_print_status_line"),
             patch.object(coord.session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             coord.session._title_generated = True
             mgr.set_state(coord.id, WorkstreamState.IDLE)
@@ -500,8 +500,8 @@ def test_coord_idle_emitted_from_worker_thread_still_wakes(coord_mgr, tmp_db):
         → wake daemon → deliver_wake_nudge_from_queue → send("")
         → idle_children system turn in history
     """
-    from turnstone.console.coordinator_idle_observer import CoordinatorIdleObserver
-    from turnstone.core.workstream import WorkstreamKind as _Kind
+    from pebble.console.coordinator_idle_observer import CoordinatorIdleObserver
+    from pebble.core.workstream import WorkstreamKind as _Kind
 
     mgr, adapter, storage = coord_mgr
     observer = CoordinatorIdleObserver(mgr, storage)
@@ -536,7 +536,7 @@ def test_coord_idle_emitted_from_worker_thread_still_wakes(coord_mgr, tmp_db):
             patch.object(coord.session, "_update_token_table"),
             patch.object(coord.session, "_print_status_line"),
             patch.object(coord.session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             coord.session._title_generated = True
 
@@ -581,8 +581,8 @@ def test_wake_delivery_contains_generation_cancelled(tmp_db):
     closure, and ``session_worker._runner`` catches only ``Exception``,
     so an escape would land in ``threading.excepthook`` as stderr noise
     on every close-vs-wake race."""
+    from pebble.core.session import GenerationCancelled
     from tests._helpers import make_chat_session
-    from turnstone.core.session import GenerationCancelled
 
     session = make_chat_session()
     session._nudge_queue.enqueue("idle_children", "kids waiting", "any")

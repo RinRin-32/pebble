@@ -1,4 +1,4 @@
-"""Unit tests for ``turnstone.core.mcp_http_parsers``.
+"""Unit tests for ``pebble.core.mcp_http_parsers``.
 
 The parser replaces the prior hand-rolled scanners that used
 ``header.lower().find("scope")`` to locate parameter names — that approach
@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from turnstone.core.mcp_http_parsers import (
+from pebble.core.mcp_http_parsers import (
     parse_www_authenticate_bearer,
     parse_www_authenticate_error,
     parse_www_authenticate_scope,

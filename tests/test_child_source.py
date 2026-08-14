@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`turnstone.core.child_source`.
+"""Unit tests for :mod:`pebble.core.child_source`.
 
 Covers both strategies in isolation against fakes — no live collector,
 no live SessionManager. Adapter-level integration coverage continues to
@@ -11,9 +11,9 @@ import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
-from turnstone.core.child_source import ClusterChildSource, SameNodeChildSource
-from turnstone.core.children_registry import ChildrenRegistry
-from turnstone.core.workstream import WorkstreamState
+from pebble.core.child_source import ClusterChildSource, SameNodeChildSource
+from pebble.core.children_registry import ChildrenRegistry
+from pebble.core.workstream import WorkstreamState
 
 if TYPE_CHECKING:
     import queue

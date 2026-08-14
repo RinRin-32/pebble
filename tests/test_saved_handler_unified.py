@@ -3,7 +3,7 @@
 Covers the unified (multi-kind) saved-list handler the console mounts
 for its L-shell dashboard, plus a regression guard for the single-kind
 :func:`make_saved_handler` after the shared body was lifted into
-:func:`turnstone.core.session_routes._collect_saved_rows`.
+:func:`pebble.core.session_routes._collect_saved_rows`.
 
 Storage is mocked (``list_workstreams_with_history`` is patched to
 return synthetic 18-tuples) — no real or dev database is touched. The
@@ -22,12 +22,12 @@ from unittest.mock import MagicMock
 import pytest
 from starlette.responses import JSONResponse
 
-from turnstone.core.session_routes import (
+from pebble.core.session_routes import (
     SessionEndpointConfig,
     make_saved_handler,
     make_unified_saved_handler,
 )
-from turnstone.core.workstream import WorkstreamKind
+from pebble.core.workstream import WorkstreamKind
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -151,10 +151,10 @@ def _patch_storage(
             return interactive_rows[offset : offset + limit]
         return []
 
-    # The handler imports the symbol from turnstone.core.memory at call
+    # The handler imports the symbol from pebble.core.memory at call
     # time, so patch it on that module.
     monkeypatch.setattr(
-        "turnstone.core.memory.list_workstreams_with_history",
+        "pebble.core.memory.list_workstreams_with_history",
         _fake,
     )
     return calls

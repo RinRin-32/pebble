@@ -1,8 +1,8 @@
-"""Tests for turnstone.core.config — unified TOML config loading."""
+"""Tests for pebble.core.config — unified TOML config loading."""
 
 import argparse
 
-import turnstone.core.config as config_mod
+import pebble.core.config as config_mod
 
 apply_config = config_mod.apply_config
 load_config = config_mod.load_config
@@ -61,7 +61,7 @@ def test_load_config_warns_when_world_readable(tmp_path, caplog):
     os.chmod(cfg, 0o644)
     set_config_path(str(cfg))
 
-    with caplog.at_level(logging.WARNING, logger="turnstone.core.config"):
+    with caplog.at_level(logging.WARNING, logger="pebble.core.config"):
         load_config()
 
     messages = [r.getMessage() for r in caplog.records]
@@ -78,7 +78,7 @@ def test_load_config_quiet_when_mode_0600(tmp_path, caplog):
     os.chmod(cfg, 0o600)
     set_config_path(str(cfg))
 
-    with caplog.at_level(logging.WARNING, logger="turnstone.core.config"):
+    with caplog.at_level(logging.WARNING, logger="pebble.core.config"):
         load_config()
 
     messages = [r.getMessage() for r in caplog.records]
@@ -199,13 +199,13 @@ def test_searxng_url_from_config(tmp_path, monkeypatch):
     cfg = tmp_path / "config.toml"
     cfg.write_text('[tools]\nsearxng_url = "http://searx.local:8080"\n')
     set_config_path(str(cfg))
-    monkeypatch.delenv("TURNSTONE_SEARXNG_URL", raising=False)
+    monkeypatch.delenv("PEBBLE_SEARXNG_URL", raising=False)
 
     assert config_mod.get_searxng_url() == "http://searx.local:8080"
 
 
 def test_searxng_url_fallback_to_env(tmp_path, monkeypatch):
-    """get_searxng_url() falls back to $TURNSTONE_SEARXNG_URL."""
+    """get_searxng_url() falls back to $PEBBLE_SEARXNG_URL."""
     _reset_cache()
     _reset_searxng_cache()
 
@@ -213,7 +213,7 @@ def test_searxng_url_fallback_to_env(tmp_path, monkeypatch):
     cfg = tmp_path / "config.toml"
     cfg.write_text("[tools]\n")
     set_config_path(str(cfg))
-    monkeypatch.setenv("TURNSTONE_SEARXNG_URL", "http://env-searx:8080")
+    monkeypatch.setenv("PEBBLE_SEARXNG_URL", "http://env-searx:8080")
 
     assert config_mod.get_searxng_url() == "http://env-searx:8080"
 
@@ -226,7 +226,7 @@ def test_searxng_url_none_when_unset(tmp_path, monkeypatch):
     cfg = tmp_path / "config.toml"
     cfg.write_text("[tools]\n")
     set_config_path(str(cfg))
-    monkeypatch.delenv("TURNSTONE_SEARXNG_URL", raising=False)
+    monkeypatch.delenv("PEBBLE_SEARXNG_URL", raising=False)
 
     assert config_mod.get_searxng_url() is None
 
@@ -239,7 +239,7 @@ def test_searxng_engines_config_wins_over_env(tmp_path, monkeypatch):
     cfg = tmp_path / "config.toml"
     cfg.write_text('[tools]\nsearxng_engines = "duckduckgo,wikipedia"\n')
     set_config_path(str(cfg))
-    monkeypatch.setenv("TURNSTONE_SEARXNG_ENGINES", "ignored")
+    monkeypatch.setenv("PEBBLE_SEARXNG_ENGINES", "ignored")
 
     assert config_mod.get_searxng_engines() == "duckduckgo,wikipedia"
 
@@ -252,7 +252,7 @@ def test_searxng_engines_default_empty(tmp_path, monkeypatch):
     cfg = tmp_path / "config.toml"
     cfg.write_text("[tools]\n")
     set_config_path(str(cfg))
-    monkeypatch.delenv("TURNSTONE_SEARXNG_ENGINES", raising=False)
+    monkeypatch.delenv("PEBBLE_SEARXNG_ENGINES", raising=False)
 
     assert config_mod.get_searxng_engines() == ""
 
@@ -317,20 +317,20 @@ def test_set_config_path_overrides_default(tmp_path):
 
 
 def test_env_var_overrides_default(tmp_path, monkeypatch):
-    """$TURNSTONE_CONFIG env var overrides the default config location."""
+    """$PEBBLE_CONFIG env var overrides the default config location."""
     _reset_cache()
     cfg = tmp_path / "env.toml"
     cfg.write_text('[api]\nbase_url = "http://env:7777"\n')
-    monkeypatch.setenv("TURNSTONE_CONFIG", str(cfg))
+    monkeypatch.setenv("PEBBLE_CONFIG", str(cfg))
     assert load_config("api") == {"base_url": "http://env:7777"}
 
 
 def test_set_config_path_overrides_env_var(tmp_path, monkeypatch):
-    """set_config_path() takes precedence over $TURNSTONE_CONFIG."""
+    """set_config_path() takes precedence over $PEBBLE_CONFIG."""
     _reset_cache()
     env_cfg = tmp_path / "env.toml"
     env_cfg.write_text('[api]\nbase_url = "http://env"\n')
-    monkeypatch.setenv("TURNSTONE_CONFIG", str(env_cfg))
+    monkeypatch.setenv("PEBBLE_CONFIG", str(env_cfg))
 
     explicit_cfg = tmp_path / "explicit.toml"
     explicit_cfg.write_text('[api]\nbase_url = "http://explicit"\n')
