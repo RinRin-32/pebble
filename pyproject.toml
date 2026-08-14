@@ -69,6 +69,7 @@ turnstone-optimizer = "turnstone.optimizer:main"
 turnstone-server = "turnstone.server:main"
 turnstone-console = "turnstone.console.server:main"
 turnstone-admin = "turnstone.admin:main"
+turnstone-client = "turnstone.client_cli:main"
 turnstone-channel = "turnstone.channels.cli:main"
 turnstone-doctor = "turnstone.doctor:main"
 

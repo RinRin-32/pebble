@@ -43,6 +43,11 @@ _WIKILINK = re.compile(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]")
 _FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 _UNSAFE_SLUG = re.compile(r"[^a-z0-9]+")
 
+# Files the vault keeps for its own sake. They are markdown and live in the
+# vault, but they are not findings — counting them would show the README as an
+# orphan node in the graph and in Obsidian.
+VAULT_INFRA_FILES = frozenset({"readme.md"})
+
 MAX_TITLE = 120
 MAX_BODY = 200_000
 # Captured output is evidence, not a log: enough to justify a verdict, bounded
@@ -71,6 +76,57 @@ class Note:
 def vault_root() -> Path:
     """Directory holding the markdown vault."""
     return workspace_root() / "kb"
+
+
+def _git_vault(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - fixed binary, argv list
+        ["git", *args], cwd=str(vault_root()), capture_output=True, text=True,
+        errors="replace", timeout=timeout, check=False,
+    )
+
+
+def ensure_vault_repo() -> Path:
+    """Make the vault a git repository.
+
+    This is the cross-device story, and it is better than a server round-trip
+    for notes: a cloned vault opens in Obsidian on any machine, works offline,
+    and every note has history — so a bad edit is recoverable and a finding can
+    be traced to when it was learned.  ``.codegraph`` and scratch files are
+    excluded so the history stays notes-only.
+    """
+    root = vault_root()
+    root.mkdir(parents=True, exist_ok=True)
+    if (root / ".git").exists():
+        return root
+    _git_vault("init", "-q", "-b", "main")
+    _git_vault("config", "user.email", "turnstone@localhost")
+    _git_vault("config", "user.name", "turnstone")
+    (root / ".gitignore").write_text(".codegraph/\n*.tmp\n.DS_Store\n", encoding="utf-8")
+    (root / "README.md").write_text(
+        "# turnstone knowledge vault\n\n"
+        "Obsidian-compatible notes written by turnstone agents. Each note records what\n"
+        "was measured, how, and at which commit.\n\n"
+        "Open this folder directly as an Obsidian vault. To sync it to another\n"
+        "machine, add a remote and push:\n\n"
+        "    git remote add origin <your-private-repo>\n"
+        "    git push -u origin main\n",
+        encoding="utf-8",
+    )
+    _commit_vault("init knowledge vault")
+    return root
+
+
+def _commit_vault(message: str) -> None:
+    """Commit vault changes.  Best-effort: a failed commit must never lose a note."""
+    try:
+        _git_vault("add", "-A")
+        result = _git_vault("commit", "-q", "-m", message)
+        if result.returncode != 0 and "nothing to commit" not in (
+            result.stdout + result.stderr
+        ):
+            log.debug("kb.commit_failed", detail=(result.stderr or result.stdout)[:200])
+    except (OSError, subprocess.SubprocessError):
+        log.debug("kb.commit_error", exc_info=True)
 
 
 def slugify(title: str) -> str:
@@ -353,8 +409,19 @@ def write_note(note: Note, *, append: bool = False) -> Path:
             repo_id=note.repo_id or existing.repo_id,
         )
     note.links = extract_links(note.body)
+    # The note is the product; version control is a convenience layered on top,
+    # so a git problem must never stop one from being written.
+    try:
+        ensure_vault_repo()
+    except Exception:
+        log.debug("kb.vault_repo_init_failed", exc_info=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_note(note), encoding="utf-8")
     note.path = str(path)
+    try:
+        _commit_vault(f"{'append' if append else 'write'}: {title}")
+    except Exception:
+        log.debug("kb.commit_skipped", exc_info=True)
     return path
 
 
@@ -374,6 +441,8 @@ def list_notes() -> list[Note]:
         return []
     out: list[Note] = []
     for path in sorted(root.glob("*.md")):
+        if path.name.lower() in VAULT_INFRA_FILES:
+            continue
         try:
             note = parse_note(
                 path.read_text(encoding="utf-8", errors="replace"), fallback_title=path.stem
