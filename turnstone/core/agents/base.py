@@ -114,3 +114,16 @@ class AgentAdapter(ABC):
     def env_overrides(self) -> dict[str, str]:
         """Extra environment for the child process (credentials, flags)."""
         return {}
+
+    def mcp_payload(self, servers: dict[str, Any]) -> str | None:
+        """Serialize *servers* into this CLI's MCP config format.
+
+        ``None`` means the CLI takes MCP servers from its own global config
+        rather than a per-run file, so the runner writes nothing.  Each CLI
+        spells this differently, which is exactly why it belongs on the adapter.
+        """
+        return None
+
+    def mcp_flags(self, config_path: str) -> list[str]:
+        """Flags attaching a written MCP config; empty when unsupported."""
+        return []

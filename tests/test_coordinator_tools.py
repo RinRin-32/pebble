@@ -162,7 +162,8 @@ def test_coordinator_session_uses_coordinator_tools(coord_session):
         # surfacing to a human channel without spawning a child purely
         # to ship the message.  Routing is session-kind-agnostic.
         "notify",
-    }
+                "kb",
+        }
     # Sub-agent tool set is zeroed on coordinator sessions.
     assert sess._task_tools == []
 

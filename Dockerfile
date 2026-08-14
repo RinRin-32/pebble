@@ -90,10 +90,18 @@ RUN mkdir -p /workspace && chown turnstone:turnstone /workspace
 RUN npm install -g --no-fund --no-audit \
         @anthropic-ai/claude-code \
         opencode-ai \
+        @colbymchenry/codegraph \
     && npm cache clean --force \
-    && claude --version && opencode --version
+    && claude --version && opencode --version && codegraph --version
 
 USER turnstone
+
+# Wire the codegraph MCP server into every agent CLI. Must run as the RUNTIME
+# user: the installer writes into $HOME, so doing this as root would configure
+# /root and leave the actual agent unwired. Non-fatal — dispatch still works
+# without the graph, just with more grepping.
+RUN codegraph install -t claude,opencode,codex -y --location global || true
+
 
 ENTRYPOINT ["entrypoint.sh"]
 

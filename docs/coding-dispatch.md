@@ -240,6 +240,53 @@ Remaining rungs, if Nix ever stops being enough: per-repo image, then
 repo-declared `.devcontainer/`. Both need dispatch in a **sibling container**,
 which is the real architectural fork.
 
+## 6b. Code graph (CodeGraph over MCP)
+
+`bind_repo` indexes the worktree with [CodeGraph](https://github.com/colbymchenry/codegraph)
+— tree-sitter ASTs into symbols and call edges in SQLite. Deterministic, local,
+no embeddings, ~0.7s for a small repo. Dispatched agents reach it as an MCP tool,
+so "who calls this?" is one call instead of a grep expedition.
+
+Wiring differs per CLI and both paths are covered:
+
+* **opencode / codex** read it from their global config, written into the image
+  at build time (`codegraph install`). Verified with `opencode mcp list` →
+  `✓ codegraph connected`.
+* **Claude Code** gets it per-run via `--mcp-config`, because `~/.claude.json`
+  is bind-mounted from the operator's host and would shadow anything the image
+  configured. The runner writes a temp config and cleans it up.
+
+The same plumbing carries any other MCP server: `run_agent(..., mcp_servers=...)`
+and the adapter serializes it. Before this, a dispatched agent got **no** MCP
+servers at all.
+
+### Edge trust
+
+CodeGraph resolves receiver types well — `self.viz.update(...)` and
+`t.g2pPool.Close()` both land on the right method despite overloaded names. It
+fails when the receiver is an expression it cannot type:
+
+```python
+shared_resource.data["epoch"].index(x)   # builtin list.index
+# → matched to an unrelated user-defined index() in another file
+```
+
+`turnstone/core/codegraph.py` prunes exactly that class after indexing. A false
+edge is worse than a missing one: an agent asked "who calls this?" follows it and
+reasons from a lie.
+
+Two things worth knowing if you touch that resolver:
+
+* An earlier version keyed on "ambiguous name that looks like a builtin method"
+  and measured **20% precision** — four true edges deleted per false one caught.
+  Verify any new rule against source before trusting it.
+* Self-edges are reported, never pruned. One was checked and turned out to be
+  genuine recursion; no static check separates that from the enclosing-method
+  collision upstream tracks for TypeScript (#1496).
+
+Inspect a graph by hand with `codegraph callers <symbol>`, `codegraph impact
+<symbol>`, or `codegraph explore <query>` inside a worktree.
+
 ## 7. Troubleshooting
 
 | Symptom | Cause |
@@ -250,6 +297,8 @@ which is the real architectural fork.
 | `could not lock config file` | Concurrent worktree creation. Fixed with `--no-track` + an flock on the mirror; if it recurs, a stale `turnstone-worktree.lock` in the mirror. |
 | Diff full of `__pycache__` / `node_modules` | Build artifacts are excluded via the mirror's `info/exclude`; add patterns to `_LOCAL_EXCLUDES` in `workspace.py`. |
 | Agent edits nothing | Check the diff *and* the stat — it may have only run commands. |
+| Agent greps instead of using the graph | Check `opencode mcp list` inside the worktree; the index only exists after `bind_repo`. |
+| `codegraph is not installed on this node` | Image built without it; rebuild. Dispatch still works, just without the graph. |
 | `go: command not found` during dispatch | No toolchain provisioned. Run `setup_env(action="provision")`. |
 | `invalid reference: main` | The repo's real default branch differs from the registered one. `create_worktree` now falls back to the mirror's HEAD automatically. |
 | `nix is not installed on this node` | The `nix-store` volume wasn't seeded. Check `docker compose logs nix-init`. |
