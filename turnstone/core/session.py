@@ -17075,7 +17075,7 @@ class ChatSession:
             "preview": "",
             # Checking out a repo writes to the shared workspace volume, so it
             # rides the same approval gate as any other side effect.
-            "needs_approval": bool(repo) and not self.skip_permissions,
+            "needs_approval": bool(repo),
             "execute": self._exec_bind_repo,
             "repo": repo,
             "base_ref": (args.get("base_ref") or "").strip(),
@@ -17164,7 +17164,7 @@ class ChatSession:
             "preview": "",
             # 'use' and 'add' download toolchains and mutate the shared env
             # registry; detect/list/status are read-only.
-            "needs_approval": action in {"use", "add"} and not self.skip_permissions,
+            "needs_approval": action in {"use", "add"},
             "execute": self._exec_setup_env,
             "action": action,
             "name": name,
@@ -17304,8 +17304,9 @@ class ChatSession:
             "header": f"\U0001f916 dispatch_agent{f' ({agent})' if agent else ''}",
             "preview": f"    {DIM}{preview}{RESET}",
             # A dispatched agent writes code and runs commands; that is exactly
-            # the class of effect the approval gate exists for.
-            "needs_approval": not self.skip_permissions,
+            # the class of effect the approval gate exists for.  Auto-approve
+            # policy is applied centrally by the executor, not here.
+            "needs_approval": True,
             "execute": self._exec_dispatch_agent,
             "task": task,
             "agent": agent,

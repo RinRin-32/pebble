@@ -11,7 +11,11 @@
       "agent": {
         "type": "string",
         "description": "Which agent CLI to use. Defaults to the server-configured agent, falling back to whichever is installed.",
-        "enum": ["opencode", "claude", "codex"],
+        "enum": [
+          "opencode",
+          "claude",
+          "codex"
+        ],
         "default": ""
       },
       "model": {
@@ -30,9 +34,10 @@
         "default": 1800
       }
     },
-    "required": ["task"]
+    "required": [
+      "task"
+    ]
   },
   "interactive": true,
-  "coordinator": true,
   "primary_key": "task"
 }
