@@ -67,10 +67,15 @@ AUTH_COOKIE_CONSOLE = "turnstone_auth_console"
 TOKEN_PREFIX = "ts_"
 TOKEN_BYTES = 32  # 64 hex chars after prefix
 
+# Issuer and audiences are NOT renamed with the project: they are baked into
+# every JWT already issued, so changing them invalidates live browser sessions
+# and any token a node is still holding.  The cookie names and the ``ts_`` token
+# prefix are left alone for the same reason -- these are credential identity,
+# not branding.
 JWT_ISSUER = "turnstone"
-JWT_AUD_SERVER = "pebble-server"
-JWT_AUD_CONSOLE = "pebble-console"
-JWT_AUD_CHANNEL = "pebble-channel"
+JWT_AUD_SERVER = "turnstone-server"
+JWT_AUD_CONSOLE = "turnstone-console"
+JWT_AUD_CHANNEL = "turnstone-channel"
 _MIN_SECRET_LENGTH = 32  # 256 bits minimum for HMAC-SHA256
 
 VALID_SCOPES: frozenset[str] = frozenset({"read", "write", "approve", "service"})

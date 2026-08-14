@@ -548,8 +548,8 @@ class TestFamilyOf:
 class TestPreflightHelpers:
     def test_find_repo_root(self, tmp_path: Path) -> None:
         (tmp_path / ".git").mkdir()
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "turnstone"\n')
-        sub = tmp_path / "turnstone" / "core"
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "pebble"\n')
+        sub = tmp_path / "pebble" / "core"
         sub.mkdir(parents=True)
         assert _find_repo_root(sub) == tmp_path
 

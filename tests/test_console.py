@@ -1133,7 +1133,7 @@ class TestConsoleHTTPEndpoints:
         status, data = self._get(client, "/health")
         assert status == 200
         assert data["status"] == "ok"
-        assert data["service"] == "turnstone-console"
+        assert data["service"] == "pebble-console"
         assert data["nodes"] == 3
 
     def test_index_html(self, client):

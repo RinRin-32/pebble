@@ -332,7 +332,7 @@ class InstallProfile:
 
 
 def _find_repo_root(start: Path) -> Path | None:
-    """Walk up from *start* looking for a Turnstone source checkout."""
+    """Walk up from *start* looking for a pebble source checkout."""
     cur = start
     for _ in range(6):
         if (cur / ".git").exists() and (cur / "pyproject.toml").is_file():
@@ -340,7 +340,10 @@ def _find_repo_root(start: Path) -> Path | None:
                 txt = (cur / "pyproject.toml").read_text(encoding="utf-8")
             except OSError:
                 txt = ""
-            if 'name = "turnstone"' in txt:
+            # The distribution is pebble-orchestrator ("pebble" is taken on
+            # PyPI); the pre-rename name is still recognised so the doctor
+            # works inside an older checkout.
+            if any(f'name = "{n}"' in txt for n in ("pebble-orchestrator", "pebble", "turnstone")):
                 return cur
         if cur.parent == cur:
             break
@@ -354,7 +357,10 @@ def _find_compose_files(
     """Find compose files in the project dir, run.sh's checkout, and the repo root."""
     names = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
     td = env.get("PEBBLE_DIR")
-    dirs = [project_dir, Path(td) if td else Path.home() / "turnstone"]
+    # Checkout dir: the new name first, the pre-rename one still probed so
+    # the doctor keeps finding an install that predates the rename.
+    dirs = [project_dir]
+    dirs += [Path(td)] if td else [Path.home() / "pebble", Path.home() / "turnstone"]
     if repo_root is not None:
         dirs.append(repo_root)
     found: list[Path] = []
@@ -443,7 +449,9 @@ def _discover_config_files(project_dir: Path, env: dict[str, str]) -> list[Confi
     if tc:
         candidates.append(Path(tc))
     candidates += [
+        Path.home() / ".config" / "pebble" / "config.toml",
         Path.home() / ".config" / "turnstone" / "config.toml",
+        Path("/etc/pebble/config.toml"),
         Path("/etc/turnstone/config.toml"),
         project_dir / "config.toml",
         project_dir / "pebble.toml",

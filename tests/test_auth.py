@@ -2156,7 +2156,7 @@ class TestBuiltinAdminDefaultPermissions:
         from alembic.config import Config
 
         migrations_dir = str(
-            Path(__file__).resolve().parent.parent / "turnstone" / "core" / "storage" / "migrations"
+            Path(__file__).resolve().parent.parent / "pebble" / "core" / "storage" / "migrations"
         )
         cfg = Config()
         cfg.set_main_option("script_location", migrations_dir)

@@ -17,7 +17,7 @@ import contextlib
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import httpx
 
@@ -49,6 +49,22 @@ if TYPE_CHECKING:
     from pebble.channels.discord.config import DiscordConfig
     from pebble.core.storage._protocol import StorageBackend
 
+    #: Every channel type Discord may hand us for an incoming message.  The
+    #: previous ``TextChannel`` annotation described the happy path rather
+    #: than reality: mentions and DMs arrive on the other members of this
+    #: union too.
+    # Explicit TypeAlias: without it, mypy in an environment where discord.py
+    # is absent reads this as a plain variable and rejects it as an annotation.
+    SessionChannel: TypeAlias = (
+        discord.TextChannel
+        | discord.VoiceChannel
+        | discord.StageChannel
+        | discord.DMChannel
+        | discord.GroupChannel
+        | discord.PartialMessageable
+        | discord.Thread
+    )
+
 log = get_logger(__name__)
 
 
@@ -73,13 +89,14 @@ def _thread_owner_id(
     then refuse the interaction.
     """
     # 1. Channel-wide session — owner is the session creator.
-    if channel_sessions is not None:
-        entry = channel_sessions.get(thread.id)
+    thread_id = getattr(thread, "id", None)
+    if channel_sessions is not None and thread_id is not None:
+        entry = channel_sessions.get(thread_id)
         if entry is not None and entry[1]:
             return entry[1]
     # 2. Explicit /ask invoker map (thread.owner_id is the bot for those).
-    if thread_invokers is not None:
-        owner = thread_invokers.get(thread.id)
+    if thread_invokers is not None and thread_id is not None:
+        owner = thread_invokers.get(thread_id)
         if owner is not None:
             return str(owner)
     # 3. Native Discord thread owner.
@@ -1040,7 +1057,7 @@ class TurnstoneBot:
 
     async def start_channel_session(
         self,
-        channel: discord.TextChannel,  # noqa: F821
+        channel: SessionChannel,  # noqa: F821
         discord_user_id: str = "",
         initial_message: str = "",
         *,
@@ -1059,7 +1076,7 @@ class TurnstoneBot:
         ws_id, _is_new = await self.router.get_or_create_workstream(
             channel_type="discord_session",
             channel_id=str(channel.id),
-            name=f"Session in #{channel.name}",
+            name=f"Session in #{getattr(channel, 'name', None) or 'direct-message'}",
             model=model,
             persona=persona,
             initial_message="",

@@ -9,12 +9,13 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import OrderedDict, deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
+
+import discord
 
 from pebble.core.log import get_logger
 
 if TYPE_CHECKING:
-    import discord
     from discord import app_commands
     from discord.ext import commands
 
@@ -23,6 +24,30 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 _THREAD_NAME_MAX = 100
+
+#: Discord accepts only these four thread auto-archive durations, and rejects
+#: anything else at the API boundary.  The config field is a plain int, so a
+#: typo there would surface as a 400 from Discord at thread-creation time --
+#: i.e. when a user runs /ask, not when the operator saves the setting.
+_ARCHIVE_DURATIONS = (60, 1440, 4320, 10080)
+
+
+def _archive_duration(minutes: int) -> Literal[60, 1440, 4320, 10080]:
+    """Coerce a configured duration to one Discord will accept.
+
+    Falls back to 24h rather than raising: a bad setting should not make the
+    command fail outright.
+    """
+    if minutes in _ARCHIVE_DURATIONS:
+        return cast("Literal[60, 1440, 4320, 10080]", minutes)
+    log.warning(
+        "discord.invalid_thread_auto_archive",
+        configured=minutes,
+        allowed=_ARCHIVE_DURATIONS,
+    )
+    return 1440
+
+
 _DM_REPLY_MAX_LENGTH = 4096  # Discord's own message limit
 
 # /link is the only flow that reads Turnstone API tokens out of user
@@ -691,10 +716,14 @@ class MessageCog:
         for _guild_id, ch_id, msg_id in links:
             try:
                 ch = self.bot.get_channel(int(ch_id))
-                if ch is None:
+                if not isinstance(ch, discord.abc.Messageable):
+                    # A category or forum has no messages to quote.  This was
+                    # already being swallowed by the except below; skipping
+                    # explicitly says so.
                     continue
                 m = await ch.fetch_message(int(msg_id))
-                extra = f"[From {m.author.display_name} in #{ch.name}]: {m.content}"
+                where = getattr(ch, "name", None) or "a channel"
+                extra = f"[From {m.author.display_name} in #{where}]: {m.content}"
                 text += f"\n{extra}"
             except Exception:
                 continue
@@ -810,7 +839,7 @@ class MessageCog:
         if isinstance(channel, discord.TextChannel):
             thread = await channel.create_thread(
                 name=thread_name,
-                auto_archive_duration=self.ts.config.thread_auto_archive,  # type: ignore[arg-type]
+                auto_archive_duration=_archive_duration(self.ts.config.thread_auto_archive),
                 type=discord.ChannelType.public_thread,
             )
             # `channel.create_thread` without a starter message makes the
@@ -890,7 +919,7 @@ class MessageCog:
         if isinstance(channel, discord.TextChannel):
             thread = await channel.create_thread(
                 name=thread_name,
-                auto_archive_duration=self.ts.config.thread_auto_archive,
+                auto_archive_duration=_archive_duration(self.ts.config.thread_auto_archive),
                 type=discord.ChannelType.public_thread,
             )
             self.ts.register_thread_invoker(thread.id, interaction.user.id)
@@ -1166,10 +1195,11 @@ class MessageCog:
             "Session ended.",
             ephemeral=True,
         )
-        await channel.send(
-            f"**Turnstone session ended by {interaction.user.mention}** — "
-            "messages will no longer be forwarded to the agent."
-        )
+        if isinstance(channel, discord.abc.Messageable):
+            await channel.send(
+                f"**Pebble session ended by {interaction.user.mention}** — "
+                "messages will no longer be forwarded to the agent."
+            )
 
     async def _cmd_help(self, interaction: discord.Interaction) -> None:
         """Show available commands."""
