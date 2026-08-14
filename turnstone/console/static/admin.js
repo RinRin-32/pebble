@@ -45,6 +45,13 @@ const ADMIN_IA = [
     ],
   },
   {
+    group: "Agents",
+    tabs: [
+      { tab: "coding-jobs", label: "Coding Jobs", perm: "admin.users" },
+      { tab: "knowledge", label: "Knowledge", perm: "admin.users" },
+    ],
+  },
+  {
     group: "Automation",
     tabs: [
       { tab: "schedules", label: "Schedules", perm: "admin.schedules" },
@@ -192,6 +199,8 @@ function switchAdminTab(tab) {
   const panels = [
     "users",
     "tokens",
+    "coding-jobs",
+    "knowledge",
     "channels",
     "schedules",
     "watches",
@@ -226,6 +235,8 @@ function switchAdminTab(tab) {
   }
 
   if (tab === "users") loadAdminUsers();
+  if (tab === "coding-jobs") loadCodingJobs();
+  if (tab === "knowledge") loadKnowledge();
   if (tab === "tokens") _populateTokenUserSelect();
   if (tab === "channels") _populateChannelUserSelect();
   if (tab === "schedules") loadAdminSchedules();
@@ -8671,3 +8682,122 @@ function _deleteNodeMeta(nodeId, key) {
 // console <body>, so the document-level delegation below covers every admin
 // table (including those rendered by governance.js, which loads after).
 _initKebabMenus();
+
+
+// ---------------------------------------------------------------------------
+// Coding Jobs — workstreams bound to a repository
+// ---------------------------------------------------------------------------
+
+function _jobStateClass(state) {
+  if (state === "attention") return "job-state job-state--attention";
+  if (state === "running" || state === "thinking") return "job-state job-state--active";
+  return "job-state";
+}
+
+function loadCodingJobs() {
+  const host = document.getElementById("admin-coding-jobs-table");
+  if (!host) return;
+  setSafeHtml(host, '<div class="dashboard-empty">Loading coding jobs...</div>');
+  authFetch("/v1/api/admin/coding-jobs")
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      const jobs = data.jobs || [];
+      const st = data.stats || {};
+      const stats = document.getElementById("admin-coding-jobs-stats");
+      if (stats) {
+        setSafeHtml(
+          stats,
+          '<span class="stat-chip"><b>' + (st.total || 0) + "</b> bound</span>" +
+          '<span class="stat-chip"><b>' + (st.active || 0) + "</b> active</span>" +
+          '<span class="stat-chip"><b>' + (st.awaiting_approval || 0) + "</b> awaiting approval</span>" +
+          '<span class="stat-chip"><b>' + (st.repos || 0) + "</b> repos</span>"
+        );
+      }
+      if (!jobs.length) {
+        setSafeHtml(host, '<div class="dashboard-empty">No workstream is bound to a repository yet. Use bind_repo, or: turnstone-client dispatch --repo &lt;name&gt; "task"</div>');
+        return;
+      }
+      let html = '<div class="admin-row admin-row--head">' +
+        '<span class="admin-col">WORKSTREAM</span><span class="admin-col">REPO</span>' +
+        '<span class="admin-col">ENV</span><span class="admin-col">PERSONA</span>' +
+        '<span class="admin-col">STATE</span><span class="admin-col">NODE</span></div>';
+      for (let i = 0; i < jobs.length; i++) {
+        const j = jobs[i];
+        html += '<div class="admin-row">' +
+          '<span class="admin-col" title="' + escapeHtml(j.ws_id || "") + '">' +
+            escapeHtml((j.name || j.ws_id || "").slice(0, 34)) + "</span>" +
+          '<span class="admin-col mono">' + escapeHtml(j.repo || "-") + "</span>" +
+          '<span class="admin-col mono">' + escapeHtml(j.env || "-") + "</span>" +
+          '<span class="admin-col">' + escapeHtml(j.persona || "-") + "</span>" +
+          '<span class="admin-col"><span class="' + _jobStateClass(j.state) + '">' +
+            escapeHtml(j.state || "") + "</span></span>" +
+          '<span class="admin-col mono">' + escapeHtml(j.node_id || "-") + "</span>" +
+          "</div>";
+      }
+      setSafeHtml(host, html);
+    })
+    .catch(function () {
+      setSafeHtml(host, '<div class="dashboard-empty">Failed to load coding jobs</div>');
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge — the vault graph, read from the derived index
+// ---------------------------------------------------------------------------
+
+function loadKnowledge() {
+  const host = document.getElementById("admin-knowledge-table");
+  if (!host) return;
+  setSafeHtml(host, '<div class="dashboard-empty">Loading knowledge...</div>');
+  authFetch("/v1/api/admin/knowledge")
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      const notes = data.notes || [];
+      const frontier = data.frontier || [];
+      const st = data.stats || {};
+      const stats = document.getElementById("admin-knowledge-stats");
+      if (stats) {
+        setSafeHtml(
+          stats,
+          '<span class="stat-chip"><b>' + (st.notes || 0) + "</b> notes</span>" +
+          '<span class="stat-chip"><b>' + (st.links || 0) + "</b> links</span>" +
+          '<span class="stat-chip"><b>' + (st.frontier || 0) + "</b> frontier</span>" +
+          '<span class="stat-chip"><b>' + (st.orphans || 0) + "</b> orphans</span>"
+        );
+      }
+      let html = "";
+      if (frontier.length) {
+        // Dangling links are the useful part: something was named and never
+        // written up, which is where research should go next.
+        html += '<div class="kb-frontier"><b>Frontier</b> &mdash; linked to, not yet written: ';
+        const names = [];
+        for (let f = 0; f < frontier.length && f < 8; f++) {
+          names.push(escapeHtml(frontier[f].title) + " (" + frontier[f].count + ")");
+        }
+        html += names.join(", ") + "</div>";
+      }
+      if (!notes.length) {
+        html += '<div class="dashboard-empty">No notes indexed yet. Agents write these with the kb tool; experiments record measured results.</div>';
+        setSafeHtml(host, html);
+        return;
+      }
+      html += '<div class="admin-row admin-row--head">' +
+        '<span class="admin-col">NOTE</span><span class="admin-col">KIND</span>' +
+        '<span class="admin-col">REPO</span><span class="admin-col">LINKS</span>' +
+        '<span class="admin-col">SUMMARY</span></div>';
+      for (let i = 0; i < notes.length; i++) {
+        const n = notes[i];
+        html += '<div class="admin-row">' +
+          '<span class="admin-col">' + escapeHtml((n.title || "").slice(0, 34)) + "</span>" +
+          '<span class="admin-col">' + escapeHtml(n.kind || "note") + "</span>" +
+          '<span class="admin-col mono">' + escapeHtml(n.repo_id || "-") + "</span>" +
+          '<span class="admin-col mono">' + (n.links_out || 0) + " out / " + (n.links_in || 0) + " in</span>" +
+          '<span class="admin-col">' + escapeHtml((n.summary || "").slice(0, 46)) + "</span>" +
+          "</div>";
+      }
+      setSafeHtml(host, html);
+    })
+    .catch(function () {
+      setSafeHtml(host, '<div class="dashboard-empty">Failed to load knowledge</div>');
+    });
+}

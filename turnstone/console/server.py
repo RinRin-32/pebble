@@ -7366,6 +7366,66 @@ async def admin_set_user_personas(request: Request) -> JSONResponse:
     return JSONResponse({"persona_ids": storage.list_user_allowed_personas(user_id)})
 
 
+async def admin_knowledge(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/knowledge — the vault graph, from the derived index.
+
+    Served from kb_notes/kb_links rather than the vault files because the
+    console does not mount /workspace; the index exists so the graph is
+    queryable from a process that cannot see the notes on disk.
+    """
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    data = await asyncio.to_thread(storage.kb_overview)
+    payload = data[0] if data else {"notes": [], "frontier": []}
+    notes = payload.get("notes", [])
+    return JSONResponse(
+        {
+            **payload,
+            "stats": {
+                "notes": len(notes),
+                "links": sum(n.get("links_out", 0) for n in notes),
+                "orphans": sum(
+                    1 for n in notes if not n.get("links_out") and not n.get("links_in")
+                ),
+                "frontier": len(payload.get("frontier", [])),
+            },
+        }
+    )
+
+
+async def admin_coding_jobs(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/coding-jobs — workstreams bound to a repository."""
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    jobs = await asyncio.to_thread(storage.coding_jobs, 100)
+    active = {"running", "thinking", "attention"}
+    return JSONResponse(
+        {
+            "jobs": jobs,
+            "stats": {
+                "total": len(jobs),
+                "active": sum(1 for j in jobs if j.get("state") in active),
+                "awaiting_approval": sum(1 for j in jobs if j.get("state") == "attention"),
+                "repos": len({j.get("repo") for j in jobs if j.get("repo")}),
+            },
+        }
+    )
+
+
 async def admin_list_orgs(request: Request) -> JSONResponse:
     """GET /v1/api/admin/orgs — list all organizations."""
     from turnstone.core.auth import require_permission
@@ -14675,6 +14735,8 @@ def create_app(
                         admin_unassign_role,
                         methods=["DELETE"],
                     ),
+                    Route("/api/admin/knowledge", admin_knowledge),
+                    Route("/api/admin/coding-jobs", admin_coding_jobs),
                     # Per-user access allow-lists (models + personas)
                     Route("/api/admin/users/{user_id}/models", admin_get_user_models),
                     Route(

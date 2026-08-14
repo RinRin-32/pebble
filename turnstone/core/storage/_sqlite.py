@@ -1921,6 +1921,87 @@ class SQLiteBackend:
             ).fetchall()
             return [r[0] for r in rows]
 
+
+    def kb_overview(self) -> list[dict[str, Any]]:
+        """Notes with their inbound/outbound link counts, for the admin panel.
+
+        Read from the derived index rather than the vault because the console
+        does not mount /workspace — the index exists precisely so the graph is
+        queryable from a process that cannot see the files.
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(
+                    kb_notes.c.note_id, kb_notes.c.title, kb_notes.c.kind,
+                    kb_notes.c.summary, kb_notes.c.tags, kb_notes.c.repo_id,
+                    kb_notes.c.updated,
+                ).order_by(kb_notes.c.title)
+            ).fetchall()
+            out_counts = dict(
+                conn.execute(
+                    sa.select(kb_links.c.from_note, sa.func.count())
+                    .group_by(kb_links.c.from_note)
+                ).fetchall()
+            )
+            in_counts = dict(
+                conn.execute(
+                    sa.select(kb_links.c.to_title, sa.func.count())
+                    .group_by(kb_links.c.to_title)
+                ).fetchall()
+            )
+            titles = {r[1] for r in rows}
+            # A link to a note that does not exist is the research frontier:
+            # something was named and never written up.
+            frontier = sorted(
+                ((t, n) for t, n in in_counts.items() if t not in titles),
+                key=lambda kv: (-kv[1], kv[0]),
+            )
+        notes = [
+            {
+                "note_id": r[0], "title": r[1], "kind": r[2], "summary": r[3],
+                "tags": r[4], "repo_id": r[5], "updated": r[6],
+                "links_out": out_counts.get(r[0], 0),
+                "links_in": in_counts.get(r[1], 0),
+            }
+            for r in rows
+        ]
+        return [{"notes": notes, "frontier": [{"title": t, "count": n} for t, n in frontier]}]
+
+    def coding_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Workstreams bound to a repo — the coding work, ongoing or finished."""
+        with self._conn() as conn:
+            cfg_rows = conn.execute(
+                sa.select(workstream_config.c.ws_id, workstream_config.c.key,
+                          workstream_config.c.value)
+                .where(workstream_config.c.key.in_(["repo_id", "nix_env", "model_alias"]))
+            ).fetchall()
+            bound: dict[str, dict[str, str]] = {}
+            for ws_id, key, value in cfg_rows:
+                bound.setdefault(ws_id, {})[key] = value
+            ids = [w for w, cfg in bound.items() if cfg.get("repo_id")]
+            if not ids:
+                return []
+            rows = conn.execute(
+                sa.select(
+                    workstreams.c.ws_id, workstreams.c.name, workstreams.c.state,
+                    workstreams.c.persona, workstreams.c.kind, workstreams.c.node_id,
+                    workstreams.c.updated,
+                )
+                .where(workstreams.c.ws_id.in_(ids))
+                .order_by(workstreams.c.updated.desc())
+                .limit(limit)
+            ).fetchall()
+        return [
+            {
+                "ws_id": r[0], "name": r[1], "state": r[2], "persona": r[3],
+                "kind": r[4], "node_id": r[5], "updated": r[6],
+                "repo": bound.get(r[0], {}).get("repo_id", ""),
+                "env": bound.get(r[0], {}).get("nix_env", ""),
+                "model": bound.get(r[0], {}).get("model_alias", ""),
+            }
+            for r in rows
+        ]
+
     # -- Repos (coding-agent dispatch) ---------------------------------------
 
     def list_repos(self, enabled_only: bool = True) -> list[dict[str, Any]]:
