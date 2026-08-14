@@ -17144,32 +17144,35 @@ class ChatSession:
         return call_id, out
 
     def _prepare_setup_env(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        action = (args.get("action") or "detect").strip().lower()
-        if action not in {"detect", "provision", "status", "teardown"}:
+        action = (args.get("action") or "status").strip().lower()
+        valid = {"detect", "list", "use", "add", "status", "detach"}
+        if action not in valid:
             return {
                 "call_id": call_id,
                 "func_name": "setup_env",
-                "header": f"✗ setup_env: unknown action {action!r}",
+                "header": f"\u2717 setup_env: unknown action {action!r}",
                 "preview": "",
                 "needs_approval": False,
-                "error": "Error: action must be detect, provision, status or teardown",
+                "error": f"Error: action must be one of {', '.join(sorted(valid))}",
             }
-        extra = args.get("packages")
+        pkgs = args.get("packages")
+        name = (args.get("name") or "").strip()
         return {
             "call_id": call_id,
             "func_name": "setup_env",
-            "header": f"\U0001f4e6 setup_env: {action}",
+            "header": f"\U0001f4e6 setup_env {action}{f': {name}' if name else ''}",
             "preview": "",
-            # Provisioning downloads toolchains and writes into the worktree;
-            # detect/status are read-only.
-            "needs_approval": action == "provision" and not self.skip_permissions,
+            # 'use' and 'add' download toolchains and mutate the shared env
+            # registry; detect/list/status are read-only.
+            "needs_approval": action in {"use", "add"} and not self.skip_permissions,
             "execute": self._exec_setup_env,
             "action": action,
-            "packages": [str(p) for p in extra] if isinstance(extra, list) else [],
+            "name": name,
+            "packages": [str(p) for p in pkgs] if isinstance(pkgs, list) else [],
         }
 
     def _exec_setup_env(self, item: dict[str, Any]) -> tuple[str, str]:
-        """Detect and provision the repo's toolchain via Nix."""
+        """Manage the named Nix environment this workstream dispatches into."""
         self._check_cancelled()
         call_id = item["call_id"]
         action = item["action"]
@@ -17181,52 +17184,82 @@ class ChatSession:
             self._report_tool_result(call_id, "setup_env", msg, is_error=True)
             return call_id, msg
 
-        cwd = self._workspace_cwd()
-        if not cwd:
-            return _fail(
-                "Error: no repo bound. Call bind_repo first — the toolchain is "
-                "provisioned for a checked-out worktree."
-            )
         if not nixenv.is_available():
             return _fail(
                 "Error: nix is not installed on this node, so per-repo toolchains "
-                "are unavailable. The base image's runtimes are all you have."
+                "are unavailable; dispatch uses the base image's runtimes only."
             )
+        cfg_key = "nix_env"
+        cfg = load_workstream_config(self._ws_id) or {}
+        attached = cfg.get(cfg_key, "")
 
-        cfg_key = "nix_env_dir"
         try:
-            if action == "status":
-                active = (load_workstream_config(self._ws_id) or {}).get(cfg_key, "")
+            if action == "list":
+                envs = nixenv.list_envs()
+                if not envs:
+                    out = "No environments yet. Use action='use' to bootstrap one."
+                else:
+                    lines = [f"{len(envs)} environment(s):"]
+                    for e in envs:
+                        mark = " (hand-edited)" if not e.generated else ""
+                        star = " <- attached" if e.name == attached else ""
+                        lines.append(f"  {e.name}{mark}: {', '.join(e.packages)}{star}")
+                    out = "\n".join(lines)
+            elif action == "status":
                 out = (
-                    f"Provisioned environment: {active}"
-                    if active
-                    else "No environment provisioned; dispatch uses the base image only."
+                    f"Attached environment: {attached}"
+                    if attached
+                    else "No environment attached; dispatch uses the base image only."
                 )
             elif action == "detect":
+                cwd = self._workspace_cwd()
+                if not cwd:
+                    return _fail("Error: no repo bound. Call bind_repo first.")
                 spec = nixenv.detect(Path(cwd))
-                if spec.repo_flake:
-                    out = "Repo declares its own flake.nix — that will be used as-is."
-                else:
-                    out = (
-                        f"Markers found: {', '.join(spec.markers) or '(none)'}\n"
-                        f"Would provision: {', '.join(spec.packages)}"
-                    )
-            elif action == "teardown":
-                removed = nixenv.teardown(self._ws_id)
-                cfg = load_workstream_config(self._ws_id) or {}
+                out = (
+                    "Repo declares its own flake.nix — it will be used as-is."
+                    if spec.repo_flake
+                    else f"Markers: {', '.join(spec.markers) or '(none)'}\n"
+                    f"Would provision: {', '.join(spec.packages)}"
+                )
+            elif action == "detach":
                 cfg.pop(cfg_key, None)
                 save_workstream_config(self._ws_id, cfg)
-                out = "Environment removed." if removed else "No environment to remove."
-            else:  # provision
-                info = nixenv.provision(self._ws_id, Path(cwd))
-                cfg = load_workstream_config(self._ws_id) or {}
-                cfg[cfg_key] = str(info.env_dir)
-                save_workstream_config(self._ws_id, cfg)
-                src = "the repo's own flake.nix" if info.repo_flake else ", ".join(info.packages)
+                out = "Detached. Dispatch now uses the base image only."
+            elif action == "add":
+                if not attached:
+                    return _fail("Error: no environment attached. Use action='use' first.")
+                if not item["packages"]:
+                    return _fail("Error: packages is required for add")
+                env = nixenv.add_packages(attached, item["packages"])
+                nixenv.provision(env)
                 out = (
-                    f"Environment ready ({src}).\n"
-                    f"dispatch_agent and bash now run inside it.\n"
-                    f"Flake written to {info.flake_path} — tune it and re-provision if needed."
+                    f"Added {', '.join(item['packages'])} to '{env.name}'.\n"
+                    f"Now: {', '.join(env.packages)}\n"
+                    "Every workstream using this environment gets them."
+                )
+            else:  # use
+                cwd = self._workspace_cwd()
+                if item["name"]:
+                    env = nixenv.get_env(item["name"])
+                    if env is None:
+                        env = nixenv.create_env(item["name"], item["packages"] or ["python312"])
+                elif cwd:
+                    repo_id = self._bound_repo_id() or "default"
+                    env = nixenv.env_for_repo(repo_id, Path(cwd))
+                else:
+                    return _fail(
+                        "Error: give a name, or call bind_repo first so one can be "
+                        "bootstrapped from the repo."
+                    )
+                nixenv.provision(env)
+                cfg[cfg_key] = env.name
+                save_workstream_config(self._ws_id, cfg)
+                out = (
+                    f"Using environment '{env.name}': {', '.join(env.packages) or 'repo flake'}\n"
+                    f"dispatch_agent now runs inside it.\n"
+                    f"Defined at {env.path}/flake.nix (git-tracked; "
+                    f"'nix develop ./{env.name}' works without turnstone)."
                 )
         except nixenv.NixEnvError as exc:
             return _fail(f"Error: {exc}")
@@ -17239,10 +17272,17 @@ class ChatSession:
         return call_id, out
 
     def _nix_env_dir(self) -> str:
-        """Provisioned Nix env for this workstream, if any."""
+        """Filesystem path of the attached environment, for command wrapping."""
         try:
-            return (load_workstream_config(self._ws_id) or {}).get("nix_env_dir", "") or ""
+            name = (load_workstream_config(self._ws_id) or {}).get("nix_env", "")
+            if not name:
+                return ""
+            from turnstone.core import nixenv
+
+            env = nixenv.get_env(name)
+            return str(env.path) if env is not None else ""
         except Exception:
+            log.debug("nixenv.resolve_failed", exc_info=True)
             return ""
 
     def _prepare_dispatch_agent(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:

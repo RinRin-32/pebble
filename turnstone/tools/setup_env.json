@@ -1,19 +1,24 @@
 {
   "name": "setup_env",
-  "description": "Provision the repo's toolchain (Go, Rust, Node, Python, …) into this workstream using Nix, so a dispatched agent can actually build and TEST its work rather than only editing files. Call it after bind_repo and before dispatch_agent when the repo needs a toolchain the base image lacks. Actions: 'detect' (report what the repo appears to need, changing nothing), 'provision' (materialize it — writes a flake.nix into the worktree you can inspect and tune), 'status' (what is currently active), 'teardown' (drop it).",
+  "description": "Manage the named Nix environments dispatched agents run in, so an agent can build and TEST its work rather than only edit files. Environments are shared and curated: hit a missing library once, add it once, and every later dispatch has it. Call after bind_repo and before dispatch_agent. Actions: 'detect' (what this repo appears to need — read-only), 'list' (all environments), 'use' (attach this workstream to one, bootstrapping from the repo when no name is given), 'add' (add packages to the attached environment), 'status' (what is attached), 'detach'.",
   "parameters": {
     "type": "object",
     "properties": {
       "action": {
         "type": "string",
-        "description": "What to do. 'detect' is read-only and safe to call first.",
-        "enum": ["detect", "provision", "status", "teardown"],
-        "default": "detect"
+        "description": "What to do. 'detect' and 'list' are read-only.",
+        "enum": ["detect", "list", "use", "add", "status", "detach"],
+        "default": "status"
+      },
+      "name": {
+        "type": "string",
+        "description": "Environment name for 'use'. Omit to bootstrap one named after the bound repo. Reuse a name (e.g. 'go-dev') to share one environment across repos.",
+        "default": ""
       },
       "packages": {
         "type": "array",
         "items": {"type": "string"},
-        "description": "Optional extra nixpkgs attribute names to add on top of what was detected, e.g. ['ffmpeg', 'postgresql']. Use exact nixpkgs names.",
+        "description": "Exact nixpkgs attribute names, e.g. ['ffmpeg', 'postgresql']. Used by 'add', and by 'use' to seed a new environment.",
         "default": []
       }
     },

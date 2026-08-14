@@ -60,15 +60,15 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 WORKDIR /data
 RUN chown turnstone:turnstone /data
 
-# Nix — per-repo toolchains for dispatched agents (turnstone/core/nixenv.py).
-# Copied from the official image rather than run through the installer: no
-# daemon, no systemd, and no user-namespace requirements, which is what makes it
-# work as an unprivileged user inside a container. /nix is a shared volume in
-# compose, so one download warms the store for every node.
-COPY --from=nixos/nix:latest /nix /nix
+# Nix config only — the STORE itself is NOT baked in.  A ~1GB /nix layer made
+# the image heavy and, worse, ephemeral: every toolchain downloaded at runtime
+# was lost on the next rebuild.  Instead compose populates a persistent
+# nix-store volume once, via a one-shot init service (see compose.yaml), and
+# every node mounts it.  That keeps this image slim and makes toolchains
+# survive rebuilds.  Without that volume, setup_env simply reports Nix as
+# unavailable and dispatch falls back to the base image's runtimes.
 RUN mkdir -p /etc/nix \
-    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
-    && chown -R turnstone:turnstone /nix
+    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf
 ENV PATH="/nix/var/nix/profiles/default/bin:${PATH}"
 
 # Workspace mount point — bind-mount a host directory here
