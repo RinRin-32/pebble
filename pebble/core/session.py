@@ -16876,7 +16876,8 @@ class ChatSession:
         text = item["text"]
         voice = item.get("voice") or ""
         if not voice:
-            voice = self._config_store.get("audio.tts_voice") or "alloy"
+            cs = getattr(self, "_config_store", None)
+            voice = (cs.get("audio.tts_voice") if cs else None) or "alloy"
 
         try:
             from pebble.core.audio import resolve_role_alias, synthesize
@@ -16991,9 +16992,9 @@ class ChatSession:
         try:
             if action == "graph":
                 g = kb.graph_summary()
-                hubs = ", ".join(f"{t} ({n})" for t, n in g["hubs"]) or "(none)"  # type: ignore[union-attr]
-                frontier = ", ".join(f"{t} ({n})" for t, n in g["frontier"]) or "(none)"  # type: ignore[union-attr]
-                orphans = ", ".join(g["orphans"]) or "(none)"  # type: ignore[arg-type]
+                hubs = ", ".join(f"{t} ({n})" for t, n in g["hubs"]) or "(none)"
+                frontier = ", ".join(f"{t} ({n})" for t, n in g["frontier"]) or "(none)"
+                orphans = ", ".join(g["orphans"]) or "(none)"
                 out = (
                     f"Vault: {g['notes']} notes, {g['links']} links\n"
                     f"Most-linked: {hubs}\n"
@@ -17016,10 +17017,11 @@ class ChatSession:
             elif action == "read":
                 if not item["title"]:
                     return _fail("Error: title is required for read")
-                note = kb.read_note(item["title"])
-                if note is None:
+                found = kb.read_note(item["title"])
+                if found is None:
                     out = f"No note titled {item['title']!r}."
                 else:
+                    note = found
                     # Built as a separate local rather than nested inside the
                     # f-string: reusing the outer quote character inside an
                     # f-string is a 3.12+ syntax, and this project supports
@@ -17313,9 +17315,10 @@ class ChatSession:
             else:  # use
                 cwd = self._workspace_cwd()
                 if item["name"]:
-                    env = nixenv.get_env(item["name"])
-                    if env is None:
-                        env = nixenv.create_env(item["name"], item["packages"] or ["python312"])
+                    existing = nixenv.get_env(item["name"])
+                    env = existing or nixenv.create_env(
+                        item["name"], item["packages"] or ["python312"]
+                    )
                 elif cwd:
                     repo_id = self._bound_repo_id() or "default"
                     env = nixenv.env_for_repo(repo_id, Path(cwd))
@@ -17459,7 +17462,8 @@ class ChatSession:
             return call_id, denial
 
         installed = available_agents()
-        name = item["agent"] or (self._config_store.get("agents.default") or "")
+        cs = getattr(self, "_config_store", None)
+        name = item["agent"] or ((cs.get("agents.default") if cs else None) or "")
         if not name:
             # Prefer whatever this node actually has, in a stable order.
             name = next((n for n in ("claude", "opencode", "codex") if n in installed), "")

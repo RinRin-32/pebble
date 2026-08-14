@@ -349,7 +349,7 @@ class TestToolPreparesAreCallable:
     enough to catch a bad attribute reference without building a session.
     """
 
-    def _stub(self):
+    def _stub(self, denial: str = ""):
         from types import SimpleNamespace
 
         # Only what prepare() legitimately touches: the ws id and the exec
@@ -359,6 +359,10 @@ class TestToolPreparesAreCallable:
             _exec_bind_repo=lambda item: None,
             _exec_setup_env=lambda item: None,
             _exec_dispatch_agent=lambda item: None,
+            # dispatch_agent asks whether this user may spend the operator's
+            # agent credentials before it offers anything for approval. "" is
+            # the allowed answer; see test_code_dispatch_gate for the policy.
+            _code_dispatch_denied=lambda: denial,
         )
 
     def test_prepare_bind_repo(self) -> None:
@@ -391,6 +395,18 @@ class TestToolPreparesAreCallable:
         assert item["needs_approval"] is True and item["task"] == "do it"
         empty = ChatSession._prepare_dispatch_agent(self._stub(), "c1", {"task": "  "})
         assert empty.get("error")
+
+    def test_prepare_dispatch_agent_refuses_before_prompting(self) -> None:
+        # A user without the grant is turned away at prepare time, so no
+        # approval prompt reaches an operator for a call that would be
+        # rejected anyway.
+        from pebble.core.session import ChatSession
+
+        item = ChatSession._prepare_dispatch_agent(
+            self._stub(denial="Error: not permitted"), "c1", {"task": "do it"}
+        )
+        assert item.get("error") == "Error: not permitted"
+        assert not item.get("needs_approval")
 
 
 class TestMcpPlumbing:

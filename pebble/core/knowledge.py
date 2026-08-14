@@ -31,7 +31,7 @@ import time
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from pebble.core.log import get_logger
 from pebble.core.workspace import workspace_root
@@ -519,7 +519,22 @@ def neighbours(title: str) -> dict[str, list[str]]:
     return {"outgoing": outgoing, "backlinks": backlinks, "dangling": dangling}
 
 
-def graph_summary() -> dict[str, object]:
+class GraphSummary(TypedDict):
+    """Shape of :func:`graph_summary`.
+
+    Spelled out rather than ``dict[str, object]`` so callers can index it
+    without casting, and so a typo in a key is caught here rather than at
+    runtime in a formatting expression.
+    """
+
+    notes: int
+    links: int
+    hubs: list[tuple[str, int]]
+    frontier: list[tuple[str, int]]
+    orphans: list[str]
+
+
+def graph_summary() -> GraphSummary:
     """Whole-vault shape: sizes, hubs, and the research frontier."""
     notes = list_notes()
     titles = {n.title for n in notes}

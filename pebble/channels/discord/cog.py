@@ -647,13 +647,19 @@ class MessageCog:
                 continue
             filename = att.filename or "file"
             mime = att.content_type or "application/octet-stream"
+            console = self.ts.router._console
+            if console is None:
+                # Attachments go through the console API; without it there is
+                # nowhere to put the bytes, so skip rather than pretend.
+                log.debug("discord.attachment_no_console", ws_id=ws_id, filename=filename)
+                continue
             try:
                 if ws_id in self.ts.router._coordinator_wss:
-                    resp = await self.ts.router._console.coordinator_upload_attachment(
+                    resp = await console.coordinator_upload_attachment(
                         ws_id, filename, data, mime_type=mime
                     )
                 else:
-                    resp = await self.ts.router._console.route_upload_attachment(
+                    resp = await console.route_upload_attachment(
                         ws_id, filename, data, mime_type=mime
                     )
             except Exception:
@@ -662,7 +668,7 @@ class MessageCog:
             aid = (
                 resp.attachment_id
                 if hasattr(resp, "attachment_id")
-                else resp.get("attachment_id", "")
+                else (resp.get("attachment_id", "") if isinstance(resp, dict) else "")
             )
             if aid:
                 attachment_ids.append(aid)

@@ -210,8 +210,10 @@ class ChannelRouter:
             now = time.monotonic()
             if self._models_cache and (now - self._models_cache_ts) < _MODELS_CACHE_TTL:
                 cached_val = self._models_cache.get("_personas")
-                if cached_val is not None:
-                    return cached_val
+                if isinstance(cached_val, list):
+                    # The cache is a loosely-typed dict shared with list_models,
+                    # so confirm the shape rather than trusting the key.
+                    return [p for p in cached_val if isinstance(p, dict)]
 
         try:
             if self._console:
@@ -220,7 +222,8 @@ class ChannelRouter:
                 assert self._server is not None
                 resp = await self._server.list_personas()
             data = resp.model_dump() if hasattr(resp, "model_dump") else resp
-            personas = data.get("personas", [])
+            raw = data.get("personas", []) if isinstance(data, dict) else []
+            personas = [p for p in raw if isinstance(p, dict)]
         except Exception:
             log.warning("channel_router.list_personas_failed", exc_info=True)
             return []

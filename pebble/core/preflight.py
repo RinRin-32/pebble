@@ -20,6 +20,11 @@ a failing line is "this feature is off", not "the stack is broken".
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pebble.core.storage._protocol import StorageBackend
+
 import os
 import shutil
 import sys
@@ -220,7 +225,7 @@ def _check_path() -> Check:
     return Check("PATH", True, "system directories present")
 
 
-def _open_storage() -> object | None:
+def _open_storage() -> StorageBackend | None:
     """Storage as the running server sees it.
 
     ``get_storage()`` returns a default SQLite backend in a process where app

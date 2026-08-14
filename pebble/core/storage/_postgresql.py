@@ -1786,16 +1786,20 @@ class PostgreSQLBackend:
                     kb_notes.c.updated,
                 ).order_by(kb_notes.c.title)
             ).fetchall()
-            out_counts = dict(
-                conn.execute(
+            # Rows are (title, count) by construction of the select, but a
+            # SQLAlchemy Row is not statically a 2-tuple, so spell it out.
+            out_counts: dict[str, int] = {
+                str(row[0]): int(row[1])
+                for row in conn.execute(
                     sa.select(kb_links.c.from_note, sa.func.count()).group_by(kb_links.c.from_note)
                 ).fetchall()
-            )
-            in_counts = dict(
-                conn.execute(
+            }
+            in_counts: dict[str, int] = {
+                str(row[0]): int(row[1])
+                for row in conn.execute(
                     sa.select(kb_links.c.to_title, sa.func.count()).group_by(kb_links.c.to_title)
                 ).fetchall()
-            )
+            }
             titles = {r[1] for r in rows}
             # A link to a note that does not exist is the research frontier:
             # something was named and never written up.

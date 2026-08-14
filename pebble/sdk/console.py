@@ -215,7 +215,8 @@ class AsyncTurnstoneConsole(_BaseClient):
     async def admin_list_personas(self) -> list[dict[str, Any]]:
         """GET /v1/api/admin/personas — all personas with IDs."""
         data = await self._request("GET", "/v1/api/admin/personas")
-        return data.get("personas", [])
+        personas = data.get("personas", []) if isinstance(data, dict) else []
+        return [p for p in personas if isinstance(p, dict)]
 
     async def patch_persona(self, persona_id: str, **fields: object) -> dict[str, Any]:
         """PATCH /v1/api/admin/personas/{persona_id} — edit persona fields."""

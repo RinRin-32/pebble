@@ -23,7 +23,10 @@ they are trivially unit-testable with a fake.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 #: Capability gating whether a user may run a coding agent at all.
 CAPABILITY_CODE_DISPATCH = "code_dispatch"
@@ -111,7 +114,7 @@ def persona_allowed(
     return persona_id in allowed
 
 
-def model_alias_filter(storage: _AccessStore, user_id: str):
+def model_alias_filter(storage: _AccessStore, user_id: str) -> Callable[[str], bool]:
     """Predicate ``(alias) -> bool`` for a user's allowed models.
 
     Suitable as the ``alias_filter`` argument to

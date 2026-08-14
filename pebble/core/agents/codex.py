@@ -56,7 +56,8 @@ class CodexAdapter(AgentAdapter):
 
         # Codex nests the payload under "msg" on its event stream; tolerate a
         # flat shape too so a format change doesn't silence the adapter.
-        msg = raw.get("msg") if isinstance(raw.get("msg"), dict) else raw
+        _msg = raw.get("msg")
+        msg: dict[str, Any] = _msg if isinstance(_msg, dict) else raw
         etype = str(msg.get("type") or raw.get("type") or "")
         session_id = str(raw.get("session_id") or raw.get("thread_id") or "")
 
@@ -86,7 +87,8 @@ class CodexAdapter(AgentAdapter):
             return [AgentEvent(kind="tool_result", tool_output=str(out), session_id=session_id)]
 
         if etype in {"token_count", "usage"}:
-            usage = msg.get("info") if isinstance(msg.get("info"), dict) else msg
+            _usage = msg.get("info")
+            usage: dict[str, Any] = _usage if isinstance(_usage, dict) else msg
             cost = usage.get("cost_usd") or usage.get("total_cost_usd")
             return [
                 AgentEvent(

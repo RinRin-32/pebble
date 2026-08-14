@@ -104,7 +104,8 @@ class ClaudeCodeAdapter(AgentAdapter):
                 if text:
                     events.append(AgentEvent(kind="reasoning", text=text, session_id=session_id))
             elif btype == "tool_use":
-                tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
+                _tin = block.get("input")
+                tool_input: dict[str, Any] = _tin if isinstance(_tin, dict) else {}
                 events.append(
                     AgentEvent(
                         kind="tool_use",
@@ -142,13 +143,15 @@ class ClaudeCodeAdapter(AgentAdapter):
         session_id = str(raw.get("session_id") or "")
 
         if etype in {"assistant", "user"}:
-            message = raw.get("message") if isinstance(raw.get("message"), dict) else {}
+            _message = raw.get("message")
+            message: dict[str, Any] = _message if isinstance(_message, dict) else {}
             return self._content_events(message, session_id)
 
         if etype == "result":
             is_error = bool(raw.get("is_error"))
             cost = raw.get("total_cost_usd")
-            usage = raw.get("usage") if isinstance(raw.get("usage"), dict) else {}
+            _usage = raw.get("usage")
+            usage: dict[str, Any] = _usage if isinstance(_usage, dict) else {}
             text = str(raw.get("result") or "")
             return [
                 AgentEvent(

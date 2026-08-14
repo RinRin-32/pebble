@@ -63,7 +63,8 @@ class OpenCodeAdapter(AgentAdapter):
         if not isinstance(raw, dict):
             return []
         etype = raw.get("type") or ""
-        part = raw.get("part") if isinstance(raw.get("part"), dict) else {}
+        _part = raw.get("part")
+        part: dict[str, Any] = _part if isinstance(_part, dict) else {}
         session_id = str(raw.get("sessionID") or "")
 
         if etype == "text":
@@ -75,8 +76,10 @@ class OpenCodeAdapter(AgentAdapter):
             return [AgentEvent(kind="reasoning", text=text, session_id=session_id)] if text else []
 
         if etype == "tool_use":
-            state = part.get("state") if isinstance(part.get("state"), dict) else {}
-            tool_input = state.get("input") if isinstance(state.get("input"), dict) else {}
+            _state = part.get("state")
+            state: dict[str, Any] = _state if isinstance(_state, dict) else {}
+            _tin = state.get("input")
+            tool_input: dict[str, Any] = _tin if isinstance(_tin, dict) else {}
             status = str(state.get("status") or "")
             # A completed call carries its output; emit the result too so the
             # surface can show what came back, not just what was attempted.
@@ -110,7 +113,8 @@ class OpenCodeAdapter(AgentAdapter):
             return events
 
         if etype == "step_finish":
-            tokens = part.get("tokens") if isinstance(part.get("tokens"), dict) else {}
+            _tok = part.get("tokens")
+            tokens: dict[str, Any] = _tok if isinstance(_tok, dict) else {}
             cost = part.get("cost")
             return [
                 AgentEvent(
