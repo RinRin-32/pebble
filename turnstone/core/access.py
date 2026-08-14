@@ -26,9 +26,14 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 
+#: Capability gating whether a user may run a coding agent at all.
+CAPABILITY_CODE_DISPATCH = "code_dispatch"
+
+
 class _AccessStore(Protocol):
     def list_user_allowed_models(self, user_id: str) -> list[str]: ...
     def list_user_allowed_personas(self, user_id: str) -> list[str]: ...
+    def list_user_capabilities(self, user_id: str) -> list[str]: ...
 
 
 def allowed_model_set(storage: _AccessStore, user_id: str) -> set[str]:
@@ -123,3 +128,32 @@ def model_alias_filter(storage: _AccessStore, user_id: str):
 def is_kind_default_persona(persona_row: dict[str, Any] | None) -> bool:
     """True if *persona_row* is a kind default (``is_default`` truthy)."""
     return bool(persona_row and persona_row.get("is_default"))
+
+
+def can_dispatch_code(
+    storage: _AccessStore, user_id: str, *, require_grant: bool = False
+) -> bool:
+    """Whether *user_id* may run a coding agent.
+
+    This is a different question from which model they may pick: a dispatch
+    spends the OPERATOR's credentials — a mounted Claude subscription, an
+    OpenRouter key — not the caller's.  In a Discord server with
+    ``/global-link`` that is every member of the server.
+
+    ``require_grant`` mirrors ``agents.dispatch_requires_grant`` and defaults to
+    False so that enabling this feature does not silently break a deployment
+    that already dispatches.  With it off, everyone may dispatch, exactly as
+    before; with it on, only holders of the capability may.  An unidentified
+    caller (no user_id) is refused once enforcement is on, because "we do not
+    know who this is" must not resolve to "allow".
+    """
+    if not require_grant:
+        return True
+    if not user_id:
+        return False
+    try:
+        return CAPABILITY_CODE_DISPATCH in set(storage.list_user_capabilities(user_id))
+    except Exception:
+        # Fail CLOSED: if the grant cannot be read, spending someone else's
+        # credentials is not the safe default.
+        return False

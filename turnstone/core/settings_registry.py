@@ -561,6 +561,19 @@ def _build_registry() -> dict[str, SettingDef]:
             "register the model in the Models tab and reference it by alias.",
         ),
         SettingDef(
+            "agents.dispatch_requires_grant",
+            "bool",
+            False,
+            "Require a grant to run coding agents",
+            "agents",
+            help="When enabled, only users holding the 'code_dispatch' capability may call "
+            "dispatch_agent. A dispatch spends the OPERATOR's agent credentials (a mounted "
+            "Claude subscription, an OpenRouter key) rather than the caller's, so in a Discord "
+            "server with /global-link that would otherwise be every member. Grant it per user "
+            "under Users -> access. Disabled by default so turning this on is a deliberate act "
+            "rather than a silent breakage.",
+        ),
+        SettingDef(
             "judge.smart_approvals",
             "bool",
             False,

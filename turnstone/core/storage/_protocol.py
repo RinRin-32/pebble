@@ -992,6 +992,16 @@ class StorageBackend(Protocol):
         """Workstreams bound to a repo, most recently updated first."""
         ...
 
+    def list_user_capabilities(self, user_id: str) -> list[str]:
+        """Capability keys granted to a user."""
+        ...
+
+    def set_user_capabilities(
+        self, user_id: str, capabilities: list[str], granted_by: str = ""
+    ) -> None:
+        """Replace a user's capability set."""
+        ...
+
     # -- Repos (coding-agent dispatch) ----------------------------------------
 
     def list_repos(self, enabled_only: bool = True) -> list[dict[str, Any]]:

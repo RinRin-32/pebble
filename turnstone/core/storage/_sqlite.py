@@ -73,6 +73,7 @@ from turnstone.core.storage._schema import (
     usage_events,
     user_allowed_models,
     user_allowed_personas,
+    user_capabilities,
     user_roles,
     users,
     watches,
@@ -2001,6 +2002,38 @@ class SQLiteBackend:
             }
             for r in rows
         ]
+
+
+    def list_user_capabilities(self, user_id: str) -> list[str]:
+        """Capability keys granted to a user."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(user_capabilities.c.capability)
+                .where(user_capabilities.c.user_id == user_id)
+                .order_by(user_capabilities.c.capability)
+            ).fetchall()
+            return [r[0] for r in rows]
+
+    def set_user_capabilities(
+        self, user_id: str, capabilities: list[str], granted_by: str = ""
+    ) -> None:
+        """Replace a user's capability set."""
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        clean = sorted({c.strip() for c in capabilities if c and c.strip()})
+        with self._conn() as conn:
+            conn.execute(
+                sa.delete(user_capabilities).where(user_capabilities.c.user_id == user_id)
+            )
+            if clean:
+                conn.execute(
+                    sa.insert(user_capabilities),
+                    [
+                        {"user_id": user_id, "capability": c,
+                         "granted_by": granted_by, "created": now}
+                        for c in clean
+                    ],
+                )
+            conn.commit()
 
     # -- Repos (coding-agent dispatch) ---------------------------------------
 

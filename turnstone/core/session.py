@@ -17348,6 +17348,51 @@ class ChatSession:
             log.debug("nixenv.resolve_failed", exc_info=True)
             return ""
 
+    def _code_dispatch_denied(self) -> str:
+        """Return a refusal message if this user may not run coding agents, else "".
+
+        Whose credentials does a dispatch spend?  Not the caller's: the agent
+        CLIs authenticate with the OPERATOR's mounted Claude subscription or
+        OpenRouter key.  In a Discord server with ``/global-link`` the caller is
+        every member of that server, so "who may spend this" is a separate
+        question from "which model may they pick", and it gets a separate gate.
+
+        Off by default (``agents.dispatch_requires_grant``), so enabling the
+        feature is a deliberate act rather than a silent breakage of a
+        deployment that already dispatches.  Once it IS on, every path that
+        cannot positively confirm the grant denies — a missing config store or
+        an unreachable database must not read as permission.
+        """
+        cs = getattr(self, "_config_store", None)
+        try:
+            requires = bool(cs.get("agents.dispatch_requires_grant")) if cs else False
+        except Exception:
+            # Cannot read the flag: assume the safe reading of an unknown
+            # policy is the one that does not spend someone else's credentials.
+            log.debug("dispatch.grant_flag_unreadable", exc_info=True)
+            requires = True
+        if not requires:
+            return ""
+
+        from turnstone.core.access import can_dispatch_code
+
+        try:
+            from turnstone.core.storage._registry import get_storage
+
+            store = get_storage()
+        except Exception:
+            log.warning("dispatch.storage_unavailable_denying", exc_info=True)
+            store = None
+        actor = self._acting_user_id or self._user_id or ""
+        if store is not None and can_dispatch_code(store, actor, require_grant=True):
+            return ""
+        return (
+            "Error: you are not permitted to run coding agents. A dispatch "
+            "spends this deployment's agent credentials, so it is granted per "
+            "user; an administrator can grant 'Code dispatch' under "
+            "Users \u2192 access."
+        )
+
     def _prepare_dispatch_agent(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
         task = (args.get("task") or "").strip()
         if not task:
@@ -17359,6 +17404,11 @@ class ChatSession:
                 "needs_approval": False,
                 "error": "Error: task is required",
             }
+        denial = self._code_dispatch_denied()
+        if denial:
+            # Refuse before raising an approval prompt: asking an operator to
+            # approve a call that will be rejected anyway wastes their attention.
+            return {"call_id": call_id, "func_name": "dispatch_agent", "error": denial}
         agent = (args.get("agent") or "").strip().lower()
         preview = task if len(task) <= 200 else task[:200] + "..."
         return {
@@ -17393,6 +17443,11 @@ class ChatSession:
             )
             self._report_tool_result(call_id, "dispatch_agent", msg, is_error=True)
             return call_id, msg
+
+        denial = self._code_dispatch_denied()
+        if denial:
+            self._report_tool_result(call_id, "dispatch_agent", denial, is_error=True)
+            return call_id, denial
 
         installed = available_agents()
         name = item["agent"] or (self._config_store.get("agents.default") or "")

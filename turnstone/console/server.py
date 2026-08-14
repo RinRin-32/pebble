@@ -7366,6 +7366,68 @@ async def admin_set_user_personas(request: Request) -> JSONResponse:
     return JSONResponse({"persona_ids": storage.list_user_allowed_personas(user_id)})
 
 
+async def admin_get_user_capabilities(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/users/{user_id}/capabilities — feature gates for a user."""
+    from turnstone.core.access import CAPABILITY_CODE_DISPATCH
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    user_id = request.path_params["user_id"]
+    cs = getattr(request.app.state, "config_store", None)
+    return JSONResponse(
+        {
+            "capabilities": storage.list_user_capabilities(user_id),
+            "available": [
+                {
+                    "key": CAPABILITY_CODE_DISPATCH,
+                    "label": "Code dispatch",
+                    "help": "Run coding agents. Spends the operator's agent credentials.",
+                }
+            ],
+            # Surfaced so the UI can say plainly whether the grant is currently
+            # enforced — a toggle that does nothing is worse than no toggle.
+            "enforced": bool(cs.get("agents.dispatch_requires_grant")) if cs else False,
+        }
+    )
+
+
+async def admin_set_user_capabilities(request: Request) -> JSONResponse:
+    """PUT /v1/api/admin/users/{user_id}/capabilities — replace the grant set."""
+    from turnstone.core.audit import record_audit
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import read_json_or_400, require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    user_id = request.path_params["user_id"]
+    if storage.get_user(user_id) is None:
+        return JSONResponse({"error": "User not found"}, status_code=404)
+    body = await read_json_or_400(request)
+    if isinstance(body, JSONResponse):
+        return body
+    raw = body.get("capabilities")
+    if not isinstance(raw, list):
+        return JSONResponse({"error": "capabilities must be a list"}, status_code=400)
+    caps = [str(c).strip() for c in raw if str(c).strip()]
+    audit_uid, ip = _audit_context(request)
+    storage.set_user_capabilities(user_id, caps, granted_by=audit_uid)
+    record_audit(
+        storage, audit_uid, "user.capabilities.set", "user", user_id,
+        {"capabilities": caps}, ip,
+    )
+    return JSONResponse({"capabilities": storage.list_user_capabilities(user_id)})
+
+
 async def admin_knowledge(request: Request) -> JSONResponse:
     """GET /v1/api/admin/knowledge — the vault graph, from the derived index.
 
@@ -14734,6 +14796,15 @@ def create_app(
                         "/api/admin/users/{user_id}/roles/{role_id}",
                         admin_unassign_role,
                         methods=["DELETE"],
+                    ),
+                    Route(
+                        "/api/admin/users/{user_id}/capabilities",
+                        admin_get_user_capabilities,
+                    ),
+                    Route(
+                        "/api/admin/users/{user_id}/capabilities",
+                        admin_set_user_capabilities,
+                        methods=["PUT"],
                     ),
                     Route("/api/admin/knowledge", admin_knowledge),
                     Route("/api/admin/coding-jobs", admin_coding_jobs),

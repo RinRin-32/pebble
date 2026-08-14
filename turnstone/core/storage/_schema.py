@@ -545,6 +545,21 @@ repos = sa.Table(
     sa.Column("updated", sa.Text, nullable=False),
 )
 
+# Per-user capabilities — coarse feature gates, distinct from the model/persona
+# allow-lists which narrow WHICH model a user may pick.  "code_dispatch" gates
+# whether a user may run a coding agent at all, because a dispatch spends the
+# OPERATOR's credentials (a mounted Claude subscription, an OpenRouter key),
+# not the caller's.
+user_capabilities = sa.Table(
+    "user_capabilities",
+    metadata,
+    sa.Column("user_id", sa.Text, nullable=False),
+    sa.Column("capability", sa.Text, nullable=False),
+    sa.Column("granted_by", sa.Text, nullable=False, server_default=""),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.PrimaryKeyConstraint("user_id", "capability"),
+)
+
 # Graph knowledge base.  Source of truth is markdown on the /workspace volume
 # (Obsidian dialect: frontmatter + [[wikilinks]]); these tables are a derived
 # index so the link graph can be traversed without re-parsing the vault.

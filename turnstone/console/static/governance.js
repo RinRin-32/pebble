@@ -885,6 +885,9 @@ function showUserAccessModal(userId) {
     authFetch("/v1/api/admin/users/" + userId + "/personas").then(function (r) {
       return r.json();
     }),
+    authFetch("/v1/api/admin/users/" + userId + "/capabilities").then(function (r) {
+      return r.json();
+    }),
   ])
     .then(function (results) {
       const allowedModels = {};
@@ -918,6 +921,33 @@ function showUserAccessModal(userId) {
         personasEl,
         _uaCheckboxList(personaItems, { name: "ua-persona" }),
       );
+
+      // Capabilities are a different question from WHICH model: a dispatch
+      // spends the operator's agent credentials, not the caller's.
+      const capsEl = document.getElementById("ua-capabilities");
+      if (capsEl) {
+        const capData = results[2] || {};
+        const held = {};
+        const have = capData.capabilities || [];
+        for (let k = 0; k < have.length; k++) held[have[k]] = true;
+        const capItems = (capData.available || []).map(function (c) {
+          return {
+            value: c.key,
+            label: c.label || c.key,
+            note: c.help || "",
+            checked: !!held[c.key],
+          };
+        });
+        let capHtml = _uaCheckboxList(capItems, { name: "ua-capability" });
+        if (!capData.enforced) {
+          // A toggle that does nothing is worse than no toggle.
+          capHtml +=
+            '<div class="ua-hint">Not enforced yet \u2014 set ' +
+            "<code>agents.dispatch_requires_grant</code> in Settings to make " +
+            "this grant required.</div>";
+        }
+        setSafeHtml(capsEl, capHtml);
+      }
     })
     .catch(function () {
       setSafeHtml(
@@ -960,6 +990,11 @@ function submitUserAccess() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ persona_ids: personas }),
+    }),
+    authFetch("/v1/api/admin/users/" + userId + "/capabilities", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ capabilities: _uaCollect("ua-capability") }),
     }),
   ])
     .then(function (rs) {
