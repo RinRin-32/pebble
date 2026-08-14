@@ -71,6 +71,14 @@ RUN mkdir -p /etc/nix \
     && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf
 ENV PATH="/nix/var/nix/profiles/default/bin:${PATH}"
 
+# Pre-create the agent credential directories, owned by the runtime user.
+# Docker creates a missing bind-mount PARENT as root, which leaves the CLI
+# unable to write its own state next to the mounted credential file
+# (opencode fails with EACCES on mkdir .../opencode/repos). Creating them here
+# means a file mount lands in an already-correct directory.
+RUN mkdir -p /home/turnstone/.local/share/opencode /home/turnstone/.claude \
+    && chown -R turnstone:turnstone /home/turnstone
+
 # Workspace mount point — bind-mount a host directory here
 RUN mkdir -p /workspace && chown turnstone:turnstone /workspace
 

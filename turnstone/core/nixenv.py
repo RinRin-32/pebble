@@ -79,6 +79,18 @@ TOOLCHAIN_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Makefile", ("gnumake",)),
 )
 
+# Extension-based fallback for repos with no build file, checked in order.
+_EXTENSION_FALLBACK: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (".java", ("jdk", "maven")),
+    (".go", ("go", "gopls")),
+    (".rs", ("cargo", "rustc")),
+    (".ts", ("nodejs_22",)),
+    (".js", ("nodejs_22",)),
+    (".c", ("gcc", "gnumake")),
+    (".cpp", ("gcc", "cmake")),
+    (".py", ("python312", "uv")),
+)
+
 _BASE_PACKAGES = ("git", "coreutils", "bash")
 _PROVISION_TIMEOUT = 1800
 _NIXPKGS_REF = "github:NixOS/nixpkgs/nixos-unstable"
@@ -192,6 +204,15 @@ def detect(worktree: Path) -> EnvSpec:
             if pkg not in seen:
                 seen.add(pkg)
                 spec.packages.append(pkg)
+    if not spec.packages:
+        # No build file at all. Fall back to source extensions before assuming
+        # Python: a plain Java or Go project with no pom.xml/go.mod would
+        # otherwise be handed an interpreter it can't use.
+        for ext, packages in _EXTENSION_FALLBACK:
+            if next(worktree.rglob(f"*{ext}"), None) is not None:
+                spec.markers.append(f"*{ext}")
+                spec.packages = list(packages)
+                break
     if not spec.packages:
         spec.packages = ["python312"]
     return spec

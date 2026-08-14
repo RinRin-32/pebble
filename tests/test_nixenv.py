@@ -149,3 +149,26 @@ class TestWrapCommand:
     def test_passthrough_without_nix(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(nixenv, "nix_binary", lambda: None)
         assert nixenv.wrap_command(["claude"], "/env") == ["claude"]
+
+
+class TestExtensionFallback:
+    """A repo with no build file must not be handed the wrong interpreter."""
+
+    def test_java_without_pom(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "Main.java").write_text("class Main {}\n")
+        spec = nixenv.detect(tmp_path)
+        assert "jdk" in spec.packages and "python312" not in spec.packages
+
+    def test_go_without_gomod(self, tmp_path: Path) -> None:
+        (tmp_path / "main.go").write_text("package main\n")
+        assert "go" in nixenv.detect(tmp_path).packages
+
+    def test_build_file_still_wins(self, tmp_path: Path) -> None:
+        (tmp_path / "go.mod").write_text("module x\n")
+        (tmp_path / "Main.java").write_text("class Main {}\n")
+        # An explicit build file is a stronger signal than a stray source file.
+        assert "go" in nixenv.detect(tmp_path).packages
+
+    def test_truly_empty_repo_gets_python(self, tmp_path: Path) -> None:
+        assert nixenv.detect(tmp_path).packages == ["python312"]

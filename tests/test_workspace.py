@@ -119,6 +119,14 @@ class TestDiff:
         (info.path / "calc.py").write_text("changed\n")
         assert "calc.py" in workspace.worktree_stat("wsstat")
 
+    def test_stat_includes_new_files(self, origin: Path) -> None:
+        # A dispatch that only CREATES files (a .gitignore, a new module) must
+        # not report an empty summary and read as having done nothing.
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsstatnew")
+        (info.path / ".gitignore").write_text("__pycache__/\n")
+        assert ".gitignore" in workspace.worktree_stat("wsstatnew")
+
     def test_diff_without_worktree_errors(self) -> None:
         with pytest.raises(workspace.WorkspaceError):
             workspace.worktree_diff("ghostws")

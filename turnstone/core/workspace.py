@@ -325,10 +325,19 @@ def worktree_diff(ws_id: str, *, max_bytes: int = 200_000) -> str:
 
 
 def worktree_stat(ws_id: str) -> str:
-    """``--stat`` summary of the worktree's changes (cheap, for headers)."""
+    """``--stat`` summary of the worktree's changes (cheap, for headers).
+
+    Registers untracked files first for the same reason :func:`worktree_diff`
+    does: without it a dispatch that only CREATES files (a .gitignore, a new
+    module) reports an empty summary and reads as having done nothing.
+    """
     wt = worktree_path(ws_id)
     if not wt.exists():
         raise WorkspaceError(f"no worktree for workstream {ws_id}")
+    try:
+        _git("add", "-A", "--intent-to-add", ".", cwd=wt, timeout=_DIFF_TIMEOUT)
+    except WorkspaceError:
+        log.debug("workspace.intent_to_add_failed", ws_id=ws_id, exc_info=True)
     return _git("diff", "--stat", cwd=wt, timeout=_DIFF_TIMEOUT).strip()
 
 
