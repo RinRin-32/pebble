@@ -337,3 +337,57 @@ class TestChildEnvironment:
             _KeyProbe([]), "go", cwd=str(tmp_path), env={"PATH": "/bin", "ANTHROPIC_API_KEY": "  "}
         )
         assert res.final_text == "[unset]"
+
+
+class TestToolPreparesAreCallable:
+    """Regression: bind_repo/setup_env/dispatch_agent referenced
+    ``self.skip_permissions``, which ChatSession does not define.
+
+    Every call raised AttributeError at prepare time, so the tools were broken
+    for any real caller — invisible to tests that drove the underlying modules
+    directly. These call the prepare methods unbound against a stub, which is
+    enough to catch a bad attribute reference without building a session.
+    """
+
+    def _stub(self):
+        from types import SimpleNamespace
+
+        # Only what prepare() legitimately touches: the ws id and the exec
+        # callables it stores. Anything else it reaches for is the bug.
+        return SimpleNamespace(
+            _ws_id="ws1",
+            _exec_bind_repo=lambda item: None,
+            _exec_setup_env=lambda item: None,
+            _exec_dispatch_agent=lambda item: None,
+        )
+
+    def test_prepare_bind_repo(self) -> None:
+        from turnstone.core.session import ChatSession
+
+        item = ChatSession._prepare_bind_repo(self._stub(), "c1", {"repo": "myrepo"})
+        assert item["func_name"] == "bind_repo"
+        assert item["needs_approval"] is True
+        # Status form mutates nothing, so it must not prompt.
+        status = ChatSession._prepare_bind_repo(self._stub(), "c1", {})
+        assert status["needs_approval"] is False
+
+    def test_prepare_setup_env(self) -> None:
+        from turnstone.core.session import ChatSession
+
+        for action, expected in (("use", True), ("add", True), ("detect", False), ("list", False)):
+            item = ChatSession._prepare_setup_env(self._stub(), "c1", {"action": action})
+            assert item["needs_approval"] is expected, action
+
+    def test_prepare_setup_env_rejects_bad_action(self) -> None:
+        from turnstone.core.session import ChatSession
+
+        item = ChatSession._prepare_setup_env(self._stub(), "c1", {"action": "nope"})
+        assert item.get("error")
+
+    def test_prepare_dispatch_agent(self) -> None:
+        from turnstone.core.session import ChatSession
+
+        item = ChatSession._prepare_dispatch_agent(self._stub(), "c1", {"task": "do it"})
+        assert item["needs_approval"] is True and item["task"] == "do it"
+        empty = ChatSession._prepare_dispatch_agent(self._stub(), "c1", {"task": "  "})
+        assert empty.get("error")

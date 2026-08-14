@@ -65,6 +65,7 @@ def run_agent(
     timeout: int = DEFAULT_TIMEOUT,
     on_event: Callable[[AgentEvent], None] | None = None,
     env: dict[str, str] | None = None,
+    wrap: str = "",
 ) -> AgentResult:
     """Dispatch *prompt* to *adapter* inside *cwd* and collect the outcome."""
     result = AgentResult()
@@ -81,6 +82,12 @@ def run_agent(
     cmd = adapter.build_command(
         prompt, cwd=cwd, model=model, session_id=session_id, agent=agent
     )
+    if wrap:
+        # Run the agent inside a provisioned Nix shell. argv stays a vector, so
+        # a prompt containing quotes or ';' is still inert.
+        from turnstone.core.nixenv import wrap_command
+
+        cmd = wrap_command(cmd, wrap)
     child_env = {**(env or os.environ.copy()), **adapter.env_overrides()}
     child_env["PATH"] = _normalized_path(child_env.get("PATH", ""))
     # An empty ANTHROPIC_API_KEY is worse than an absent one: it can be read as

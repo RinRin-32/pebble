@@ -60,6 +60,25 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 WORKDIR /data
 RUN chown turnstone:turnstone /data
 
+# Nix config only — the STORE itself is NOT baked in.  A ~1GB /nix layer made
+# the image heavy and, worse, ephemeral: every toolchain downloaded at runtime
+# was lost on the next rebuild.  Instead compose populates a persistent
+# nix-store volume once, via a one-shot init service (see compose.yaml), and
+# every node mounts it.  That keeps this image slim and makes toolchains
+# survive rebuilds.  Without that volume, setup_env simply reports Nix as
+# unavailable and dispatch falls back to the base image's runtimes.
+RUN mkdir -p /etc/nix \
+    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf
+ENV PATH="/nix/var/nix/profiles/default/bin:${PATH}"
+
+# Pre-create the agent credential directories, owned by the runtime user.
+# Docker creates a missing bind-mount PARENT as root, which leaves the CLI
+# unable to write its own state next to the mounted credential file
+# (opencode fails with EACCES on mkdir .../opencode/repos). Creating them here
+# means a file mount lands in an already-correct directory.
+RUN mkdir -p /home/turnstone/.local/share/opencode /home/turnstone/.claude \
+    && chown -R turnstone:turnstone /home/turnstone
+
 # Workspace mount point — bind-mount a host directory here
 RUN mkdir -p /workspace && chown turnstone:turnstone /workspace
 

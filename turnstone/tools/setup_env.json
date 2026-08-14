@@ -1,0 +1,40 @@
+{
+  "name": "setup_env",
+  "description": "Manage the named Nix environments dispatched agents run in, so an agent can build and TEST its work rather than only edit files. Environments are shared and curated: hit a missing library once, add it once, and every later dispatch has it. Call after bind_repo and before dispatch_agent. Actions: 'detect' (what this repo appears to need \u2014 read-only), 'list' (all environments), 'use' (attach this workstream to one, bootstrapping from the repo when no name is given), 'add' (add packages to the attached environment), 'status' (what is attached), 'detach'.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "What to do. 'detect' and 'list' are read-only.",
+        "enum": [
+          "detect",
+          "list",
+          "use",
+          "add",
+          "status",
+          "detach"
+        ],
+        "default": "status"
+      },
+      "name": {
+        "type": "string",
+        "description": "Environment name for 'use'. Omit to bootstrap one named after the bound repo. Reuse a name (e.g. 'go-dev') to share one environment across repos.",
+        "default": ""
+      },
+      "packages": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Exact nixpkgs attribute names, e.g. ['ffmpeg', 'postgresql']. Used by 'add', and by 'use' to seed a new environment.",
+        "default": []
+      }
+    },
+    "required": [
+      "action"
+    ]
+  },
+  "interactive": true,
+  "primary_key": "action"
+}

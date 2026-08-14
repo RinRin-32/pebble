@@ -18,6 +18,5 @@
     "required": []
   },
   "interactive": true,
-  "coordinator": true,
   "primary_key": "repo"
 }

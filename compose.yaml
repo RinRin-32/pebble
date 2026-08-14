@@ -66,6 +66,7 @@ networks:
 volumes:
   turnstone-data:
   workspace:
+  nix-store:
   postgres-data:
   caddy-data:
   caddy-config:
@@ -126,6 +127,31 @@ services:
         limits:
           memory: 2G
     restart: unless-stopped
+
+  # -------------------------------------------------------------------
+  # nix-init — populates the shared Nix store ONCE, then exits.
+  #
+  # The store is a volume rather than an image layer so toolchains downloaded by
+  # setup_env survive rebuilds. It cannot be seeded by mounting the volume over
+  # an image's /nix: Docker copies image content into a fresh volume, and several
+  # nodes doing that concurrently collide ("mkdir ... file exists"). One writer
+  # that completes first removes the race entirely.
+  # -------------------------------------------------------------------
+  nix-init:
+    image: nixos/nix:latest
+    command:
+      - sh
+      - -c
+      - >-
+        if [ ! -d /nixvol/var/nix ]; then
+          echo "seeding nix store..." && cp -a /nix/. /nixvol/;
+        fi;
+        chown -R 1000:1000 /nixvol && echo "nix store ready"
+    volumes:
+      - nix-store:/nixvol
+    networks:
+      - turnstone-net
+    restart: "no"
 
   # -------------------------------------------------------------------
   # turnstone-console — cluster dashboard. Reach it ONLY through Caddy at
@@ -292,6 +318,8 @@ services:
     volumes:
       - turnstone-data:/data
       - ${WORKSPACE_MOUNT:-workspace}:/workspace
+      # Persistent Nix store, seeded once by nix-init.
+      - nix-store:/nix
       # Agent credentials are NOT mounted here: the path is machine-specific and
       # a missing bind source makes Docker silently create a root-owned
       # directory, which breaks the login it was meant to supply.  Put them in
@@ -334,6 +362,9 @@ services:
         condition: service_healthy
       searxng:
         condition: service_healthy
+      # Wait for the store to be seeded: one writer, then N readers.
+      nix-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "/usr/local/bin/healthcheck.py", "http://127.0.0.1:8080/health"]
       interval: 10s

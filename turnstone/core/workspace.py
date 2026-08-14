@@ -166,6 +166,20 @@ def ensure_mirror(repo_id: str, git_url: str) -> Path:
     return path
 
 
+def default_branch(repo_id: str) -> str:
+    """The mirror's own HEAD branch, or "" if it can't be determined.
+
+    Authoritative in a way a registered ``default_branch`` column is not: a repo
+    row can say "main" while the remote actually uses "master", which fails the
+    checkout with an opaque "invalid reference".
+    """
+    try:
+        out = _git("--git-dir", str(mirror_path(repo_id)), "symbolic-ref", "HEAD", timeout=30)
+    except WorkspaceError:
+        return ""
+    return out.strip().rsplit("/", 1)[-1]
+
+
 def create_worktree(
     repo_id: str,
     ws_id: str,
@@ -198,6 +212,21 @@ def create_worktree(
             _git("--git-dir", str(mirror), "worktree", "prune")
         except WorkspaceError:
             log.debug("workspace.prune_failed", repo_id=repo_id, exc_info=True)
+        # A registered default_branch can disagree with the remote's real HEAD
+        # ("main" vs "master"), which fails with an opaque "invalid reference".
+        # Fall back to what the mirror actually has rather than surfacing that.
+        if base_ref and base_ref != "HEAD":
+            try:
+                _git("--git-dir", str(mirror), "rev-parse", "--verify", base_ref, timeout=30)
+            except WorkspaceError:
+                resolved = default_branch(repo_id)
+                log.info(
+                    "workspace.base_ref_fallback",
+                    repo_id=repo_id,
+                    requested=base_ref,
+                    resolved=resolved or "HEAD",
+                )
+                base_ref = resolved or "HEAD"
         _git(
             "--git-dir",
             str(mirror),
@@ -296,10 +325,19 @@ def worktree_diff(ws_id: str, *, max_bytes: int = 200_000) -> str:
 
 
 def worktree_stat(ws_id: str) -> str:
-    """``--stat`` summary of the worktree's changes (cheap, for headers)."""
+    """``--stat`` summary of the worktree's changes (cheap, for headers).
+
+    Registers untracked files first for the same reason :func:`worktree_diff`
+    does: without it a dispatch that only CREATES files (a .gitignore, a new
+    module) reports an empty summary and reads as having done nothing.
+    """
     wt = worktree_path(ws_id)
     if not wt.exists():
         raise WorkspaceError(f"no worktree for workstream {ws_id}")
+    try:
+        _git("add", "-A", "--intent-to-add", ".", cwd=wt, timeout=_DIFF_TIMEOUT)
+    except WorkspaceError:
+        log.debug("workspace.intent_to_add_failed", ws_id=ws_id, exc_info=True)
     return _git("diff", "--stat", cwd=wt, timeout=_DIFF_TIMEOUT).strip()
 
 
