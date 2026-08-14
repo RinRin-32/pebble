@@ -576,7 +576,7 @@ def _build_registry() -> dict[str, SettingDef]:
         SettingDef(
             "judge.confidence_threshold",
             "float",
-            0.95,
+            0.80,
             "Min judge confidence for Smart Approvals",
             "judge",
             min_value=0.0,

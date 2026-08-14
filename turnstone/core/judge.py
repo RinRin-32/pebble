@@ -92,7 +92,7 @@ class JudgeConfig:
     enabled: bool = True
     model: str = ""  # empty = use session model
     smart_approvals: bool = False  # auto-approve high-confidence "approve" LLM verdicts
-    confidence_threshold: float = 0.95  # Smart Approvals auto-approve bar (recommendation=approve)
+    confidence_threshold: float = 0.80  # Smart Approvals auto-approve bar (recommendation=approve)
     max_context_ratio: float = 0.5
     timeout: float = 120.0  # per-turn timeout in seconds (see class docstring)
     read_only_tools: bool = True

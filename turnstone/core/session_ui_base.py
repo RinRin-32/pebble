@@ -511,7 +511,7 @@ class SessionUIBase:
         # takes effect on the next batch.  Defaults keep the feature off
         # for any UI the session doesn't configure (eval, fixtures).
         self.smart_approvals_enabled = False
-        self.smart_approval_threshold = 0.95
+        self.smart_approval_threshold = 0.80
         # How long ``approve_tools`` waits for the async LLM verdict
         # before falling back to a human prompt (fail-closed).  Bounded
         # by the judge timeout; the wait returns early the moment every
