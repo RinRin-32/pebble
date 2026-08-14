@@ -287,3 +287,54 @@ class TestStaleness:
     def test_redaction_keeps_the_useful_part(self, tmp_path: Path) -> None:
         res = kb.run_experiment("echo 'tests passed in 12.3s'", cwd=tmp_path)
         assert "tests passed" in res.output
+
+
+class TestVaultIsGit:
+    """The vault syncs across devices as a git repo, not via a server."""
+
+    def test_vault_becomes_a_repo_on_first_write(self) -> None:
+        kb.write_note(kb.Note(title="First", body="hello"))
+        assert (kb.vault_root() / ".git").exists()
+
+    def test_each_note_is_committed(self) -> None:
+        import subprocess
+
+        kb.write_note(kb.Note(title="Alpha", body="a"))
+        kb.write_note(kb.Note(title="Beta", body="b"))
+        log = subprocess.run(
+            ["git", "log", "--oneline"], cwd=kb.vault_root(),
+            capture_output=True, text=True,
+        ).stdout
+        assert "Alpha" in log and "Beta" in log
+
+    def test_append_is_its_own_commit(self) -> None:
+        import subprocess
+
+        kb.write_note(kb.Note(title="Log", body="one"))
+        kb.write_note(kb.Note(title="Log", body="two"), append=True)
+        log = subprocess.run(
+            ["git", "log", "--oneline"], cwd=kb.vault_root(),
+            capture_output=True, text=True,
+        ).stdout
+        # History is the point: a finding can be traced to when it was learned.
+        assert "append: Log" in log and "write: Log" in log
+
+    def test_codegraph_is_ignored(self) -> None:
+        kb.write_note(kb.Note(title="X", body="x"))
+        assert ".codegraph/" in (kb.vault_root() / ".gitignore").read_text()
+
+    def test_a_failed_commit_never_loses_the_note(self, monkeypatch) -> None:
+        # The note is the product; version control is a convenience on top.
+        monkeypatch.setattr(kb, "_commit_vault", lambda msg: (_ for _ in ()).throw(OSError("no git")))
+        try:
+            kb.write_note(kb.Note(title="Survives", body="content"))
+        except OSError:
+            pass
+        assert kb.note_path("Survives").exists()
+
+    def test_readme_is_not_a_note(self) -> None:
+        # The vault's own README would otherwise appear as an orphan node.
+        kb.write_note(kb.Note(title="Real finding", body="x"))
+        titles = [n.title for n in kb.list_notes()]
+        assert titles == ["Real finding"]
+        assert (kb.vault_root() / "README.md").exists()
