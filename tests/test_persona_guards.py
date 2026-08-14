@@ -14,12 +14,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone.core.personas import PersonaSnapshot, snapshot_from_persona
-from turnstone.core.session import ChatSession
-from turnstone.core.storage import get_storage
-from turnstone.core.storage._utils import PERSONA_MUTABLE
-from turnstone.core.tools import TASK_AGENT_TOOLS
-from turnstone.core.workstream import WorkstreamKind
+from pebble.core.personas import PersonaSnapshot, snapshot_from_persona
+from pebble.core.session import ChatSession
+from pebble.core.storage import get_storage
+from pebble.core.storage._utils import PERSONA_MUTABLE
+from pebble.core.tools import TASK_AGENT_TOOLS
+from pebble.core.workstream import WorkstreamKind
 
 
 def _snap(
@@ -48,7 +48,7 @@ def _session(mock_openai_client: Any, **kwargs: Any) -> ChatSession:
 
 
 def _wire_names(session: ChatSession) -> list[str]:
-    from turnstone.core.providers._protocol import ModelCapabilities
+    from pebble.core.providers._protocol import ModelCapabilities
 
     caps = ModelCapabilities(supports_web_search=True)
     with patch.object(session, "_get_capabilities", return_value=caps):
@@ -184,7 +184,7 @@ class TestToolSearchEscape:
     def test_mid_session_adopt_of_hard_set_drops_tool_search(
         self, tmp_db, mock_openai_client
     ) -> None:
-        from turnstone.core.memory import register_workstream, save_workstream_config
+        from pebble.core.memory import register_workstream, save_workstream_config
 
         # Unstamped session with a live ToolSearchManager and a discovered tool.
         session = _session(mock_openai_client, mcp_client=self._mcp_client(), tool_search="on")
@@ -192,7 +192,7 @@ class TestToolSearchEscape:
         session._tool_search.expand_visible(["mcp_widget"])
         # Adopt a hard-set (scribe-shaped) stamp via non-fork resume.
         register_workstream("t" * 32)
-        from turnstone.core.memory import save_message
+        from pebble.core.memory import save_message
 
         save_message("t" * 32, "user", "hi")
         save_workstream_config(
@@ -318,7 +318,7 @@ class TestMemoryOff:
         """
         from types import SimpleNamespace
 
-        from turnstone.core.trajectory import turns_from_dicts
+        from pebble.core.trajectory import turns_from_dicts
 
         session.messages = turns_from_dicts(
             [
@@ -353,7 +353,7 @@ class TestMemoryOff:
             patch.object(session, "_estimated_prompt_tokens", side_effect=est),
             patch.object(session, "_utility_completion", return_value=summary) as uc,
             patch.object(session, "_append_user_turn", wraps=session._append_user_turn) as resume,
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("go")
         return uc, resume
@@ -365,7 +365,7 @@ class TestMemoryOff:
         # actual compaction spills a summary AND the resume nudge points at
         # recall (NUDGE_COMPACTION_RESUME).
         from tests._session_helpers import make_session
-        from turnstone.core.metacognition import NUDGE_COMPACTION_RESUME
+        from pebble.core.metacognition import NUDGE_COMPACTION_RESUME
 
         session = make_session(
             client=mock_openai_client,
@@ -389,7 +389,7 @@ class TestMemoryOff:
         # scribe-shaped empty toolset hides recall — the spill still happens
         # but the resume nudge switches to the no-recall variant.
         from tests._session_helpers import make_session
-        from turnstone.core.metacognition import NUDGE_COMPACTION_RESUME_NO_RECALL
+        from pebble.core.metacognition import NUDGE_COMPACTION_RESUME_NO_RECALL
 
         session = make_session(
             client=mock_openai_client,
@@ -529,7 +529,7 @@ class TestSpawnPersona:
 
 
 def test_task_agent_schema_has_persona_param() -> None:
-    from turnstone.core.tools import TOOLS
+    from pebble.core.tools import TOOLS
 
     task_agent = next(t for t in TOOLS if t["function"]["name"] == "task_agent")
     props = task_agent["function"]["parameters"]["properties"]
@@ -547,7 +547,7 @@ def test_task_agent_schema_has_persona_param() -> None:
 
 class TestImmutability:
     def test_save_config_reemits_same_stamp(self, tmp_db, mock_openai_client) -> None:
-        from turnstone.core.memory import load_workstream_config
+        from pebble.core.memory import load_workstream_config
 
         snap = _snap(name="scribe", prompt="P", tools=frozenset({"read_file"}), memory=False)
         session = _session(mock_openai_client, ws_id="w1" * 16, persona_snapshot=snap)
@@ -565,7 +565,7 @@ class TestImmutability:
         assert "name" not in PERSONA_MUTABLE
 
     def test_legacy_ws_never_gets_backstamped(self, tmp_db, mock_openai_client) -> None:
-        from turnstone.core.memory import load_workstream_config
+        from pebble.core.memory import load_workstream_config
 
         session = _session(mock_openai_client, ws_id="w2" * 16)  # no persona
         session._save_config()
@@ -641,12 +641,12 @@ class TestRehydrateThreading:
         # workstream, a fresh resume re-adopts all five levers intact.
         from types import SimpleNamespace
 
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             register_workstream,
             save_message,
             save_workstream_config,
         )
-        from turnstone.core.trajectory import turns_from_dicts
+        from pebble.core.trajectory import turns_from_dicts
 
         snap = _snap(
             name="scribe", prompt="P", tools=frozenset({"read_file"}), mcp=False, memory=False
@@ -700,7 +700,7 @@ class TestResumeAdoption:
         return mcp
 
     def test_corrupt_target_stamp_leaves_session_intact(self, tmp_db, mock_openai_client) -> None:
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             load_workstream_config,
             register_workstream,
             save_message,
@@ -730,7 +730,7 @@ class TestResumeAdoption:
         assert load_workstream_config(b_id) == b_config_before
 
     def test_mcp_on_stamp_refused_when_gated_off(self, tmp_db, mock_openai_client) -> None:
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             register_workstream,
             save_message,
             save_workstream_config,
@@ -749,7 +749,7 @@ class TestResumeAdoption:
             session.resume(b_id)
 
     def test_mcp_off_stamp_narrows_in_place(self, tmp_db, mock_openai_client) -> None:
-        from turnstone.core.memory import (
+        from pebble.core.memory import (
             register_workstream,
             save_message,
             save_workstream_config,
@@ -787,7 +787,7 @@ class TestResumeAdoption:
 
 class TestPolicyComposition:
     def test_db_policy_rides_on_top_of_override(self) -> None:
-        from turnstone.prompts import ClientType, SessionContext, compose_system_message
+        from pebble.prompts import ClientType, SessionContext, compose_system_message
 
         ctx = SessionContext(current_datetime="2026-07-02T10:00", timezone="UTC", username="guard")
         policies = [
@@ -819,7 +819,7 @@ class TestPolicyComposition:
 
 class TestCliPersona:
     def test_seed_persona_loads(self, tmp_db) -> None:
-        from turnstone.cli import resolve_cli_persona_kwargs
+        from pebble.cli import resolve_cli_persona_kwargs
 
         storage = get_storage()
         storage.create_persona(
@@ -837,14 +837,14 @@ class TestCliPersona:
         assert kwargs["persona_snapshot"].tools == frozenset()
 
     def test_unknown_name_exits(self, tmp_db, capsys) -> None:
-        from turnstone.cli import resolve_cli_persona_kwargs
+        from pebble.cli import resolve_cli_persona_kwargs
 
         with pytest.raises(SystemExit):
             resolve_cli_persona_kwargs(get_storage(), "nope", None)
         assert "not found or disabled" in capsys.readouterr().out
 
     def test_kind_mismatch_exits(self, tmp_db) -> None:
-        from turnstone.cli import resolve_cli_persona_kwargs
+        from pebble.cli import resolve_cli_persona_kwargs
 
         storage = get_storage()
         storage.create_persona(
@@ -859,8 +859,8 @@ class TestCliPersona:
             resolve_cli_persona_kwargs(storage, "exec", None)
 
     def test_resume_adopts_target_stamp(self, tmp_db) -> None:
-        from turnstone.cli import resolve_cli_persona_kwargs
-        from turnstone.core.memory import save_workstream_config
+        from pebble.cli import resolve_cli_persona_kwargs
+        from pebble.core.memory import save_workstream_config
 
         snap = _snap(name="scribe", tools=frozenset(), mcp=False, memory=False)
         save_workstream_config("t" * 32, snap.to_config())
@@ -868,7 +868,7 @@ class TestCliPersona:
         assert kwargs["persona_snapshot"] == snap
 
     def test_no_default_yields_legacy(self, tmp_db) -> None:
-        from turnstone.cli import resolve_cli_persona_kwargs
+        from pebble.cli import resolve_cli_persona_kwargs
 
         assert resolve_cli_persona_kwargs(get_storage(), None, None) == {}
 
@@ -881,8 +881,8 @@ class TestCliPersona:
 
 class TestTemplateIndependence:
     def test_edit_and_archive_leave_stamp_alone(self, tmp_db, mock_openai_client) -> None:
-        from turnstone.core.memory import load_workstream_config
-        from turnstone.core.personas import snapshot_from_config
+        from pebble.core.memory import load_workstream_config
+        from pebble.core.personas import snapshot_from_config
 
         storage = get_storage()
         storage.create_persona(
@@ -928,7 +928,7 @@ class TestTemplateIndependence:
 
 def _persona_collector() -> Any:
     from tests._coord_test_helpers import MockStorage
-    from turnstone.console.collector import ClusterCollector
+    from pebble.console.collector import ClusterCollector
 
     return ClusterCollector(storage=MockStorage(), discovery_interval=999)
 
@@ -936,7 +936,7 @@ def _persona_collector() -> Any:
 def test_ws_created_reconcile_lane_carries_persona() -> None:
     # Poll-diff additions: a freshly-appeared workstream becomes a ws_created
     # event AND is stored on the node snapshot — persona rides both.
-    from turnstone.console.collector import NodeSnapshot
+    from pebble.console.collector import NodeSnapshot
 
     c = _persona_collector()
     node = NodeSnapshot(node_id="node-a", server_url="http://a:8080")
@@ -957,7 +957,7 @@ def test_ws_created_apply_delta_lane_carries_persona() -> None:
     # seeds node.workstreams — persona rides the emitted row and the store.
     import queue
 
-    from turnstone.console.collector import NodeSnapshot
+    from pebble.console.collector import NodeSnapshot
 
     c = _persona_collector()
     c._nodes["node-a"] = NodeSnapshot(node_id="node-a", server_url="http://a:8080")
@@ -1002,11 +1002,11 @@ class TestForkAdoptsStamp:
         from starlette.routing import Mount, Route
         from starlette.testclient import TestClient
 
-        from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-        from turnstone.core.auth import AuthResult
-        from turnstone.core.session_manager import SessionManager
-        from turnstone.core.session_routes import SessionEndpointConfig, make_create_handler
-        from turnstone.server import (
+        from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+        from pebble.core.auth import AuthResult
+        from pebble.core.session_manager import SessionManager
+        from pebble.core.session_routes import SessionEndpointConfig, make_create_handler
+        from pebble.server import (
             WebUI,
             _interactive_create_build_kwargs,
             _interactive_create_post_install,
@@ -1102,7 +1102,7 @@ class TestForkAdoptsStamp:
         )
 
     def test_fork_adopts_source_stamp_not_default(self, _fork_app) -> None:
-        from turnstone.core.memory import register_workstream, save_workstream_config
+        from pebble.core.memory import register_workstream, save_workstream_config
 
         client, mgr = _fork_app
         self._seed_default()  # present, and must LOSE to the source stamp
@@ -1122,7 +1122,7 @@ class TestForkAdoptsStamp:
         assert ws.session._persona_memory is False
 
     def test_corrupt_source_stamp_is_400(self, _fork_app) -> None:
-        from turnstone.core.memory import register_workstream, save_workstream_config
+        from pebble.core.memory import register_workstream, save_workstream_config
 
         client, mgr = _fork_app
         src = "c" * 32
@@ -1134,7 +1134,7 @@ class TestForkAdoptsStamp:
         assert "cannot fork" in resp.json()["error"]
 
     def test_unstamped_legacy_source_forks_unstamped(self, _fork_app) -> None:
-        from turnstone.core.memory import register_workstream
+        from pebble.core.memory import register_workstream
 
         client, mgr = _fork_app
         self._seed_default()  # the default must NOT leak onto the fork
@@ -1174,11 +1174,11 @@ class TestCreateStampsPersona:
         from starlette.routing import Mount, Route
         from starlette.testclient import TestClient
 
-        from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-        from turnstone.core.auth import AuthResult
-        from turnstone.core.session_manager import SessionManager
-        from turnstone.core.session_routes import SessionEndpointConfig, make_create_handler
-        from turnstone.server import (
+        from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+        from pebble.core.auth import AuthResult
+        from pebble.core.session_manager import SessionManager
+        from pebble.core.session_routes import SessionEndpointConfig, make_create_handler
+        from pebble.server import (
             WebUI,
             _interactive_create_build_kwargs,
             _interactive_create_post_install,
@@ -1349,7 +1349,7 @@ def _persona_desc(session: ChatSession, tool_name: str) -> str:
 
 
 def _pristine_persona_desc(tool_name: str) -> str:
-    from turnstone.core.tools import TOOLS
+    from pebble.core.tools import TOOLS
 
     tool = next(t for t in TOOLS if t["function"]["name"] == tool_name)
     prop = ChatSession._persona_property(tool["function"]["parameters"]["properties"])
@@ -1425,7 +1425,7 @@ class TestPersonaDiscovery:
 
     def test_storage_down_keeps_pristine_base(self, tmp_db, mock_openai_client) -> None:
         self._seed()
-        with patch("turnstone.core.storage.is_storage_initialized", return_value=False):
+        with patch("pebble.core.storage.is_storage_initialized", return_value=False):
             session = _session(mock_openai_client)
         assert _persona_desc(session, "task_agent") == _pristine_persona_desc("task_agent")
 

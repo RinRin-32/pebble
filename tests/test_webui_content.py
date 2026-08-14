@@ -4,7 +4,7 @@ import queue
 
 import pytest
 
-from turnstone.server import WebUI
+from pebble.server import WebUI
 
 
 @pytest.fixture(autouse=True)
@@ -39,7 +39,7 @@ class TestContentAccumulation:
         accumulator wiring, not the emit-time batching cadence (which
         coalesces fragments; see test_sse_token_batching.py)."""
 
-        monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+        monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
         ui = _make_ui()
         ui.on_content_token("Hello ")
         ui.on_content_token("world")
@@ -143,9 +143,9 @@ class TestContentAccumulation:
 
     def test_content_cap_prevents_unbounded_growth(self):
         """Content exceeding the cap should stop accumulating."""
-        # Constant lifted from turnstone.server to turnstone.core.session_ui_base
+        # Constant lifted from pebble.server to pebble.core.session_ui_base
         # in the rich ws_state payload work so coord enforces the same ceiling.
-        from turnstone.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
+        from pebble.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
 
         ui = _make_ui()
         # Fill to capacity

@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from turnstone.core import preflight
+from pebble.core import preflight
 
 
 class TestWorkspaceCheck:
     def test_missing_workspace(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TURNSTONE_WORKSPACE", str(tmp_path / "nope"))
+        monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path / "nope"))
         check = preflight._check_workspace()
         assert check.ok is False and "does not exist" in check.detail
         assert check.fix
@@ -28,7 +28,7 @@ class TestWorkspaceCheck:
         # mount, worktrees are node-local and dispatch stops being clustered.
         ws = tmp_path / "workspace"
         ws.mkdir()
-        monkeypatch.setenv("TURNSTONE_WORKSPACE", str(ws))
+        monkeypatch.setenv("PEBBLE_WORKSPACE", str(ws))
         check = preflight._check_workspace()
         assert check.ok is False and "NOT a mount" in check.detail
 
@@ -37,7 +37,7 @@ class TestWorkspaceCheck:
     ) -> None:
         ws = tmp_path / "workspace"
         ws.mkdir()
-        monkeypatch.setenv("TURNSTONE_WORKSPACE", str(ws))
+        monkeypatch.setenv("PEBBLE_WORKSPACE", str(ws))
         preflight._check_workspace()
         assert list(ws.iterdir()) == []
 
@@ -132,7 +132,7 @@ class TestReport:
         )
 
     def test_run_all_returns_checks(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TURNSTONE_DB_URL", "")
+        monkeypatch.setenv("PEBBLE_DB_URL", "")
         checks = preflight.run_all()
         names = {c.name for c in checks}
         assert {"workspace", "agent CLIs", "PATH"} <= names

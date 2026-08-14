@@ -26,7 +26,7 @@ import json
 import pytest
 
 from tests._session_helpers import make_session
-from turnstone.core.trajectory import turns_from_dicts
+from pebble.core.trajectory import turns_from_dicts
 
 
 def _marker_meta(watermark: int | None) -> str | None:
@@ -233,7 +233,7 @@ def test_compaction_persists_checkpoint_and_resume_is_bounded(tmp_db, mock_opena
     transcript that would overflow the window on reopen."""
     from unittest.mock import patch
 
-    from turnstone.core.memory import register_workstream, save_message
+    from pebble.core.memory import register_workstream, save_message
 
     ws = "wsE2E"
     register_workstream(ws, user_id="u1", name="t")
@@ -396,7 +396,7 @@ def test_rewind_after_compaction_never_deletes_summary_backing(tmp_db, mock_open
     """The review's major rewind finding: after a compaction, a tail-trim must
     delete from the storage TAIL and floor at the marker, not keep the oldest
     summarized rows and drop the marker."""
-    from turnstone.core.memory import get_storage, register_workstream, save_message
+    from pebble.core.memory import get_storage, register_workstream, save_message
 
     ws = "wsRW"
     register_workstream(ws, user_id="u1", name="t")
@@ -431,7 +431,7 @@ def test_rewind_after_compaction_never_deletes_summary_backing(tmp_db, mock_open
 def test_persist_truncation_uncompacted_matches_plain_tail_delete(tmp_db, mock_openai_client):
     """With no compaction (floor 0), the new path is identical to the old
     keep=len(self.messages) tail delete."""
-    from turnstone.core.memory import get_storage, register_workstream, save_message
+    from pebble.core.memory import get_storage, register_workstream, save_message
 
     ws = "wsPlain"
     register_workstream(ws, user_id="u1", name="t")
@@ -451,7 +451,7 @@ def test_persist_truncation_skips_delete_when_count_unavailable(tmp_db, mock_ope
     truncation would lose user history."""
     from unittest.mock import patch
 
-    from turnstone.core.memory import get_storage, register_workstream, save_message
+    from pebble.core.memory import get_storage, register_workstream, save_message
 
     ws = "wsCnt"
     register_workstream(ws, user_id="u1", name="t")
@@ -460,7 +460,7 @@ def test_persist_truncation_skips_delete_when_count_unavailable(tmp_db, mock_ope
     st = get_storage()
     sess = make_session(client=mock_openai_client)
     sess._ws_id = ws
-    with patch("turnstone.core.session.count_messages", return_value=0):
+    with patch("pebble.core.session.count_messages", return_value=0):
         sess._persist_truncation(2)
     assert st.count_messages(ws) == 4  # nothing deleted
 
@@ -470,7 +470,7 @@ def test_persist_truncation_skips_delete_when_floor_unavailable(tmp_db, mock_ope
     floor on a compacted ws could otherwise drop the marker on an over-deep trim."""
     from unittest.mock import patch
 
-    from turnstone.core.memory import get_storage, register_workstream, save_message
+    from pebble.core.memory import get_storage, register_workstream, save_message
 
     ws = "wsFloor"
     register_workstream(ws, user_id="u1", name="t")
@@ -479,6 +479,6 @@ def test_persist_truncation_skips_delete_when_floor_unavailable(tmp_db, mock_ope
     st = get_storage()
     sess = make_session(client=mock_openai_client)
     sess._ws_id = ws
-    with patch("turnstone.core.session.get_compaction_floor", return_value=-1):
+    with patch("pebble.core.session.get_compaction_floor", return_value=-1):
         sess._persist_truncation(2)
     assert st.count_messages(ws) == 4  # nothing deleted

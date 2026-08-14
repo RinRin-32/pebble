@@ -3,7 +3,7 @@
 Thank you for your interest in contributing to Turnstone. This Contributor
 License Agreement ("Agreement") is between you ("Contributor") and Patrick
 Buckley ("Maintainer"), and applies to all Contributions submitted to the
-Turnstone project at https://github.com/turnstonelabs/turnstone.
+Turnstone project at https://github.com/RinRin-32/pebble.
 
 By submitting a Contribution, you agree to the following terms:
 

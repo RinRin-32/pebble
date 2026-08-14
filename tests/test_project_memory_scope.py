@@ -12,9 +12,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
-from turnstone.core import auth
-from turnstone.core.session import ChatSession
-from turnstone.core.workstream import WorkstreamKind
+from pebble.core import auth
+from pebble.core.session import ChatSession
+from pebble.core.workstream import WorkstreamKind
 
 if TYPE_CHECKING:
     import pytest
@@ -145,7 +145,7 @@ class TestProjectInSystemContext:
     """The attached project's name renders in the system message Session Context."""
 
     def test_build_context_includes_project_when_set(self) -> None:
-        from turnstone.prompts import SessionContext, _build_context
+        from pebble.prompts import SessionContext, _build_context
 
         ctx = SessionContext(
             current_datetime="2026-06-26T12:00",
@@ -158,7 +158,7 @@ class TestProjectInSystemContext:
         assert "- **User:** alice" in out
 
     def test_build_context_omits_project_when_empty(self) -> None:
-        from turnstone.prompts import SessionContext, _build_context
+        from pebble.prompts import SessionContext, _build_context
 
         ctx = SessionContext(
             current_datetime="2026-06-26T12:00",

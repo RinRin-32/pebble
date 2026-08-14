@@ -1,8 +1,8 @@
-"""Tests for turnstone.channels._formatter."""
+"""Tests for pebble.channels._formatter."""
 
 from __future__ import annotations
 
-from turnstone.channels._formatter import (
+from pebble.channels._formatter import (
     chunk_message,
     format_approval_request,
     format_verdict,

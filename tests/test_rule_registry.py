@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from turnstone.core.rule_registry import (
+from pebble.core.rule_registry import (
     RuleRegistry,
 )
 

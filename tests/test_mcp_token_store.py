@@ -12,7 +12,7 @@ import base64
 import pytest
 from cryptography.fernet import Fernet
 
-from turnstone.core.mcp_crypto import (
+from pebble.core.mcp_crypto import (
     MCPTokenCipher,
     MCPTokenCipherConfig,
     MCPTokenDecryptError,

@@ -2,15 +2,15 @@
 
 turnstone exposes 17 built-in tools plus any number of external MCP tools to the
 LLM via the OpenAI function-calling interface. Built-in tools are defined as JSON
-files under `turnstone/tools/` and loaded at startup by `turnstone/core/tools.py`.
+files under `pebble/tools/` and loaded at startup by `pebble/core/tools.py`.
 MCP tools are discovered from configured MCP servers at startup by
-`turnstone/core/mcp_client.py`.
+`pebble/core/mcp_client.py`.
 
 ---
 
 ## Tool Schema Format
 
-Each JSON file in `turnstone/tools/` contains a standard OpenAI function-calling
+Each JSON file in `pebble/tools/` contains a standard OpenAI function-calling
 schema plus turnstone-specific metadata keys:
 
 ```json
@@ -40,7 +40,7 @@ schema plus turnstone-specific metadata keys:
 
 ## Derived Tool Sets
 
-`turnstone/core/tools.py` loads all JSON files and derives these collections:
+`pebble/core/tools.py` loads all JSON files and derives these collections:
 
 | Name                | Description |
 |---------------------|-------------|
@@ -308,7 +308,7 @@ Search the web using a text query.
 - **What it does**: Searches the web and returns ranked results with titles, URLs, and content snippets. Uses provider-native search when available:
   - **Anthropic**: Replaced at the API boundary with Anthropic's `web_search_20250305` server-side tool. Claude decides when to search; the API executes it and returns results with citations inline. No backend needed.
   - **OpenAI search models** (`gpt-5-search-api`): Replaced with `web_search_options` parameter. The model always searches and returns `url_citation` annotations.
-  - **Local/vLLM models**: Falls back to a self-hosted [SearxNG](https://searxng.org) instance. Set `searxng_url` in `config.toml` `[tools]` or `$TURNSTONE_SEARXNG_URL` (the docker-compose stack bundles a `searxng` service and points at it by default). Operators with a custom MCP search server can instead set `web_search_backend = "mcp:server:tool"`.
+  - **Local/vLLM models**: Falls back to a self-hosted [SearxNG](https://searxng.org) instance. Set `searxng_url` in `config.toml` `[tools]` or `$PEBBLE_SEARXNG_URL` (the docker-compose stack bundles a `searxng` service and points at it by default). Operators with a custom MCP search server can instead set `web_search_backend = "mcp:server:tool"`.
 - **Auto-approve**: Yes (auto-approved for all tool dispatch paths).
 - **Agent availability**: `task_agent`.
 
@@ -341,8 +341,8 @@ For an endpoint that does *not* apply the model's template, set `rerank_instruct
 **Picking `rerank_bm25_threshold`.** The relevance floor that gates proactive memory injection is a probability in `[0, 1]`, but the right value differs per model (a sharp 0.6B reranker may want ~0.95; a broader 4B ~0.33). Calibrate it against your endpoint:
 
 ```bash
-turnstone-admin rerank-calibrate           # probe the endpoint, recommend a floor
-turnstone-admin rerank-calibrate --apply   # ...and write tools.rerank_bm25_threshold
+pebble-admin rerank-calibrate           # probe the endpoint, recommend a floor
+pebble-admin rerank-calibrate --apply   # ...and write tools.rerank_bm25_threshold
 ```
 
 It reports the score scale, whether the endpoint cleanly separates relevant from irrelevant probes (a **"no clean separation"** result flags a mis-served or weak reranker), and the suggested floor. Leave the threshold at `0` to rerank-without-filtering.
@@ -456,7 +456,7 @@ Send a notification to a user or channel on an external platform.
 Provide either `username` for user-based targeting or `channel_type` +
 `channel_id` for direct targeting. Do not combine both.
 
-- **What it does**: Sends a notification via the channel gateway's HTTP endpoint (`POST /v1/api/notify`). The server queries the `services` table for healthy channel gateways, authenticates with a service JWT (`aud: turnstone-channel`), and delivers to the first healthy gateway. On failure, retries up to 2 additional times with backoff (1s, 3s). Rate-limited to 5 notifications per turn (counter only increments on success).
+- **What it does**: Sends a notification via the channel gateway's HTTP endpoint (`POST /v1/api/notify`). The server queries the `services` table for healthy channel gateways, authenticates with a service JWT (`aud: pebble-channel`), and delivers to the first healthy gateway. On failure, retries up to 2 additional times with backoff (1s, 3s). Rate-limited to 5 notifications per turn (counter only increments on success).
 - **Auto-approve**: Yes — notifications are time-sensitive and auto-approved so the model can alert users urgently.
 - **Agent availability**: `task_agent`.
 
@@ -731,7 +731,7 @@ delimiter. Servers with `__` in their name are rejected at connection time.
 
 ### Configuration
 
-**TOML** (`~/.config/turnstone/config.toml`):
+**TOML** (`~/.config/pebble/config.toml`):
 
 ```toml
 [mcp.servers.github]

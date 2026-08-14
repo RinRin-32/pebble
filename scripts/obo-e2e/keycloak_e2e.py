@@ -35,14 +35,14 @@ from typing import Any
 
 import httpx
 
-from turnstone.core.mcp_crypto import (
+from pebble.core.mcp_crypto import (
     MCPTokenCipher,
     MCPTokenCipherConfig,
     MCPTokenStore,
 )
-from turnstone.core.mcp_oauth import get_obo_access_token_classified
-from turnstone.core.oidc import OIDCConfig
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.mcp_oauth import get_obo_access_token_classified
+from pebble.core.oidc import OIDCConfig
+from pebble.core.storage._sqlite import SQLiteBackend
 
 USER = "e2e-user"
 RESULTS: list[tuple[str, str]] = []

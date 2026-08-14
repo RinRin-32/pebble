@@ -17,13 +17,13 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     _get_registry_url,
     admin_registry_install,
     admin_registry_search,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.mcp_registry import (
+from pebble.core.auth import AuthResult
+from pebble.core.mcp_registry import (
     DEFAULT_REGISTRY_URL,
     MCPRegistryError,
     RegistryPackage,
@@ -33,7 +33,7 @@ from turnstone.core.mcp_registry import (
     RegistryServer,
     RegistryServerMeta,
 )
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Auth middleware
@@ -182,7 +182,7 @@ class TestRegistrySearch:
         srv = _sample_remote_server()
         mock_result = _mock_search_result([srv])
 
-        with patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client:
+        with patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client:
             instance = AsyncMock()
             instance.search.return_value = mock_result
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -213,7 +213,7 @@ class TestRegistrySearch:
         srv = _sample_remote_server(version="1.0.0")
         mock_result = _mock_search_result([srv])
 
-        with patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client:
+        with patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client:
             instance = AsyncMock()
             instance.search.return_value = mock_result
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -233,7 +233,7 @@ class TestRegistrySearch:
         assert resp.status_code == 403
 
     def test_search_registry_error(self, client: TestClient) -> None:
-        with patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client:
+        with patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client:
             instance = AsyncMock()
             instance.search.side_effect = MCPRegistryError("Connection failed")
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -248,7 +248,7 @@ class TestRegistrySearch:
     def test_search_pagination(self, client: TestClient) -> None:
         mock_result = _mock_search_result([], next_cursor="cursor123")
 
-        with patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client:
+        with patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client:
             instance = AsyncMock()
             instance.search.return_value = mock_result
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -273,9 +273,9 @@ class TestRegistryInstall:
         mock_result = _mock_search_result([srv])
 
         with (
-            patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client,
+            patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client,
             patch(
-                "turnstone.console.server._notify_nodes_mcp_reload",
+                "pebble.console.server._notify_nodes_mcp_reload",
                 new_callable=AsyncMock,
                 return_value={},
             ),
@@ -312,9 +312,9 @@ class TestRegistryInstall:
         mock_result = _mock_search_result([srv])
 
         with (
-            patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client,
+            patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client,
             patch(
-                "turnstone.console.server._notify_nodes_mcp_reload",
+                "pebble.console.server._notify_nodes_mcp_reload",
                 new_callable=AsyncMock,
                 return_value={},
             ),
@@ -399,7 +399,7 @@ class TestRegistryInstall:
     def test_install_not_found_in_registry(self, client: TestClient) -> None:
         mock_result = _mock_search_result([])
 
-        with patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client:
+        with patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client:
             instance = AsyncMock()
             instance.search.return_value = mock_result
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -422,9 +422,9 @@ class TestRegistryInstall:
         mock_result = _mock_search_result([srv])
 
         with (
-            patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client,
+            patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client,
             patch(
-                "turnstone.console.server._notify_nodes_mcp_reload",
+                "pebble.console.server._notify_nodes_mcp_reload",
                 new_callable=AsyncMock,
                 return_value={},
             ),
@@ -452,9 +452,9 @@ class TestRegistryInstall:
         mock_result = _mock_search_result([srv])
 
         with (
-            patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client,
+            patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client,
             patch(
-                "turnstone.console.server._notify_nodes_mcp_reload",
+                "pebble.console.server._notify_nodes_mcp_reload",
                 new_callable=AsyncMock,
                 return_value={},
             ),
@@ -496,9 +496,9 @@ class TestRegistryInstall:
         mock_result = _mock_search_result([srv])
 
         with (
-            patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client,
+            patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client,
             patch(
-                "turnstone.console.server._notify_nodes_mcp_reload",
+                "pebble.console.server._notify_nodes_mcp_reload",
                 new_callable=AsyncMock,
                 return_value={},
             ) as mock_reload,
@@ -534,7 +534,7 @@ class TestRegistryInstall:
         srv = _sample_remote_server()
         mock_result = _mock_search_result([srv])
 
-        with patch("turnstone.core.mcp_registry.MCPRegistryClient") as mock_client:
+        with patch("pebble.core.mcp_registry.MCPRegistryClient") as mock_client:
             instance = AsyncMock()
             instance.search.return_value = mock_result
             instance.__aenter__ = AsyncMock(return_value=instance)
@@ -574,7 +574,7 @@ class TestGetRegistryUrl:
         config_store.get.return_value = "https://custom.registry.example.com"
         request = _mock_request(config_store=config_store)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             url = _get_registry_url(request)
 
         assert url == "https://custom.registry.example.com"
@@ -586,7 +586,7 @@ class TestGetRegistryUrl:
         request = _mock_request(config_store=config_store)
 
         with patch(
-            "turnstone.core.config.load_config",
+            "pebble.core.config.load_config",
             return_value={"registry_url": "https://config.registry.example.com"},
         ):
             url = _get_registry_url(request)
@@ -597,7 +597,7 @@ class TestGetRegistryUrl:
         request = _mock_request()
 
         with patch(
-            "turnstone.core.config.load_config",
+            "pebble.core.config.load_config",
             return_value={"registry_url": "https://config.registry.example.com"},
         ):
             url = _get_registry_url(request)
@@ -609,7 +609,7 @@ class TestGetRegistryUrl:
         config_store.get.return_value = ""
         request = _mock_request(config_store=config_store)
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             url = _get_registry_url(request)
 
         assert url == DEFAULT_REGISTRY_URL
@@ -617,7 +617,7 @@ class TestGetRegistryUrl:
     def test_falls_back_to_default_when_no_config_store_or_config(self) -> None:
         request = _mock_request()
 
-        with patch("turnstone.core.config.load_config", return_value={}):
+        with patch("pebble.core.config.load_config", return_value={}):
             url = _get_registry_url(request)
 
         assert url == DEFAULT_REGISTRY_URL

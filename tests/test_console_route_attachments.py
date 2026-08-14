@@ -13,14 +13,14 @@ from unittest.mock import MagicMock
 import httpx
 from starlette.testclient import TestClient
 
-from turnstone.console.collector import ClusterCollector
-from turnstone.console.router import ConsoleRouter, NodeRef
+from pebble.console.collector import ClusterCollector
+from pebble.console.router import ConsoleRouter, NodeRef
 
 _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
 
 def _test_jwt() -> str:
-    from turnstone.core.auth import JWT_AUD_CONSOLE, create_jwt
+    from pebble.core.auth import JWT_AUD_CONSOLE, create_jwt
 
     return create_jwt(
         user_id="test-routing",
@@ -35,7 +35,7 @@ _AUTH: dict[str, str] = {"Authorization": f"Bearer {_test_jwt()}"}
 
 
 def _make_app(router: Any) -> Any:
-    from turnstone.console.server import _load_static, create_app
+    from pebble.console.server import _load_static, create_app
 
     _load_static()
     collector = MagicMock(spec=ClusterCollector)

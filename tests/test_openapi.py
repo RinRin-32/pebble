@@ -7,20 +7,20 @@ class TestServerSpec:
     """Validate the generated server OpenAPI spec."""
 
     def test_valid_openapi_version(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         assert spec["openapi"] == "3.1.0"
 
     def test_has_info(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         assert "title" in spec["info"]
         assert "version" in spec["info"]
 
     def test_has_all_api_endpoints(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         paths = set(spec["paths"].keys())
@@ -49,7 +49,7 @@ class TestServerSpec:
         assert expected.issubset(paths), f"Missing: {expected - paths}"
 
     def test_voice_endpoints_documented(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         stt = spec["paths"]["/v1/api/workstreams/{ws_id}/speech-to-text"]["post"]
@@ -66,7 +66,7 @@ class TestServerSpec:
     def test_workstream_history_has_limit_query_param(self):
         """Mirror of the coord-side history limit param test — server now
         exposes the same endpoint via the lifted factory."""
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         op = spec["paths"]["/v1/api/workstreams/{ws_id}/history"]["get"]
@@ -75,20 +75,20 @@ class TestServerSpec:
         assert "limit" in param_names
 
     def test_schemas_not_empty(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         assert len(spec["components"]["schemas"]) > 0
 
     def test_json_serializable(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         result = json.dumps(spec)
         assert len(result) > 100
 
     def test_send_endpoint_has_request_body(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         send = spec["paths"]["/v1/api/workstreams/{ws_id}/send"]["post"]
@@ -96,7 +96,7 @@ class TestServerSpec:
         assert "application/json" in send["requestBody"]["content"]
 
     def test_health_endpoint_not_versioned(self):
-        from turnstone.api.server_spec import build_server_spec
+        from pebble.api.server_spec import build_server_spec
 
         spec = build_server_spec()
         assert "/health" in spec["paths"]
@@ -107,13 +107,13 @@ class TestConsoleSpec:
     """Validate the generated console OpenAPI spec."""
 
     def test_valid_openapi_version(self):
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         assert spec["openapi"] == "3.1.0"
 
     def test_has_cluster_endpoints(self):
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         paths = set(spec["paths"].keys())
@@ -128,14 +128,14 @@ class TestConsoleSpec:
         assert expected.issubset(paths), f"Missing: {expected - paths}"
 
     def test_json_serializable(self):
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         result = json.dumps(spec)
         assert len(result) > 100
 
     def test_nodes_endpoint_has_query_params(self):
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         nodes = spec["paths"]["/v1/api/cluster/nodes"]["get"]
@@ -150,7 +150,7 @@ class TestConsoleSpec:
         so SDK consumers and operators couldn't discover the surface
         from /docs.  Pin the full set so a future regression that drops
         one fails loudly."""
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         paths = set(spec["paths"].keys())
@@ -180,7 +180,7 @@ class TestConsoleSpec:
         ``make_create_handler`` factory converges on 200 across both
         kinds for response-shape parity with every other shared verb.
         """
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         op = spec["paths"]["/v1/api/workstreams/new"]["post"]
@@ -189,7 +189,7 @@ class TestConsoleSpec:
         assert "200" in op["responses"]
 
     def test_coordinator_history_has_limit_query_param(self):
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         op = spec["paths"]["/v1/api/workstreams/{ws_id}/history"]["get"]
@@ -200,7 +200,7 @@ class TestConsoleSpec:
     def test_coordinator_endpoints_share_tag(self):
         """All coordinator endpoints (including the cluster-inspect one)
         live under the same OpenAPI tag so /docs groups them together."""
-        from turnstone.api.console_spec import build_console_spec
+        from pebble.api.console_spec import build_console_spec
 
         spec = build_console_spec()
         coord_paths = [p for p in spec["paths"] if "/coordinator" in p]

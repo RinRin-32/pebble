@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.core import audio
+from pebble.core import audio
 
 
 class _Cfg:
@@ -285,7 +285,7 @@ class TestOpenAIAudioModelsKnown:
     openai-compatible/local backends that aren't in the static table.)"""
 
     def test_stt_models_flagged(self):
-        from turnstone.core.providers import lookup_model_capabilities
+        from pebble.core.providers import lookup_model_capabilities
 
         for m in (
             "whisper-1",
@@ -298,7 +298,7 @@ class TestOpenAIAudioModelsKnown:
             assert caps.get("supports_speech_synthesis") is False, m
 
     def test_tts_models_flagged(self):
-        from turnstone.core.providers import lookup_model_capabilities
+        from pebble.core.providers import lookup_model_capabilities
 
         for m in ("tts-1", "tts-1-hd", "gpt-4o-mini-tts"):  # tts-1-hd is a prefix variant
             caps = lookup_model_capabilities("openai", m) or {}
@@ -306,7 +306,7 @@ class TestOpenAIAudioModelsKnown:
             assert caps.get("supports_transcription") is False, m
 
     def test_chat_model_has_no_audio_flags(self):
-        from turnstone.core.providers import lookup_model_capabilities
+        from pebble.core.providers import lookup_model_capabilities
 
         caps = lookup_model_capabilities("openai", "gpt-5") or {}
         assert not caps.get("supports_transcription")

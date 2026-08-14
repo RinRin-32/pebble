@@ -25,14 +25,14 @@ from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
 from tests.conftest import make_mcp_token_cipher
-from turnstone.core.auth import AuthResult
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.mcp_oauth import (
+from pebble.core.auth import AuthResult
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.mcp_oauth import (
     handle_mcp_oauth_list_connections,
     handle_mcp_oauth_revoke_connection,
 )
-from turnstone.core.oidc import OIDCConfig
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.oidc import OIDCConfig
+from pebble.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -216,7 +216,7 @@ def _drain_revoke_upstream_tasks(client: TestClient, timeout: float = 2.0) -> No
     against the upstream POST must call this helper before the
     assertion.
     """
-    from turnstone.core.mcp_oauth import _revoke_upstream_tasks
+    from pebble.core.mcp_oauth import _revoke_upstream_tasks
 
     portal = getattr(client, "portal", None)
     if portal is None:
@@ -694,7 +694,7 @@ class TestRevokeConnection:
         # in flight.
         assert token_store.get_user_token("user-1", "srv-oauth") is None
         # Cancel any in-flight tasks so the test client can exit cleanly.
-        from turnstone.core.mcp_oauth import _revoke_upstream_tasks
+        from pebble.core.mcp_oauth import _revoke_upstream_tasks
 
         portal = getattr(client, "portal", None)
         if portal is not None:
@@ -711,7 +711,7 @@ class TestRevokeConnection:
         detail records ``upstream_revoke_outcome="shed_by_cap"`` and
         the AS endpoint is never contacted.
         """
-        from turnstone.core.mcp_oauth import (
+        from pebble.core.mcp_oauth import (
             _REVOKE_UPSTREAM_TASKS_MAX,
             _revoke_upstream_tasks,
         )
@@ -788,7 +788,7 @@ class TestRevokeConnection:
 
 class TestEvictUserSession:
     def test_evict_user_session_no_loop_is_silent_noop(self) -> None:
-        from turnstone.core.mcp_client import MCPClientManager
+        from pebble.core.mcp_client import MCPClientManager
 
         mgr = MCPClientManager.__new__(MCPClientManager)
         mgr._loop = None  # type: ignore[attr-defined]
@@ -796,7 +796,7 @@ class TestEvictUserSession:
         mgr.evict_user_session("user-1", "srv-oauth")
 
     def test_evict_user_session_dispatches_to_loop(self) -> None:
-        from turnstone.core.mcp_client import MCPClientManager
+        from pebble.core.mcp_client import MCPClientManager
 
         mgr = MCPClientManager.__new__(MCPClientManager)
         loop = asyncio.new_event_loop()

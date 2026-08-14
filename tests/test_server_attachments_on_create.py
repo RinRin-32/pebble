@@ -31,7 +31,7 @@ _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
 
 def _make_jwt(user_id: str) -> str:
-    from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
+    from pebble.core.auth import JWT_AUD_SERVER, create_jwt
 
     return create_jwt(
         user_id=user_id,
@@ -60,8 +60,8 @@ class TestValidateAndSaveUploadedFiles:
     def test_stages_image_and_text_to_buffer(self, tmp_path):
         import hashlib
 
-        from turnstone.core.attachment_buffer import get_attachment_buffer
-        from turnstone.core.attachments import (
+        from pebble.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachments import (
             validate_and_save_uploaded_files as _validate_and_save_uploaded_files,
         )
 
@@ -84,11 +84,11 @@ class TestValidateAndSaveUploadedFiles:
             buf.clear()
 
     def test_rejects_oversized_image(self, tmp_path):
-        from turnstone.core.attachments import IMAGE_SIZE_CAP
-        from turnstone.core.attachments import (
+        from pebble.core.attachments import IMAGE_SIZE_CAP
+        from pebble.core.attachments import (
             validate_and_save_uploaded_files as _validate_and_save_uploaded_files,
         )
-        from turnstone.core.storage import init_storage, reset_storage
+        from pebble.core.storage import init_storage, reset_storage
 
         reset_storage()
         init_storage("sqlite", path=str(tmp_path / "t.db"), run_migrations=False)
@@ -104,10 +104,10 @@ class TestValidateAndSaveUploadedFiles:
             reset_storage()
 
     def test_rejects_unsupported_text(self, tmp_path):
-        from turnstone.core.attachments import (
+        from pebble.core.attachments import (
             validate_and_save_uploaded_files as _validate_and_save_uploaded_files,
         )
-        from turnstone.core.storage import init_storage, reset_storage
+        from pebble.core.storage import init_storage, reset_storage
 
         reset_storage()
         init_storage("sqlite", path=str(tmp_path / "t.db"), run_migrations=False)
@@ -129,7 +129,7 @@ class TestValidateAndSaveUploadedFiles:
 
 class TestResolveStagedAttachments:
     def _stage(self, ws_id, user_id, filename, mime, kind, content):
-        from turnstone.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachment_buffer import get_attachment_buffer
 
         return get_attachment_buffer().stage(
             ws_id=ws_id,
@@ -141,9 +141,9 @@ class TestResolveStagedAttachments:
         )
 
     def test_resolves_staged_to_attachments(self):
-        from turnstone.core.attachment_buffer import get_attachment_buffer
-        from turnstone.core.attachments import Attachment
-        from turnstone.core.attachments import (
+        from pebble.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachments import Attachment
+        from pebble.core.attachments import (
             resolve_staged_attachments as _resolve_staged_attachments,
         )
 
@@ -164,8 +164,8 @@ class TestResolveStagedAttachments:
             buf.clear()
 
     def test_unknown_id_is_dropped(self):
-        from turnstone.core.attachment_buffer import get_attachment_buffer
-        from turnstone.core.attachments import (
+        from pebble.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachments import (
             resolve_staged_attachments as _resolve_staged_attachments,
         )
 
@@ -184,8 +184,8 @@ class TestResolveStagedAttachments:
 
     def test_cross_user_id_not_resolved(self):
         # A staged id scoped to another user (same ws) must not resolve.
-        from turnstone.core.attachment_buffer import get_attachment_buffer
-        from turnstone.core.attachments import (
+        from pebble.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachments import (
             resolve_staged_attachments as _resolve_staged_attachments,
         )
 
@@ -234,7 +234,7 @@ class _FakeSession:
     def _record_fatal_error(self, exc):
         """Faithful model of ChatSession._record_fatal_error: sanitize, emit
         on_error, persist last_error, set the flag, emit state=error."""
-        from turnstone.core.memory import persist_last_error, sanitize_error_text
+        from pebble.core.memory import persist_last_error, sanitize_error_text
 
         safe = sanitize_error_text(f"{type(exc).__name__}: {exc}")
         if self.ui is not None:
@@ -258,8 +258,8 @@ class _FakeSession:
             # row, and drain the staged handles from the buffer — so callers
             # can assert the lifecycle landed.
             if attachments and self.ws_id and self.user_id:
-                from turnstone.core.attachment_buffer import get_attachment_buffer
-                from turnstone.core.memory import (
+                from pebble.core.attachment_buffer import get_attachment_buffer
+                from pebble.core.memory import (
                     save_attachment,
                     save_message,
                     set_message_attachments,
@@ -320,7 +320,7 @@ class _FakeUI:
         # state the coordinator polls (via the manager), not just the label.
         mgr = type(self)._workstream_mgr
         if mgr is not None:
-            from turnstone.core.workstream import WorkstreamState
+            from pebble.core.workstream import WorkstreamState
 
             with contextlib.suppress(ValueError):
                 mgr.set_state(self.ws_id, WorkstreamState(state))
@@ -332,20 +332,20 @@ class _FakeUI:
 @pytest.fixture
 def app_client(tmp_path, monkeypatch):
     """End-to-end app with a fake session factory + SessionManager."""
-    from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-    from turnstone.core.metrics import MetricsCollector
-    from turnstone.core.session_manager import SessionManager
-    from turnstone.core.storage import get_storage, init_storage, reset_storage
-    from turnstone.server import WebUI, create_app
+    from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+    from pebble.core.metrics import MetricsCollector
+    from pebble.core.session_manager import SessionManager
+    from pebble.core.storage import get_storage, init_storage, reset_storage
+    from pebble.server import WebUI, create_app
 
     reset_storage()
     init_storage("sqlite", path=str(tmp_path / "t.db"), run_migrations=False)
 
     metrics = MetricsCollector()
     metrics.model = "test-model"
-    monkeypatch.setattr("turnstone.server._metrics", metrics)
+    monkeypatch.setattr("pebble.server._metrics", metrics)
     # Replace WebUI with our fake so the create handler's isinstance check passes.
-    monkeypatch.setattr("turnstone.server.WebUI", _FakeUI)
+    monkeypatch.setattr("pebble.server.WebUI", _FakeUI)
 
     fake_sessions: list[_FakeSession] = []
 
@@ -387,7 +387,7 @@ def app_client(tmp_path, monkeypatch):
     )
     # Pending uploads live in the process-global per-node buffer; clear it so
     # staged uploads can't leak across tests.
-    from turnstone.core.attachment_buffer import get_attachment_buffer
+    from pebble.core.attachment_buffer import get_attachment_buffer
 
     get_attachment_buffer().clear()
 
@@ -404,8 +404,8 @@ class TestCreateMultipart:
     def test_create_with_image_and_initial_message(self, app_client):
         import hashlib
 
-        from turnstone.core.attachment_buffer import get_attachment_buffer
-        from turnstone.core.memory import attachment_referenced_in_ws, get_attachment
+        from pebble.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.memory import attachment_referenced_in_ws, get_attachment
 
         client, sessions, _gq = app_client
         meta = {"name": "demo", "initial_message": "describe this image"}
@@ -460,7 +460,7 @@ class TestCreateMultipart:
         Neuter the worker's drain (stub ``send``) so only the synchronous
         post-install drain can clear the buffer, then assert it's empty right
         after the response with NO polling."""
-        from turnstone.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachment_buffer import get_attachment_buffer
 
         client, _sessions, _gq = app_client
         monkeypatch.setattr(_FakeSession, "send", lambda self, *a, **k: None)
@@ -484,8 +484,8 @@ class TestCreateMultipart:
         the interjection seam — they must REMAIN STAGED so the composer
         still shows them and the user's next send delivers them, while the
         message text itself rides the queue."""
-        from turnstone.core import session_worker
-        from turnstone.core.attachment_buffer import get_attachment_buffer
+        from pebble.core import session_worker
+        from pebble.core.attachment_buffer import get_attachment_buffer
 
         client, _sessions, _gq = app_client
         queued: list[str] = []
@@ -528,8 +528,8 @@ class TestCreateMultipart:
         was delivered.  Attachments stay staged for the retry."""
         import queue as _queue
 
-        from turnstone.core import session_worker
-        from turnstone.core.attachment_buffer import get_attachment_buffer
+        from pebble.core import session_worker
+        from pebble.core.attachment_buffer import get_attachment_buffer
 
         client, _sessions, _gq = app_client
 
@@ -566,7 +566,7 @@ class TestCreateMultipart:
     def test_create_with_attachments_no_initial_message_keeps_staged(self, app_client):
         import hashlib
 
-        from turnstone.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachment_buffer import get_attachment_buffer
 
         client, _, _gq = app_client
         meta = {"name": "stash"}
@@ -586,7 +586,7 @@ class TestCreateMultipart:
         assert staged[0].filename == "notes.md"
 
     def test_create_rejects_oversized_image_and_rolls_back(self, app_client):
-        from turnstone.core.attachments import IMAGE_SIZE_CAP
+        from pebble.core.attachments import IMAGE_SIZE_CAP
 
         client, _, gq = app_client
         oversized = PNG_1x1 + b"\x00" * (IMAGE_SIZE_CAP + 1)
@@ -627,7 +627,7 @@ class TestCreateMultipart:
         assert resp.status_code == 400
 
     def test_attachments_with_resume_ws_returns_400(self, app_client):
-        from turnstone.core.memory import register_workstream
+        from pebble.core.memory import register_workstream
 
         client, _, _gq = app_client
         register_workstream("ws-resume-target", name="resume target")
@@ -667,7 +667,7 @@ class TestCreateJsonStillWorks:
         from unittest.mock import patch
 
         client, _sessions, _gq = app_client
-        with patch("turnstone.core.session_worker.send", return_value=True) as mock_send:
+        with patch("pebble.core.session_worker.send", return_value=True) as mock_send:
             resp = client.post(
                 "/v1/api/workstreams/new",
                 json={"name": "init-dispatch", "initial_message": "go"},
@@ -710,8 +710,8 @@ class TestInitialWorkerFailureState:
 
     @pytest.mark.parametrize("pretry", [False, True], ids=["common-backend", "pre-try"])
     def test_backend_error_settles_error_with_detail(self, app_client, monkeypatch, pretry):
-        from turnstone.core.memory import load_last_error
-        from turnstone.core.workstream import WorkstreamState
+        from pebble.core.memory import load_last_error
+        from pebble.core.workstream import WorkstreamState
 
         client, sessions, _gq = app_client
 
@@ -788,8 +788,8 @@ def test_retry_closure_sanitizes_error_display(monkeypatch):
     import threading
     from types import SimpleNamespace
 
-    from turnstone.core import session_worker
-    from turnstone.server import _interactive_dispatch_retry
+    from pebble.core import session_worker
+    from pebble.server import _interactive_dispatch_retry
 
     ui = _FakeUI(ws_id="ws-retry")
 

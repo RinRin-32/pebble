@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.providers import (
+from pebble.core.providers import (
     StreamChunk,
     ToolCallDelta,
     UsageInfo,
     drain_stream,
 )
-from turnstone.core.providers._openai_common import RETRYABLE_ERROR_NAMES
-from turnstone.core.providers._protocol import IncompleteStreamError
+from pebble.core.providers._openai_common import RETRYABLE_ERROR_NAMES
+from pebble.core.providers._protocol import IncompleteStreamError
 
 
 class TestContentAndReasoning:
@@ -222,7 +222,7 @@ class TestInfoDelta:
         # as a final info chunk after the finish reason.  Folding it back as
         # content + "\n\n" + info must byte-match the old non-streaming
         # format_citations(content, anns) append.
-        from turnstone.core.providers._openai_common import format_citations
+        from pebble.core.providers._openai_common import format_citations
 
         class _Ann:
             type = "url_citation"

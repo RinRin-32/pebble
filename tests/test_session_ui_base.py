@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tests.conftest import resolve_when_pending
-from turnstone.core.session_ui_base import SessionUIBase
+from pebble.core.session_ui_base import SessionUIBase
 
 
 class _ConcreteUI(SessionUIBase):
@@ -52,7 +52,7 @@ def _per_token_flush(monkeypatch: pytest.MonkeyPatch) -> None:
     non-token ordering) is pinned in ``test_sse_token_batching.py``.
     """
 
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def _register_cycle(
     exact production shape, registers under the lock, and returns the
     cycle for direct assertions.
     """
-    from turnstone.core.session_ui_base import ApprovalCycle
+    from pebble.core.session_ui_base import ApprovalCycle
 
     items = [
         {"call_id": cid, "func_name": "bash", "approval_label": "bash", "needs_approval": True}
@@ -186,10 +186,10 @@ def _mock_storage(storage: Any = None) -> Any:
 
 
 def _patch_get_storage(storage: Any):  # type: ignore[no-untyped-def]
-    """Patch ``turnstone.core.storage._registry.get_storage`` to return
+    """Patch ``pebble.core.storage._registry.get_storage`` to return
     the supplied stub so the fire-and-forget persistence paths in
     SessionUIBase are observable under test."""
-    return patch("turnstone.core.storage._registry.get_storage", return_value=storage)
+    return patch("pebble.core.storage._registry.get_storage", return_value=storage)
 
 
 def test_on_intent_verdict_caches_for_sse_replay() -> None:
@@ -371,10 +371,10 @@ def test_both_subclasses_purge_round_state_from_approve_tools() -> None:
     1's cached ``approve`` pre-satisfy round 2's Smart-Approvals wait.
     A concurrent sibling's cache entry survives.
     """
-    import turnstone.server
-    from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
+    import pebble.server
+    from pebble.console.coordinator_ui import ConsoleCoordinatorUI
 
-    webui = turnstone.server.WebUI
+    webui = pebble.server.WebUI
 
     for cls in (webui, ConsoleCoordinatorUI):
         ui = cls(ws_id="ws-x", user_id="u1")
@@ -741,7 +741,7 @@ def test_record_output_assessment_defaults_to_heuristic_tier() -> None:
 
 def _register_card_cycle(ui: SessionUIBase, card: dict[str, Any]) -> Any:
     """Register a cycle from a raw approve_request card (shape-exact tests)."""
-    from turnstone.core.session_ui_base import ApprovalCycle
+    from pebble.core.session_ui_base import ApprovalCycle
 
     cycle = ApprovalCycle(list(card.get("items") or []), card, None)
     ui._register_approval_cycle(cycle)
@@ -1199,7 +1199,7 @@ def test_parse_audit_timestamp_treats_naive_strings_as_utc() -> None:
     without explicit UTC.replace at parse time."""
     from datetime import UTC, datetime
 
-    from turnstone.core.session_ui_base import SessionUIBase
+    from pebble.core.session_ui_base import SessionUIBase
 
     expected = datetime(2026, 4, 27, 18, 0, 0, tzinfo=UTC).timestamp()
     assert SessionUIBase._parse_audit_timestamp("2026-04-27T18:00:00") == expected
@@ -1322,7 +1322,7 @@ def test_inflight_seq_advances_on_every_emit_even_at_cap() -> None:
     be filter-dropped by the events handler — silently losing the
     rest of the stream. The cap is a buffer-size limit, not a
     "stop streaming" signal."""
-    from turnstone.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
+    from pebble.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
 
     ui = _make_ui()
     chunk = "x" * 1024
@@ -1344,7 +1344,7 @@ def test_subscriber_after_cap_hit_receives_subsequent_tokens() -> None:
     live tokens past the cap. Past-cap tokens are absent from
     ``snap.content`` (the snapshot text was truncated at cap) but
     the live stream past them must NOT be filter-dropped."""
-    from turnstone.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
+    from pebble.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
 
     ui = _make_ui()
     chunk = "x" * 1024
@@ -1376,7 +1376,7 @@ def test_subscriber_after_cap_hit_receives_subsequent_tokens() -> None:
 def test_subscriber_after_reasoning_cap_hit_receives_subsequent_tokens() -> None:
     """Same invariant as content cap: reasoning subscribers past
     cap must keep receiving live reasoning tokens."""
-    from turnstone.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
+    from pebble.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
 
     ui = _make_ui()
     chunk = "x" * 1024
@@ -1730,7 +1730,7 @@ def _patch_policies(verdicts: dict[str, str]):  # type: ignore[no-untyped-def]
     """Neutralise the admin tool-policy stage so approve_tools tests
     isolate the Smart Approvals gate."""
     return patch(
-        "turnstone.core.policy.evaluate_tool_policies_batch",
+        "pebble.core.policy.evaluate_tool_policies_batch",
         return_value=verdicts,
     )
 
@@ -2163,9 +2163,9 @@ def test_auto_approve_reason_vocabulary_matches_js() -> None:
     import re
     from pathlib import Path
 
-    from turnstone.core.session_ui_base import AutoApproveReason
+    from pebble.core.session_ui_base import AutoApproveReason
 
-    js = Path(__file__).resolve().parents[1] / "turnstone/console/static/coordinator/coordinator.js"
+    js = Path(__file__).resolve().parents[1] / "pebble/console/static/coordinator/coordinator.js"
     m = re.search(
         r"KNOWN_AUTO_APPROVE_REASONS\s*=\s*new Set\(\s*\[(.*?)\]",
         js.read_text(),
@@ -2352,7 +2352,7 @@ class TestAgentScopeInfoSuppression:
         # The scope depth is a module-level contextvar that persists across tests
         # in the same thread; reset it around each so an unbalanced test (or a
         # leak from elsewhere) can't bleed suppression into another test.
-        from turnstone.core.session_ui_base import _agent_scope_var
+        from pebble.core.session_ui_base import _agent_scope_var
 
         token = _agent_scope_var.set(0)
         yield
@@ -2430,7 +2430,7 @@ class TestAgentTrajectoryStash:
         assert ui.get_agent_trajectory("k") == [{"id": "v2"}]
 
     def test_lru_evicts_oldest(self) -> None:
-        from turnstone.core.session_ui_base import _AGENT_TRAJECTORY_CAP
+        from pebble.core.session_ui_base import _AGENT_TRAJECTORY_CAP
 
         ui = _make_ui()
         for i in range(_AGENT_TRAJECTORY_CAP + 3):

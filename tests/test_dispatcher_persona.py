@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from turnstone.core.personas import snapshot_from_persona
+from pebble.core.personas import snapshot_from_persona
 
 
 def _migration() -> Any:
@@ -26,7 +26,7 @@ def _migration() -> Any:
     """
     path = (
         Path(__file__).parent.parent
-        / "turnstone/core/storage/migrations/versions/071_dispatcher_persona.py"
+        / "pebble/core/storage/migrations/versions/071_dispatcher_persona.py"
     )
     spec = importlib.util.spec_from_file_location("m071", path)
     module = importlib.util.module_from_spec(spec)

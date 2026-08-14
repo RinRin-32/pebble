@@ -4,7 +4,7 @@
 
 **Affected surfaces**:
 
-- Scheduled workstreams (`turnstone-console` task scheduler).
+- Scheduled workstreams (`pebble-console` task scheduler).
 - Discord adapter runs.
 - Slack adapter runs.
 - Any future channel adapter without an interactive browser session.

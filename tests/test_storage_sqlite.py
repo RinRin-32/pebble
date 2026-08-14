@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 import sqlalchemy as sa
 
-from turnstone.core.storage._schema import workstreams
+from pebble.core.storage._schema import workstreams
 
 # -- Workstream registration ---------------------------------------------------
 
@@ -385,7 +385,7 @@ class TestListWorkstreamsWithHistory:
         """The interactive 'saved workstreams' sidebar calls this with
         kind=INTERACTIVE so coordinator rows (which also persist
         conversation history) don't leak into the interactive UI."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         backend.register_workstream("interactive-1", kind=WorkstreamKind.INTERACTIVE)
         backend.save_message("interactive-1", "user", "hi")
@@ -408,7 +408,7 @@ class TestListWorkstreamsWithHistory:
     def test_kind_filter_accepts_string(self, backend):
         """String form (``"interactive"``) works too — matches how the
         memory.py helper forwards caller-supplied values."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         backend.register_workstream("interactive-1", kind=WorkstreamKind.INTERACTIVE)
         backend.save_message("interactive-1", "user", "hi")
@@ -423,7 +423,7 @@ class TestListWorkstreamsWithHistory:
         node_id, state, model_alias + launch_skill (workstream_config),
         child_count (parent_ws_id), context_tokens (latest usage_events row)
         and context_window (model_definitions join)."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         backend.register_workstream(
             "parent", node_id="n1", state="error", kind=WorkstreamKind.COORDINATOR
@@ -1163,6 +1163,6 @@ class TestLifecycle:
         backend.close()  # Should not raise
 
     def test_isinstance_check(self, backend):
-        from turnstone.core.storage._protocol import StorageBackend
+        from pebble.core.storage._protocol import StorageBackend
 
         assert isinstance(backend, StorageBackend)

@@ -23,7 +23,7 @@ spec:
           image: {{ include "turnstone.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - turnstone-console
+            - pebble-console
             - --host=0.0.0.0
             - --port={{ .Values.console.service.port }}
           ports:
@@ -38,11 +38,11 @@ spec:
                 optional: true
           {{- if or .Values.auth.existingSecret .Values.auth.jwtSecret }}
           env:
-            - name: TURNSTONE_JWT_SECRET
+            - name: PEBBLE_JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "turnstone.auth.secretName" . }}
-                  key: TURNSTONE_JWT_SECRET
+                  key: PEBBLE_JWT_SECRET
           {{- end }}
           readinessProbe:
             httpGet:

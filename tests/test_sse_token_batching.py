@@ -38,7 +38,7 @@ from typing import Any
 
 import pytest
 
-from turnstone.core.session_ui_base import _TOKEN_BATCH_WINDOW_SECS, SessionUIBase
+from pebble.core.session_ui_base import _TOKEN_BATCH_WINDOW_SECS, SessionUIBase
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,7 +67,7 @@ def wide_window(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make the batch window effectively infinite so tests control the
     flush points explicitly (via non-token emits / size cap) and a slow
     CI machine can't turn one expected batch into two."""
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 60.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 60.0)
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ def test_zero_window_flushes_every_token_individually(monkeypatch: pytest.Monkey
     """With the window forced to zero every token arrives past the
     window boundary and flushes on its own — batching self-disables
     with no behaviour change vs the pre-batching emit shape."""
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
     ui = _make_ui()
     lq = ui._register_listener()
     for i in range(4):
@@ -130,7 +130,7 @@ def test_batch_size_cap_triggers_flush(wide_window: None, monkeypatch: pytest.Mo
     """A pending batch reaching the size cap flushes without waiting for
     the window — bounds worst-case batch size (and client repaint cost)
     at fast rates."""
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_MAX_CHARS", 8)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_MAX_CHARS", 8)
     ui = _make_ui()
     lq = ui._register_listener()
     ui.on_content_token("x")  # immediate first flush
@@ -279,7 +279,7 @@ def test_inflight_cap_respected_and_stream_continues_past_cap(
     it did per-token: check-before-append (bounded overshoot), and the
     live stream keeps flowing past the cap — the cap bounds the
     snapshot, it is NOT a stop-streaming signal."""
-    monkeypatch.setattr("turnstone.core.session_ui_base._MAX_TURN_CONTENT_CHARS", 6)
+    monkeypatch.setattr("pebble.core.session_ui_base._MAX_TURN_CONTENT_CHARS", 6)
     ui = _make_ui()
     lq = ui._register_listener()
     ui.on_content_token("aaaa")  # immediate flush; inflight size 4 < 6

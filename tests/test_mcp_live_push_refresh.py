@@ -43,7 +43,7 @@ from tests.conftest import (
     _wait_session_live,
     _wait_tcp_ready,
 )
-from turnstone.core.mcp_client import MCPClientManager
+from pebble.core.mcp_client import MCPClientManager
 
 if TYPE_CHECKING:
     import subprocess
@@ -120,7 +120,7 @@ class TestPushRefreshNoDeadlock:
             if not _wait_tcp_ready(port, 10.0):
                 pytest.skip("push-refresh server subprocess did not come up")
             with patch(
-                "turnstone.core.mcp_client.load_config",
+                "pebble.core.mcp_client.load_config",
                 return_value={"static_health_check_seconds": 30},
             ):
                 mgr = MCPClientManager(

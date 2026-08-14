@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from turnstone.core.storage._utils import prepare_provider_data_for_save, wrap_provider_data
+from pebble.core.storage._utils import prepare_provider_data_for_save, wrap_provider_data
 
 _BLOCKS = [{"type": "thinking", "thinking": "reasoning", "signature": "s"}]
 _BLOCKS_JSON = json.dumps(_BLOCKS)

@@ -27,8 +27,8 @@ from __future__ import annotations
 import json
 
 from tests._session_helpers import make_session
-from turnstone.core.metacognition import NUDGE_COMPACTION_RESUME
-from turnstone.core.session import COMPACTION_SOURCE
+from pebble.core.metacognition import NUDGE_COMPACTION_RESUME
+from pebble.core.session import COMPACTION_SOURCE
 
 NEEDLE = "quillfeather"
 
@@ -142,9 +142,9 @@ class TestRecallExecScope:
             calls.update(kwargs)
             return rows
 
-        monkeypatch.setattr("turnstone.core.session.search_history", fake_search_history)
+        monkeypatch.setattr("pebble.core.session.search_history", fake_search_history)
         monkeypatch.setattr(
-            "turnstone.core.session.get_compaction_checkpoint", lambda ws: checkpoint
+            "pebble.core.session.get_compaction_checkpoint", lambda ws: checkpoint
         )
         item = session._prepare_recall("c1", {"query": "x"})
         _, output = session._exec_recall(item)

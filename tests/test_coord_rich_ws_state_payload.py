@@ -22,9 +22,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
-from turnstone.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
-from turnstone.core.workstream import WorkstreamState
+from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+from pebble.core.session_ui_base import _MAX_TURN_CONTENT_CHARS
+from pebble.core.workstream import WorkstreamState
 
 # ---------------------------------------------------------------------------
 # Per-ws metric writes — lifted to SessionUIBase, both subclasses inherit
@@ -32,7 +32,7 @@ from turnstone.core.workstream import WorkstreamState
 
 
 def _patch_get_storage(storage: Any):
-    return patch("turnstone.core.storage._registry.get_storage", return_value=storage)
+    return patch("pebble.core.storage._registry.get_storage", return_value=storage)
 
 
 def test_coord_on_status_writes_per_ws_metrics() -> None:
@@ -123,7 +123,7 @@ def test_coord_on_content_token_accumulates(monkeypatch: pytest.MonkeyPatch) -> 
     Batch window forced to 0 (per-token flush) — pins the accumulator
     wiring, not the batching cadence (test_sse_token_batching.py)."""
 
-    monkeypatch.setattr("turnstone.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
+    monkeypatch.setattr("pebble.core.session_ui_base._TOKEN_BATCH_WINDOW_SECS", 0.0)
     ui = ConsoleCoordinatorUI(ws_id="coord-ws", user_id="u1")
     ui.on_content_token("Hello ")
     ui.on_content_token("world")
@@ -289,8 +289,8 @@ def _build_adapter_and_ws(ws_id: str = "coord-ws-1") -> tuple[Any, Any, _FakeCol
     only reads ``ws.id`` and ``ws.ui``, so a real ``Workstream`` with
     a populated ``ConsoleCoordinatorUI`` is enough.
     """
-    from turnstone.console.coordinator_adapter import CoordinatorAdapter
-    from turnstone.core.workstream import Workstream
+    from pebble.console.coordinator_adapter import CoordinatorAdapter
+    from pebble.core.workstream import Workstream
 
     recorder = _FakeCollectorRecorder()
     adapter = CoordinatorAdapter(
@@ -471,7 +471,7 @@ def test_coord_spawn_metrics_increments_messages_and_resets_tool_count() -> None
     """Coord's ``_coord_spawn_metrics`` mirrors interactive's per-spawn
     counter writes (sans the Prometheus call) so the rich ``ws_state``
     broadcast renders the same per-turn shape."""
-    from turnstone.console.server import _coord_spawn_metrics
+    from pebble.console.server import _coord_spawn_metrics
 
     ui = ConsoleCoordinatorUI(ws_id="coord-ws", user_id="u1")
     ui._ws_messages = 5
@@ -484,7 +484,7 @@ def test_coord_spawn_metrics_increments_messages_and_resets_tool_count() -> None
 def test_coord_spawn_metrics_tolerates_ui_without_counters() -> None:
     """A SessionUI subclass without the per-ws counters shouldn't trip
     the hook — defensive guard mirrors the interactive analog."""
-    from turnstone.console.server import _coord_spawn_metrics
+    from pebble.console.server import _coord_spawn_metrics
 
     class _StubUI:
         pass
@@ -608,12 +608,12 @@ def test_webui_on_status_still_records_prometheus_metrics() -> None:
     accidentally dropping the override."""
     import queue
 
-    from turnstone.server import WebUI
+    from pebble.server import WebUI
 
     WebUI._global_queue = queue.Queue()
     try:
         ui = WebUI(ws_id="ws-int", user_id="u1")
-        with patch("turnstone.server._metrics") as mock_metrics, _patch_get_storage(MagicMock()):
+        with patch("pebble.server._metrics") as mock_metrics, _patch_get_storage(MagicMock()):
             ui.on_status(
                 {"prompt_tokens": 10, "completion_tokens": 5},
                 context_window=200,
@@ -635,12 +635,12 @@ def test_webui_on_aux_usage_records_prometheus_metrics() -> None:
     counting aux tokens with nothing failing."""
     import queue
 
-    from turnstone.server import WebUI
+    from pebble.server import WebUI
 
     WebUI._global_queue = queue.Queue()
     try:
         ui = WebUI(ws_id="ws-int", user_id="u1")
-        with patch("turnstone.server._metrics") as mock_metrics, _patch_get_storage(MagicMock()):
+        with patch("pebble.server._metrics") as mock_metrics, _patch_get_storage(MagicMock()):
             ui.on_aux_usage(
                 {
                     "prompt_tokens": 64,
@@ -661,12 +661,12 @@ def test_webui_on_tool_result_still_records_prometheus_tool_call() -> None:
     """Same as above for ``on_tool_result``."""
     import queue
 
-    from turnstone.server import WebUI
+    from pebble.server import WebUI
 
     WebUI._global_queue = queue.Queue()
     try:
         ui = WebUI(ws_id="ws-int", user_id="u1")
-        with patch("turnstone.server._metrics") as mock_metrics:
+        with patch("pebble.server._metrics") as mock_metrics:
             ui.on_tool_result("call-1", "bash", "output")
         mock_metrics.record_tool_call.assert_called_once_with("bash")
         # Per-ws counter writes happened too (inherited from base).

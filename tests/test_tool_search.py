@@ -1,10 +1,10 @@
-"""Tests for turnstone.core.tool_search — BM25 index and tool search manager."""
+"""Tests for pebble.core.tool_search — BM25 index and tool search manager."""
 
 from __future__ import annotations
 
 import pytest
 
-from turnstone.core.tool_search import (
+from pebble.core.tool_search import (
     BM25Index,
     ToolSearchManager,
     _mcp_server_summary,

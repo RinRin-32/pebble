@@ -12,15 +12,15 @@ from __future__ import annotations
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
-_SHARED = _ROOT / "turnstone/shared_static"
+_SHARED = _ROOT / "pebble/shared_static"
 _PANE_JS = _SHARED / "pane.js"
 _PREVIEW_JS = _SHARED / "preview.js"
 _CONVERSATION_JS = _SHARED / "conversation.js"
 _INTERACTIVE_JS = _SHARED / "interactive.js"
 _SHELL_JS = _SHARED / "shell.js"
 _PREVIEW_CSS = _SHARED / "preview.css"
-_UI_INDEX = _ROOT / "turnstone/ui/static/index.html"
-_CONSOLE_INDEX = _ROOT / "turnstone/console/static/index.html"
+_UI_INDEX = _ROOT / "pebble/ui/static/index.html"
+_CONSOLE_INDEX = _ROOT / "pebble/console/static/index.html"
 
 
 def _read(p: Path) -> str:

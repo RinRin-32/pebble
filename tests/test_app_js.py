@@ -17,14 +17,14 @@ from pathlib import Path
 
 import pytest
 
-_APP_JS = Path(__file__).resolve().parent.parent / "turnstone/ui/static/app.js"
-_INTERACTIVE_JS = Path(__file__).resolve().parent.parent / "turnstone/shared_static/interactive.js"
-_SHELL_JS = Path(__file__).resolve().parent.parent / "turnstone/shared_static/shell.js"
+_APP_JS = Path(__file__).resolve().parent.parent / "pebble/ui/static/app.js"
+_INTERACTIVE_JS = Path(__file__).resolve().parent.parent / "pebble/shared_static/interactive.js"
+_SHELL_JS = Path(__file__).resolve().parent.parent / "pebble/shared_static/shell.js"
 _REDACT_CREDENTIALS_JS = (
-    Path(__file__).resolve().parent.parent / "turnstone/shared_static/redact_credentials.js"
+    Path(__file__).resolve().parent.parent / "pebble/shared_static/redact_credentials.js"
 )
-_CONSOLE_APP_JS = Path(__file__).resolve().parent.parent / "turnstone/console/static/app.js"
-_CONSOLE_INDEX = Path(__file__).resolve().parent.parent / "turnstone/console/static/index.html"
+_CONSOLE_APP_JS = Path(__file__).resolve().parent.parent / "pebble/console/static/app.js"
+_CONSOLE_INDEX = Path(__file__).resolve().parent.parent / "pebble/console/static/index.html"
 
 
 def _pane_method_offset(body: str, name: str) -> int:
@@ -250,7 +250,7 @@ def test_shared_utils_no_longer_defines_replay_advisories_after_tool() -> None:
     — so the ``replayAdvisoriesAfterTool`` advisory-walk helper is gone.
     Guard its removal so a stale re-introduction is caught.
     """
-    utils_js = Path(__file__).resolve().parent.parent / "turnstone/shared_static/utils.js"
+    utils_js = Path(__file__).resolve().parent.parent / "pebble/shared_static/utils.js"
     body = utils_js.read_text(encoding="utf-8")
     assert "replayAdvisoriesAfterTool" not in body, (
         "replayAdvisoriesAfterTool should be deleted — operator context now "
@@ -366,14 +366,14 @@ def test_operator_nudge_labels_use_shared_helper() -> None:
     helper rather than leaking the raw ``_source`` (the 'operator · start'
     regression).  Both panes call the one helper so they can't drift."""
     root = Path(__file__).resolve().parent.parent
-    utils = (root / "turnstone/shared_static/utils.js").read_text(encoding="utf-8")
+    utils = (root / "pebble/shared_static/utils.js").read_text(encoding="utf-8")
     assert "function operatorSourceLabel(" in utils
     for t in ("start", "resume", "correction", "denial", "completion", "repeat"):
         assert f'{t}: "metacognition"' in utils, f"nudge type {t!r} must label as metacognition"
     assert 'tool_error: "tool error"' in utils
     assert 'skill_hint: "skill hint"' in utils
-    app = (root / "turnstone/shared_static/interactive.js").read_text(encoding="utf-8")
-    coord = (root / "turnstone/console/static/coordinator/coordinator.js").read_text(
+    app = (root / "pebble/shared_static/interactive.js").read_text(encoding="utf-8")
+    coord = (root / "pebble/console/static/coordinator/coordinator.js").read_text(
         encoding="utf-8"
     )
     assert "operatorSourceLabel(source)" in app, "interactive pane must use the shared label helper"
@@ -384,8 +384,8 @@ def test_operator_nudge_labels_use_shared_helper() -> None:
 # Phase 8 — Chunk D: MCP error embed + settings panel UX
 # ---------------------------------------------------------------------------
 
-_INDEX_HTML = Path(__file__).resolve().parent.parent / "turnstone/ui/static/index.html"
-_STYLE_CSS = Path(__file__).resolve().parent.parent / "turnstone/ui/static/style.css"
+_INDEX_HTML = Path(__file__).resolve().parent.parent / "pebble/ui/static/index.html"
+_STYLE_CSS = Path(__file__).resolve().parent.parent / "pebble/ui/static/style.css"
 
 # Pins the absence of unsafe DOM-write and dynamic-code sinks.  Spell
 # the property/identifier names out of literal string concatenation so
@@ -553,27 +553,27 @@ def test_phase8_appendtooloutput_dispatches_mcp_error_before_renderer() -> None:
     )
 
 
-_UTILS_JS = Path(__file__).resolve().parent.parent / "turnstone/shared_static/utils.js"
-_AUTH_JS = Path(__file__).resolve().parent.parent / "turnstone/shared_static/auth.js"
-_KB_JS = Path(__file__).resolve().parent.parent / "turnstone/shared_static/kb.js"
+_UTILS_JS = Path(__file__).resolve().parent.parent / "pebble/shared_static/utils.js"
+_AUTH_JS = Path(__file__).resolve().parent.parent / "pebble/shared_static/auth.js"
+_KB_JS = Path(__file__).resolve().parent.parent / "pebble/shared_static/kb.js"
 _COORD_JS = (
-    Path(__file__).resolve().parent.parent / "turnstone/console/static/coordinator/coordinator.js"
+    Path(__file__).resolve().parent.parent / "pebble/console/static/coordinator/coordinator.js"
 )
-_CONSOLE_ADMIN_JS = Path(__file__).resolve().parent.parent / "turnstone/console/static/admin.js"
+_CONSOLE_ADMIN_JS = Path(__file__).resolve().parent.parent / "pebble/console/static/admin.js"
 _CONSOLE_GOVERNANCE_JS = (
-    Path(__file__).resolve().parent.parent / "turnstone/console/static/governance.js"
+    Path(__file__).resolve().parent.parent / "pebble/console/static/governance.js"
 )
 
 
 _UNSAFE_CODE_SINK_LINT_TARGETS = [
-    ("turnstone/ui/static/app.js", _INTERACTIVE_JS),
-    ("turnstone/shared_static/utils.js", _UTILS_JS),
-    ("turnstone/shared_static/auth.js", _AUTH_JS),
-    ("turnstone/shared_static/kb.js", _KB_JS),
-    ("turnstone/console/static/coordinator/coordinator.js", _COORD_JS),
-    ("turnstone/console/static/admin.js", _CONSOLE_ADMIN_JS),
-    ("turnstone/console/static/governance.js", _CONSOLE_GOVERNANCE_JS),
-    ("turnstone/console/static/app.js", _CONSOLE_APP_JS),
+    ("pebble/ui/static/app.js", _INTERACTIVE_JS),
+    ("pebble/shared_static/utils.js", _UTILS_JS),
+    ("pebble/shared_static/auth.js", _AUTH_JS),
+    ("pebble/shared_static/kb.js", _KB_JS),
+    ("pebble/console/static/coordinator/coordinator.js", _COORD_JS),
+    ("pebble/console/static/admin.js", _CONSOLE_ADMIN_JS),
+    ("pebble/console/static/governance.js", _CONSOLE_GOVERNANCE_JS),
+    ("pebble/console/static/app.js", _CONSOLE_APP_JS),
 ]
 
 
@@ -1043,26 +1043,26 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 # shared_static files that used to sit here (auth/kb/utils) are ES modules
 # now — test_shell_js.py sweeps them with module semantics.
 _SWEPT_BUNDLES = [
-    _REPO_ROOT / "turnstone/ui/static/app.js",
-    _REPO_ROOT / "turnstone/console/static/admin.js",
-    _REPO_ROOT / "turnstone/console/static/governance.js",
-    _REPO_ROOT / "turnstone/console/static/app.js",
+    _REPO_ROOT / "pebble/ui/static/app.js",
+    _REPO_ROOT / "pebble/console/static/admin.js",
+    _REPO_ROOT / "pebble/console/static/governance.js",
+    _REPO_ROOT / "pebble/console/static/app.js",
 ]
 
 # The const-reassign analysis below is pure text — module vs script semantics
 # is irrelevant — so the var-free ES modules ride the same guard (their parse
 # + var + sink guards live in test_shell_js.py).
 _CONST_GUARD_BUNDLES = _SWEPT_BUNDLES + [
-    _REPO_ROOT / "turnstone/shared_static/auth.js",
-    _REPO_ROOT / "turnstone/shared_static/kb.js",
-    _REPO_ROOT / "turnstone/shared_static/utils.js",
-    _REPO_ROOT / "turnstone/shared_static/toast.js",
-    _REPO_ROOT / "turnstone/shared_static/shell.js",
-    _REPO_ROOT / "turnstone/shared_static/pane.js",
-    _REPO_ROOT / "turnstone/shared_static/rail.js",
-    _REPO_ROOT / "turnstone/shared_static/interactive.js",
-    _REPO_ROOT / "turnstone/shared_static/conversation.js",
-    _REPO_ROOT / "turnstone/shared_static/redact_credentials.js",
+    _REPO_ROOT / "pebble/shared_static/auth.js",
+    _REPO_ROOT / "pebble/shared_static/kb.js",
+    _REPO_ROOT / "pebble/shared_static/utils.js",
+    _REPO_ROOT / "pebble/shared_static/toast.js",
+    _REPO_ROOT / "pebble/shared_static/shell.js",
+    _REPO_ROOT / "pebble/shared_static/pane.js",
+    _REPO_ROOT / "pebble/shared_static/rail.js",
+    _REPO_ROOT / "pebble/shared_static/interactive.js",
+    _REPO_ROOT / "pebble/shared_static/conversation.js",
+    _REPO_ROOT / "pebble/shared_static/redact_credentials.js",
 ]
 
 
@@ -1684,7 +1684,7 @@ def test_connectglobalsse_onerror_preserves_native_reconnect() -> None:
 def test_coord_connectsse_onerror_preserves_native_reconnect() -> None:
     """Coordinator's connectSSE has the same contract — without the
     guard the coord's per-ws SSE silently drops events on any blip."""
-    coord_js = _REPO_ROOT / "turnstone/console/static/coordinator/coordinator.js"
+    coord_js = _REPO_ROOT / "pebble/console/static/coordinator/coordinator.js"
     body = _strip_js_comments(coord_js.read_text(encoding="utf-8"))
     onerror = _onerror_block(body, "evtSource.onerror")
     assert onerror is not None, "coordinator.js evtSource.onerror not found"
@@ -2011,7 +2011,7 @@ def test_interactive_history_is_rest_first_not_sse() -> None:
     assert "this.replayHistory(data.messages" in body, (
         "interactive must feed the projected REST /history payload straight to replayHistory"
     )
-    idx = (Path(__file__).resolve().parent.parent / "turnstone/ui/static/index.html").read_text(
+    idx = (Path(__file__).resolve().parent.parent / "pebble/ui/static/index.html").read_text(
         encoding="utf-8"
     )
     assert "/shared/history_normalize.js" not in idx, (

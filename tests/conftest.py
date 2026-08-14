@@ -126,9 +126,9 @@ def resolve_when_pending(ui: Any, *args: Any, **kwargs: Any) -> _PendingResolver
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-    from turnstone.core.mcp_client import MCPClientManager, StaticServerState
-    from turnstone.core.mcp_crypto import MCPTokenCipher
-    from turnstone.core.oidc import OIDCConfig
+    from pebble.core.mcp_client import MCPClientManager, StaticServerState
+    from pebble.core.mcp_crypto import MCPTokenCipher
+    from pebble.core.oidc import OIDCConfig
 
 
 # A background daemon (e.g. title generation) can log into pytest's per-test
@@ -195,7 +195,7 @@ def make_mcp_token_cipher() -> MCPTokenCipher:
 
     from cryptography.fernet import Fernet
 
-    from turnstone.core.mcp_crypto import MCPTokenCipher, MCPTokenCipherConfig
+    from pebble.core.mcp_crypto import MCPTokenCipher, MCPTokenCipherConfig
 
     raw = base64.urlsafe_b64decode(Fernet.generate_key())
     return MCPTokenCipher(MCPTokenCipherConfig(keys=(raw,)))
@@ -208,7 +208,7 @@ def _seed_static_state(mgr: MCPClientManager, name: str, **overrides: Any) -> St
     where needed; ``StaticServerState`` is constructed lazily so non-MCP
     tests don't pay the import cost.
     """
-    from turnstone.core.mcp_client import StaticServerState
+    from pebble.core.mcp_client import StaticServerState
 
     state = mgr._static_servers.get(name)
     if state is None:
@@ -317,7 +317,7 @@ def make_oidc_test_config(**overrides: Any) -> OIDCConfig:
     Shared between ``test_oidc.py`` and ``test_oidc_handlers.py`` so the
     defaults (including the now-required ``redirect_base``) stay aligned.
     """
-    from turnstone.core.oidc import OIDCConfig
+    from pebble.core.oidc import OIDCConfig
 
     defaults: dict[str, Any] = {
         "enabled": True,
@@ -351,7 +351,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.fixture
 def tmp_db(tmp_path):
     """Provide a temporary SQLite storage backend (singleton registry)."""
-    from turnstone.core.storage import init_storage, reset_storage
+    from pebble.core.storage import init_storage, reset_storage
 
     db_path = str(tmp_path / "test.db")
     reset_storage()
@@ -367,14 +367,14 @@ def storage_backend(request, tmp_path):
     Returns a StorageBackend instance (SQLite or PostgreSQL).
     Tests that use this fixture run against whichever backend CI selects.
     """
-    from turnstone.core.storage import init_storage, reset_storage
+    from pebble.core.storage import init_storage, reset_storage
 
     backend_type = request.config.getoption("--storage-backend")
     reset_storage()
 
     if backend_type == "postgresql":
         pg_url = os.environ.get(
-            "TURNSTONE_TEST_PG_URL",
+            "PEBBLE_TEST_PG_URL",
             "postgresql+psycopg://postgres:postgres@localhost:5432/turnstone_test",
         )
         backend = init_storage("postgresql", url=pg_url, run_migrations=False)
@@ -387,7 +387,7 @@ def storage_backend(request, tmp_path):
         try:
             import sqlalchemy as sa
 
-            from turnstone.core.storage._schema import metadata as db_metadata
+            from pebble.core.storage._schema import metadata as db_metadata
 
             with backend._engine.connect() as conn:
                 table_names = ", ".join(t.name for t in reversed(db_metadata.sorted_tables))
@@ -441,7 +441,7 @@ def _clear_policy_cache():
     because there's only one storage instance for the process lifetime;
     the test isolation requirement is what motivates the autouse.
     """
-    from turnstone.core.policy import invalidate_policy_cache
+    from pebble.core.policy import invalidate_policy_cache
 
     invalidate_policy_cache()
     yield

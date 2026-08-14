@@ -11,23 +11,23 @@ from typing import Any
 
 import pytest
 
-from turnstone import client_cli as cli
+from pebble import client_cli as cli
 
 
 class TestConfig:
     def test_env_overrides_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         path = tmp_path / "client.toml"
         cli.save_config(cli.ClientConfig(url="http://file", token="from-file"), path)
-        monkeypatch.setenv("TURNSTONE_URL", "http://env")
-        monkeypatch.setenv("TURNSTONE_TOKEN", "from-env")
+        monkeypatch.setenv("PEBBLE_URL", "http://env")
+        monkeypatch.setenv("PEBBLE_TOKEN", "from-env")
         cfg = cli.load_config(path)
         # CI passes credentials in the environment and must never need to write
         # them to disk.
         assert cfg.url == "http://env" and cfg.token == "from-env"
 
     def test_roundtrip(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("TURNSTONE_URL", raising=False)
-        monkeypatch.delenv("TURNSTONE_TOKEN", raising=False)
+        monkeypatch.delenv("PEBBLE_URL", raising=False)
+        monkeypatch.delenv("PEBBLE_TOKEN", raising=False)
         path = tmp_path / "client.toml"
         cli.save_config(cli.ClientConfig(url="https://host:8443", token="ts_abc"), path)
         cfg = cli.load_config(path)
@@ -40,14 +40,14 @@ class TestConfig:
         assert path.stat().st_mode & 0o077 == 0, "an API token must not be group/world readable"
 
     def test_quotes_are_escaped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("TURNSTONE_TOKEN", raising=False)
-        monkeypatch.delenv("TURNSTONE_URL", raising=False)
+        monkeypatch.delenv("PEBBLE_TOKEN", raising=False)
+        monkeypatch.delenv("PEBBLE_URL", raising=False)
         path = tmp_path / "client.toml"
         cli.save_config(cli.ClientConfig(token='we"ird\\value'), path)
         assert cli.load_config(path).token == 'we"ird\\value'
 
     def test_missing_file_is_unconfigured(self, tmp_path: Path, monkeypatch) -> None:
-        monkeypatch.delenv("TURNSTONE_TOKEN", raising=False)
+        monkeypatch.delenv("PEBBLE_TOKEN", raising=False)
         assert cli.load_config(tmp_path / "nope.toml").configured is False
 
 

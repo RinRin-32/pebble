@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     _collect_mcp_status,
     _notify_nodes_mcp_reconnect_one,
     _notify_nodes_mcp_refresh_one,
@@ -37,8 +37,8 @@ from turnstone.console.server import (
     admin_mcp_reload,
     admin_update_mcp_server,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Auth middleware variants
@@ -141,7 +141,7 @@ _ROUTES = [
 
 def _routes_with_internal() -> list[Mount]:
     """Routes including the node-side internal endpoints (lazy-imported)."""
-    from turnstone.server import (
+    from pebble.server import (
         internal_mcp_reconnect_one,
         internal_mcp_refresh_one,
         internal_mcp_reload,
@@ -180,7 +180,7 @@ def _install_token_store(app, storage) -> None:
     the OAuth client-secret write path.  Uses a deterministic test key."""
     from cryptography.fernet import Fernet
 
-    from turnstone.core.mcp_crypto import (
+    from pebble.core.mcp_crypto import (
         MCPTokenCipher,
         MCPTokenCipherConfig,
         MCPTokenStore,
@@ -284,7 +284,7 @@ def _create_server(
 # ---------------------------------------------------------------------------
 
 _PATCH_MCP_STATUS = patch(
-    "turnstone.console.server._collect_mcp_status",
+    "pebble.console.server._collect_mcp_status",
     new_callable=AsyncMock,
     return_value={},
 )
@@ -661,7 +661,7 @@ class TestUpdateMcpServer:
         """
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import mcp_user_tokens
+        from pebble.core.storage._schema import mcp_user_tokens
 
         # Seed an oauth_user row at URL_A.
         r = client.post(
@@ -990,7 +990,7 @@ class TestUpdateMcpServer:
         the mint cache invariant forbids)."""
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import mcp_user_tokens
+        from pebble.core.storage._schema import mcp_user_tokens
 
         r = client.post(
             "/v1/api/admin/mcp-servers",
@@ -1199,7 +1199,7 @@ class TestUpdateMcpServer:
         tokens minted for the OLD audience (they are audience-bound)."""
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import mcp_user_tokens
+        from pebble.core.storage._schema import mcp_user_tokens
 
         r = client.post(
             "/v1/api/admin/mcp-servers",
@@ -1246,7 +1246,7 @@ class TestUpdateMcpServer:
     def _seed_obo_row_with_cache(self, client, storage, *, name: str, scopes: str | None) -> str:
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import mcp_user_tokens
+        from pebble.core.storage._schema import mcp_user_tokens
 
         r = client.post(
             "/v1/api/admin/mcp-servers",
@@ -1282,7 +1282,7 @@ class TestUpdateMcpServer:
     def _count_cache_rows(self, storage, name: str) -> int:
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import mcp_user_tokens
+        from pebble.core.storage._schema import mcp_user_tokens
 
         with storage._engine.connect() as conn:
             count = conn.execute(
@@ -1992,7 +1992,7 @@ class TestAdminMcpReloadEndpoint:
     def test_reload_success(self, client: TestClient) -> None:
         """Reload endpoint returns status ok and fan-out results."""
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={"n1": {"reloaded": 3}},
         ):
@@ -2005,7 +2005,7 @@ class TestAdminMcpReloadEndpoint:
     def test_reload_empty_cluster(self, client: TestClient) -> None:
         """Reload with no nodes returns empty results."""
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={},
         ):
@@ -2035,7 +2035,7 @@ class TestAdminMcpReloadEndpoint:
     def test_reload_mixed_node_results(self, client: TestClient) -> None:
         """Reload propagates per-node errors in results."""
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={
                 "n1": {"reloaded": 2},
@@ -2074,7 +2074,7 @@ class TestMcpWriteAutoReload:
 
     def test_create_notifies_nodes(self, client: TestClient) -> None:
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={},
         ) as notify:
@@ -2084,7 +2084,7 @@ class TestMcpWriteAutoReload:
     def test_update_notifies_nodes(self, client: TestClient) -> None:
         sid = _create_server(client, name="auto-reload-update")["server_id"]
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={},
         ) as notify:
@@ -2095,7 +2095,7 @@ class TestMcpWriteAutoReload:
     def test_delete_notifies_nodes(self, client: TestClient) -> None:
         sid = _create_server(client, name="auto-reload-delete")["server_id"]
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={},
         ) as notify:
@@ -2107,7 +2107,7 @@ class TestMcpWriteAutoReload:
         """A 404 (server not found) returns before the success response, so no
         node reload is scheduled — the fan-out rides only the success path."""
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={},
         ) as notify:
@@ -2118,7 +2118,7 @@ class TestMcpWriteAutoReload:
     def test_update_does_not_notify_on_missing_server(self, client: TestClient) -> None:
         """A 404 on update likewise schedules no reload."""
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={},
         ) as notify:
@@ -2132,7 +2132,7 @@ class TestMcpWriteAutoReload:
         """A create that 503s on the OAuth-secret token-store gate returns an
         error before any write — so no reload is scheduled."""
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_reload",
+            "pebble.console.server._notify_nodes_mcp_reload",
             new_callable=AsyncMock,
             return_value={},
         ) as notify:
@@ -2158,7 +2158,7 @@ class TestMcpWriteAutoReload:
         catalog may be stale, since there is no periodic node reconcile."""
         with (
             patch(
-                "turnstone.console.server._notify_nodes_mcp_reload",
+                "pebble.console.server._notify_nodes_mcp_reload",
                 new_callable=AsyncMock,
                 return_value={"n1": {"error": "Connection refused"}},
             ),
@@ -2174,7 +2174,7 @@ class TestMcpWriteAutoReload:
         WARNING rather than lost, for the same reason."""
         with (
             patch(
-                "turnstone.console.server._notify_nodes_mcp_reload",
+                "pebble.console.server._notify_nodes_mcp_reload",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("collector exploded"),
             ),
@@ -2211,7 +2211,7 @@ class TestInternalMcpReloadEndpoint:
 
     def test_reload_calls_reconcile(self, node_client: TestClient, storage: SQLiteBackend) -> None:
         """Reload endpoint calls reconcile_sync and returns its result."""
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             r = node_client.post("/v1/api/_internal/mcp-reload")
         assert r.status_code == 200
         data = r.json()
@@ -2234,7 +2234,7 @@ class TestInternalMcpReloadEndpoint:
         mgr.reconcile_sync.return_value = {"added": [], "removed": [], "updated": []}
         app.state.mcp_client = mgr
         c = TestClient(app, raise_server_exceptions=False)
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             r = c.post("/v1/api/_internal/mcp-reload")
         assert r.status_code == 200
         mgr.reconcile_sync.assert_called_once_with(storage)
@@ -2249,8 +2249,8 @@ class TestInternalMcpReloadEndpoint:
         # No mcp_client on app.state
         c = TestClient(app, raise_server_exceptions=False)
         with (
-            patch("turnstone.core.storage._registry.get_storage", return_value=storage),
-            patch("turnstone.core.mcp_client.MCPClientManager") as mock_cls,
+            patch("pebble.core.storage._registry.get_storage", return_value=storage),
+            patch("pebble.core.mcp_client.MCPClientManager") as mock_cls,
         ):
             mock_mgr = MagicMock()
             mock_mgr.reconcile_sync.return_value = {
@@ -2280,7 +2280,7 @@ class TestInternalMcpReloadEndpoint:
         }
         app.state.mcp_client = mgr
         c = TestClient(app, raise_server_exceptions=False)
-        with patch("turnstone.core.storage._registry.get_storage", return_value=storage):
+        with patch("pebble.core.storage._registry.get_storage", return_value=storage):
             r = c.post("/v1/api/_internal/mcp-reload")
         data = r.json()
         assert data["added"] == ["a"]
@@ -2426,7 +2426,7 @@ class TestAdminMcpRefreshOneEndpoint:
 
     def test_refresh_one_success(self, client: TestClient) -> None:
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_action",
+            "pebble.console.server._notify_nodes_mcp_action",
             new_callable=AsyncMock,
             return_value={"n1": {"status": "ok"}},
         ) as mock_notify:
@@ -2458,7 +2458,7 @@ class TestAdminMcpReconnectOneEndpoint:
 
     def test_reconnect_one_success(self, client: TestClient) -> None:
         with patch(
-            "turnstone.console.server._notify_nodes_mcp_action",
+            "pebble.console.server._notify_nodes_mcp_action",
             new_callable=AsyncMock,
             return_value={"n1": {"status": "ok"}},
         ) as mock_notify:

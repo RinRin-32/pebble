@@ -17,13 +17,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from turnstone.core.auth import AuthResult
-from turnstone.core.mcp_oauth import (
+from pebble.core.auth import AuthResult
+from pebble.core.mcp_oauth import (
     handle_mcp_oauth_clear_all_pending,
     handle_mcp_oauth_clear_pending,
     handle_mcp_oauth_list_pending,
 )
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     from starlette.requests import Request

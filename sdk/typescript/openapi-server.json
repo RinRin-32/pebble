@@ -994,7 +994,7 @@
         "tags": [
           "Workstreams"
         ],
-        "description": "Returns the full conversation as an ``{\"messages\": [...]}`` OpenAI Chat Completions envelope, served as a ``<ws_id>.json`` file download (``Content-Disposition: attachment``). Persisted reasoning is surfaced on assistant messages as a ``reasoning_content`` field. Conversation-only \u2014 the parent + per-child zip bundle is exposed only through the ``turnstone-admin export --children`` CLI.",
+        "description": "Returns the full conversation as an ``{\"messages\": [...]}`` OpenAI Chat Completions envelope, served as a ``<ws_id>.json`` file download (``Content-Disposition: attachment``). Persisted reasoning is surfaced on assistant messages as a ``reasoning_content`` field. Conversation-only \u2014 the parent + per-child zip bundle is exposed only through the ``pebble-admin export --children`` CLI.",
         "parameters": [
           {
             "name": "ws_id",

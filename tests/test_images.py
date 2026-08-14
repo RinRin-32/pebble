@@ -1,4 +1,4 @@
-"""Tests for EXIF-orientation normalisation (turnstone.core.images)."""
+"""Tests for EXIF-orientation normalisation (pebble.core.images)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from io import BytesIO
 
 import pytest
 
-from turnstone.core.images import normalize_image_orientation
+from pebble.core.images import normalize_image_orientation
 
 Image = pytest.importorskip("PIL.Image")
 

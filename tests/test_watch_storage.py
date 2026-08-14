@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 
-from turnstone.core.storage._schema import watches as watches_table
+from pebble.core.storage._schema import watches as watches_table
 
 
 def _make_watch_kwargs(**overrides):

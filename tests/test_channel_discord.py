@@ -93,7 +93,7 @@ class TestDiscordConfig:
     """Tests for DiscordConfig default and custom values."""
 
     def test_defaults(self):
-        from turnstone.channels.discord.config import DiscordConfig
+        from pebble.channels.discord.config import DiscordConfig
 
         cfg = DiscordConfig()
         assert cfg.bot_token == ""
@@ -108,7 +108,7 @@ class TestDiscordConfig:
         assert cfg.auto_approve is False
 
     def test_custom_values(self):
-        from turnstone.channels.discord.config import DiscordConfig
+        from pebble.channels.discord.config import DiscordConfig
 
         cfg = DiscordConfig(
             bot_token="tok_123",
@@ -139,7 +139,7 @@ class TestStreamingMessage:
     """Tests for the StreamingMessage helper in bot.py."""
 
     def test_append_accumulates(self):
-        from turnstone.channels.discord.bot import StreamingMessage
+        from pebble.channels.discord.bot import StreamingMessage
 
         channel = MagicMock()
         channel.send = AsyncMock()
@@ -151,7 +151,7 @@ class TestStreamingMessage:
         assert sm.accumulated_text == "hello world"
 
     def test_finalize_sends_when_no_prior_message(self):
-        from turnstone.channels.discord.bot import StreamingMessage
+        from pebble.channels.discord.bot import StreamingMessage
 
         channel = MagicMock()
         channel.send = AsyncMock()
@@ -163,7 +163,7 @@ class TestStreamingMessage:
         channel.send.assert_awaited_once_with("hello")
 
     def test_finalize_edits_existing_message(self):
-        from turnstone.channels.discord.bot import StreamingMessage
+        from pebble.channels.discord.bot import StreamingMessage
 
         channel = MagicMock()
         sent_msg = MagicMock()
@@ -182,7 +182,7 @@ class TestStreamingMessage:
         sent_msg.edit.assert_awaited_with(content="hi there")
 
     def test_finalize_chunks_long_content(self):
-        from turnstone.channels.discord.bot import StreamingMessage
+        from pebble.channels.discord.bot import StreamingMessage
 
         channel = MagicMock()
         channel.send = AsyncMock()
@@ -196,7 +196,7 @@ class TestStreamingMessage:
         assert channel.send.await_count >= 2
 
     def test_finalize_empty_is_noop(self):
-        from turnstone.channels.discord.bot import StreamingMessage
+        from pebble.channels.discord.bot import StreamingMessage
 
         channel = MagicMock()
         channel.send = AsyncMock()
@@ -216,7 +216,7 @@ class TestMessageCog:
 
     def _make_cog(self):
         """Build a MessageCog with a fully mocked bot and TurnstoneBot."""
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()
@@ -289,7 +289,7 @@ class TestAskModelSelection:
     """Tests for the /ask command's model parameter and channel default."""
 
     def _make_cog_and_interaction(self):
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()
@@ -373,14 +373,14 @@ class TestParseFooter:
     """Tests for _parse_footer in views.py."""
 
     def test_valid_footer_with_owner(self):
-        from turnstone.channels.discord.views import _parse_footer
+        from pebble.channels.discord.views import _parse_footer
 
         interaction = _make_interaction(footer_text="ws_abc|corr_123|12345")
         result = _parse_footer(interaction)
         assert result == ("ws_abc", "corr_123", "12345")
 
     def test_footer_without_owner_returns_empty_owner(self):
-        from turnstone.channels.discord.views import _parse_footer
+        from pebble.channels.discord.views import _parse_footer
 
         # Legacy footer without an owner field (pre-upgrade posts).
         interaction = _make_interaction(footer_text="ws_abc|corr_123")
@@ -388,20 +388,20 @@ class TestParseFooter:
         assert result == ("ws_abc", "corr_123", "")
 
     def test_no_message_returns_none(self):
-        from turnstone.channels.discord.views import _parse_footer
+        from pebble.channels.discord.views import _parse_footer
 
         interaction = MagicMock()
         interaction.message = None
         assert _parse_footer(interaction) is None
 
     def test_no_embeds_returns_none(self):
-        from turnstone.channels.discord.views import _parse_footer
+        from pebble.channels.discord.views import _parse_footer
 
         interaction = _make_interaction(has_embeds=False)
         assert _parse_footer(interaction) is None
 
     def test_empty_footer_returns_none(self):
-        from turnstone.channels.discord.views import _parse_footer
+        from pebble.channels.discord.views import _parse_footer
 
         # Build an interaction whose embed has footer.text = None.
         interaction = MagicMock(spec=discord.Interaction)
@@ -412,7 +412,7 @@ class TestParseFooter:
         assert _parse_footer(interaction) is None
 
     def test_footer_without_pipe_returns_none(self):
-        from turnstone.channels.discord.views import _parse_footer
+        from pebble.channels.discord.views import _parse_footer
 
         interaction = _make_interaction(footer_text="no_pipe_here")
         # footer text has no "|" separator
@@ -432,8 +432,8 @@ class TestWsEventFinalization:
 
     def test_stream_end_finalizes_streaming(self):
         """ContentEvent + StreamEndEvent finalizes the message."""
-        from turnstone.channels.discord.bot import TurnstoneBot
-        from turnstone.sdk.events import ContentEvent, StreamEndEvent
+        from pebble.channels.discord.bot import TurnstoneBot
+        from pebble.sdk.events import ContentEvent, StreamEndEvent
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -468,8 +468,8 @@ class TestWsEventFinalization:
 
     def test_stream_end_no_streaming_is_noop(self):
         """StreamEndEvent without prior content should not error."""
-        from turnstone.channels.discord.bot import TurnstoneBot
-        from turnstone.sdk.events import StreamEndEvent
+        from pebble.channels.discord.bot import TurnstoneBot
+        from pebble.sdk.events import StreamEndEvent
 
         bot = MagicMock(spec=TurnstoneBot)
         bot._streaming = {}
@@ -498,8 +498,8 @@ class TestApprovalVerdictDisplay:
 
     def _make_bot(self):
         """Build a mock TurnstoneBot with _on_ws_event bound."""
-        from turnstone.channels._routing import PolicyVerdict
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels._routing import PolicyVerdict
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -521,7 +521,7 @@ class TestApprovalVerdictDisplay:
 
     def test_approval_with_heuristic_verdict(self):
         """ApproveRequestEvent items with verdict dicts add embed fields."""
-        from turnstone.sdk.events import ApproveRequestEvent
+        from pebble.sdk.events import ApproveRequestEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -561,7 +561,7 @@ class TestApprovalVerdictDisplay:
 
     def test_approval_without_verdict(self):
         """ApproveRequestEvent items without verdict still work normally."""
-        from turnstone.sdk.events import ApproveRequestEvent
+        from pebble.sdk.events import ApproveRequestEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -580,7 +580,7 @@ class TestApprovalVerdictDisplay:
 
     def test_intent_verdict_event_updates_embed(self):
         """IntentVerdictEvent should update the pending approval embed."""
-        from turnstone.sdk.events import IntentVerdictEvent
+        from pebble.sdk.events import IntentVerdictEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -616,7 +616,7 @@ class TestApprovalVerdictDisplay:
 
     def test_intent_verdict_without_pending_approval_is_noop(self):
         """IntentVerdictEvent without a pending approval message should not error."""
-        from turnstone.sdk.events import IntentVerdictEvent
+        from pebble.sdk.events import IntentVerdictEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -627,8 +627,8 @@ class TestApprovalVerdictDisplay:
 
     def test_stream_end_clears_pending_approval(self):
         """StreamEndEvent should clean up the pending approval message tracking."""
-        from turnstone.channels.discord.bot import TurnstoneBot
-        from turnstone.sdk.events import StreamEndEvent
+        from pebble.channels.discord.bot import TurnstoneBot
+        from pebble.sdk.events import StreamEndEvent
 
         bot = MagicMock(spec=TurnstoneBot)
         bot._streaming = {}
@@ -653,7 +653,7 @@ class TestStreamEndBehavior:
     """StreamEndEvent finalizes streaming and cleans up state."""
 
     def _make_bot(self):
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -671,7 +671,7 @@ class TestStreamEndBehavior:
 
     def test_stream_end_no_streaming_no_send(self):
         """StreamEndEvent without prior content should not send anything."""
-        from turnstone.sdk.events import StreamEndEvent
+        from pebble.sdk.events import StreamEndEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -683,7 +683,7 @@ class TestStreamEndBehavior:
 
     def test_stream_end_finalizes_existing_streaming(self):
         """StreamEndEvent with an existing StreamingMessage should finalize it."""
-        from turnstone.sdk.events import ContentEvent, StreamEndEvent
+        from pebble.sdk.events import ContentEvent, StreamEndEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -704,7 +704,7 @@ class TestNotificationTracking:
 
     def _make_dm_bot(self, *, sent_message_id: int):
         """Build a MagicMock bot whose notification target resolves to a DM."""
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -748,7 +748,7 @@ class TestNotificationTracking:
         user ID, so storing a channel ID would reject every legitimate
         reply.
         """
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -791,7 +791,7 @@ class TestNotificationTracking:
 
     def test_dm_reply_routes_to_workstream(self):
         """DM reply to a tracked notification routes the message to the workstream."""
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()
@@ -827,7 +827,7 @@ class TestNotificationTracking:
 
     def test_dm_reply_user_mismatch_rejected_and_preserved(self):
         """DM reply from wrong user is rejected; entry re-inserted for legitimate user."""
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()
@@ -856,7 +856,7 @@ class TestNotificationTracking:
 
     def test_dm_reply_stale_notification_feedback(self):
         """DM reply to an expired/unknown notification should inform the user."""
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()
@@ -885,7 +885,7 @@ class TestNotificationTracking:
 
     def test_dm_without_reference_sends_guidance(self):
         """DM without a message reference should reply with guidance."""
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()
@@ -911,7 +911,7 @@ class TestNotificationTracking:
 
     def test_dm_reply_unlinked_user_ignored(self):
         """DM reply from an unlinked user should be ignored."""
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()
@@ -937,8 +937,8 @@ class TestNotificationTracking:
 
     def test_stream_end_forwards_accumulated_content_to_dm(self):
         """StreamEndEvent should forward accumulated content to notification reply DM."""
-        from turnstone.channels.discord.bot import TurnstoneBot
-        from turnstone.sdk.events import ContentEvent, StreamEndEvent
+        from pebble.channels.discord.bot import TurnstoneBot
+        from pebble.sdk.events import ContentEvent, StreamEndEvent
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -979,8 +979,8 @@ class TestNotificationTracking:
 
     def test_stream_end_cleans_up_dm_even_without_content(self):
         """StreamEndEvent without prior content should still clean up DM tracking."""
-        from turnstone.channels.discord.bot import TurnstoneBot
-        from turnstone.sdk.events import StreamEndEvent
+        from pebble.channels.discord.bot import TurnstoneBot
+        from pebble.sdk.events import StreamEndEvent
 
         bot = MagicMock(spec=TurnstoneBot)
         bot._streaming = {}
@@ -1015,21 +1015,21 @@ class TestFormatToolResult:
     """Tests for format_tool_result in _formatter.py."""
 
     def test_basic_output(self):
-        from turnstone.channels._formatter import format_tool_result
+        from pebble.channels._formatter import format_tool_result
 
         result = format_tool_result("hello world")
         assert "```" in result
         assert "hello world" in result
 
     def test_wraps_in_code_block(self):
-        from turnstone.channels._formatter import format_tool_result
+        from pebble.channels._formatter import format_tool_result
 
         result = format_tool_result("output text")
         assert result.startswith("```\n")
         assert result.endswith("\n```")
 
     def test_truncates_long_output_by_lines(self):
-        from turnstone.channels._formatter import format_tool_result
+        from pebble.channels._formatter import format_tool_result
 
         output = "\n".join(f"line {i}" for i in range(20))
         result = format_tool_result(output)
@@ -1038,7 +1038,7 @@ class TestFormatToolResult:
         assert inner.strip().count("\n") <= 11
 
     def test_truncates_long_output_by_chars(self):
-        from turnstone.channels._formatter import format_tool_result
+        from pebble.channels._formatter import format_tool_result
 
         output = "x" * 600
         result = format_tool_result(output)
@@ -1047,7 +1047,7 @@ class TestFormatToolResult:
         assert len(inner) <= 501  # 497 + ellipsis char
 
     def test_escapes_triple_backticks_in_output(self):
-        from turnstone.channels._formatter import format_tool_result
+        from pebble.channels._formatter import format_tool_result
 
         output = "before ``` after"
         result = format_tool_result(output)
@@ -1066,7 +1066,7 @@ class TestTryParseMedia:
     def test_stream_url_detected(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         data = json.dumps({"stream_url": "http://jf:8096/Videos/abc/stream", "container": "mp4"})
         result = try_parse_media(data)
@@ -1076,7 +1076,7 @@ class TestTryParseMedia:
     def test_media_details_detected(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         data = json.dumps({"id": "abc", "name": "Test Movie", "type": "Movie", "year": 2024})
         result = try_parse_media(data)
@@ -1086,7 +1086,7 @@ class TestTryParseMedia:
     def test_search_results_detected(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         data = json.dumps({"results": [{"id": "1", "name": "Hit"}], "total_count": 1})
         result = try_parse_media(data)
@@ -1096,7 +1096,7 @@ class TestTryParseMedia:
     def test_sessions_detected(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         data = json.dumps({"sessions": [{"id": "s1", "user_name": "ptrck"}]})
         result = try_parse_media(data)
@@ -1105,24 +1105,24 @@ class TestTryParseMedia:
     def test_empty_results_returns_none(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         assert try_parse_media(json.dumps({"results": []})) is None
 
     def test_plain_text_returns_none(self):
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         assert try_parse_media("just a string") is None
 
     def test_non_dict_json_returns_none(self):
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         assert try_parse_media("[1, 2, 3]") is None
 
     def test_unrelated_dict_returns_none(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         assert try_parse_media(json.dumps({"foo": "bar"})) is None
 
@@ -1141,13 +1141,13 @@ class TestIsSafeImageUrl:
         monkeypatch.setattr(socket, "getaddrinfo", fake)
 
     def test_http_url(self, monkeypatch):
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         self._patch_resolver(monkeypatch, ["203.0.113.5"])
         assert _run(_is_safe_image_url("http://jellyfin:8096/Items/abc/Images/Primary")) is True
 
     def test_https_url(self, monkeypatch):
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         self._patch_resolver(monkeypatch, ["203.0.113.5"])
         assert (
@@ -1156,54 +1156,54 @@ class TestIsSafeImageUrl:
         )
 
     def test_ftp_rejected(self):
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         assert _run(_is_safe_image_url("ftp://evil.com/image.jpg")) is False
 
     def test_file_rejected(self):
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         assert _run(_is_safe_image_url("file:///etc/passwd")) is False
 
     def test_userinfo_rejected(self):
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         assert _run(_is_safe_image_url("http://user:pass@jellyfin:8096/image")) is False
 
     def test_empty_rejected(self):
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         assert _run(_is_safe_image_url("")) is False
 
     def test_private_ip_allowed(self):
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         assert _run(_is_safe_image_url("http://192.168.0.6:8096/Items/abc/Images/Primary")) is True
 
     def test_dns_rebinding_rejected(self, monkeypatch):
         """Hostname that resolves to a loopback IP must be rejected."""
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         self._patch_resolver(monkeypatch, ["127.0.0.1"])
         assert _run(_is_safe_image_url("http://rebind.example.com/image")) is False
 
     def test_metadata_endpoint_rejected(self):
         """AWS/GCP metadata IP is link-local → rejected."""
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         assert _run(_is_safe_image_url("http://169.254.169.254/latest/meta-data/")) is False
 
     def test_ipv6_aws_nitro_metadata_rejected(self, monkeypatch):
         """fd00:ec2::254 is IPv6 ULA (is_private) but must be blocked —
         the IPv4 169.254.169.254 check left this analogue open."""
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         self._patch_resolver(monkeypatch, ["fd00:ec2::254"])
         assert _run(_is_safe_image_url("http://nitro.example.com/")) is False
 
     def test_ipv6_ecs_task_metadata_rejected(self, monkeypatch):
         """ECS Task Metadata lives in the same fd00:ec2::/32 prefix."""
-        from turnstone.channels._formatter import _is_safe_image_url
+        from pebble.channels._formatter import _is_safe_image_url
 
         self._patch_resolver(monkeypatch, ["fd00:ec2::23"])
         assert _run(_is_safe_image_url("http://ecs-meta.example.com/")) is False
@@ -1215,7 +1215,7 @@ class TestBuildMediaEmbed:
     def test_single_item_embed_uses_web_url_not_stream_url(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         data = {
             "name": "Test Movie",
@@ -1228,7 +1228,7 @@ class TestBuildMediaEmbed:
         parsed = try_parse_media(json.dumps(data))
         assert parsed is not None
 
-        from turnstone.channels._formatter import _build_single_media_embed
+        from pebble.channels._formatter import _build_single_media_embed
 
         embed = _build_single_media_embed(parsed, "mcp__mediamcp__get_stream_url")
         # web_url should be the embed URL, never stream_url
@@ -1238,7 +1238,7 @@ class TestBuildMediaEmbed:
     def test_search_results_embed_format(self):
         import json
 
-        from turnstone.channels._formatter import try_parse_media
+        from pebble.channels._formatter import try_parse_media
 
         data = {
             "results": [
@@ -1249,7 +1249,7 @@ class TestBuildMediaEmbed:
         }
         parsed = try_parse_media(json.dumps(data))
 
-        from turnstone.channels._formatter import _build_search_results_embed
+        from pebble.channels._formatter import _build_search_results_embed
 
         embed = _build_search_results_embed(parsed)
         assert "Movie A" in embed.description
@@ -1257,7 +1257,7 @@ class TestBuildMediaEmbed:
         assert "2 of 2" in embed.footer.text
 
     def test_build_media_embed_returns_none_for_plain_text(self):
-        from turnstone.channels._formatter import try_build_media_embed
+        from pebble.channels._formatter import try_build_media_embed
 
         http = MagicMock()
         result = _run(try_build_media_embed("tool", "plain text", http=http))
@@ -1266,7 +1266,7 @@ class TestBuildMediaEmbed:
     def test_season_episode_string_values(self):
         """Season/episode numbers as strings should not raise."""
 
-        from turnstone.channels._formatter import _build_search_results_embed
+        from pebble.channels._formatter import _build_search_results_embed
 
         data = {
             "results": [
@@ -1293,7 +1293,7 @@ class TestThinkingIndicator:
     """Tests for ThinkingStart/Stop event handling in the Discord bot."""
 
     def _make_bot(self):
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -1312,7 +1312,7 @@ class TestThinkingIndicator:
         return bot
 
     def test_thinking_start_sends_message(self):
-        from turnstone.sdk.events import ThinkingStartEvent
+        from pebble.sdk.events import ThinkingStartEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1326,7 +1326,7 @@ class TestThinkingIndicator:
         assert bot._thinking_msgs["ws-1"] is sent_msg
 
     def test_thinking_stop_preserves_message_for_reuse(self):
-        from turnstone.sdk.events import ThinkingStopEvent
+        from pebble.sdk.events import ThinkingStopEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1342,7 +1342,7 @@ class TestThinkingIndicator:
         assert "ws-1" in bot._thinking_msgs
 
     def test_thinking_stop_without_message_is_noop(self):
-        from turnstone.sdk.events import ThinkingStopEvent
+        from pebble.sdk.events import ThinkingStopEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1351,7 +1351,7 @@ class TestThinkingIndicator:
         _run(bot._on_ws_event("ws-1", thread, event))
 
     def test_content_event_reuses_thinking_message(self):
-        from turnstone.sdk.events import ContentEvent
+        from pebble.sdk.events import ContentEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1368,7 +1368,7 @@ class TestThinkingIndicator:
         assert sm.message is thinking_msg
 
     def test_stream_end_clears_thinking_message(self):
-        from turnstone.sdk.events import StreamEndEvent
+        from pebble.sdk.events import StreamEndEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1393,7 +1393,7 @@ class TestToolInfoEvent:
     """Tests for ToolInfoEvent handling in the Discord bot."""
 
     def _make_bot(self):
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -1412,7 +1412,7 @@ class TestToolInfoEvent:
         return bot
 
     def test_sends_per_item_embed(self):
-        from turnstone.sdk.events import ToolInfoEvent
+        from pebble.sdk.events import ToolInfoEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1431,7 +1431,7 @@ class TestToolInfoEvent:
         assert bot._tool_info_msgs["ws-1"] == [("", "bash", "ls -la", sent_msg)]
 
     def test_multiple_tools_send_multiple_embeds(self):
-        from turnstone.sdk.events import ToolInfoEvent
+        from pebble.sdk.events import ToolInfoEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1447,7 +1447,7 @@ class TestToolInfoEvent:
         assert len(bot._tool_info_msgs["ws-1"]) == 2
 
     def test_shows_all_items_regardless_of_approval(self):
-        from turnstone.sdk.events import ToolInfoEvent
+        from pebble.sdk.events import ToolInfoEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1463,7 +1463,7 @@ class TestToolInfoEvent:
         assert thread.send.await_count == 2
 
     def test_reuses_thinking_message_for_first_tool(self):
-        from turnstone.sdk.events import ToolInfoEvent
+        from pebble.sdk.events import ToolInfoEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1487,7 +1487,7 @@ class TestToolResultEvent:
     """Tests for ToolResultEvent handling in the Discord bot."""
 
     def _make_bot(self):
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -1507,7 +1507,7 @@ class TestToolResultEvent:
         return bot
 
     def test_marks_info_done_and_sends_result(self):
-        from turnstone.sdk.events import ToolResultEvent
+        from pebble.sdk.events import ToolResultEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1534,7 +1534,7 @@ class TestToolResultEvent:
         assert bot._tool_info_msgs["ws-1"] == []
 
     def test_result_sent_even_without_info_match(self):
-        from turnstone.sdk.events import ToolResultEvent
+        from pebble.sdk.events import ToolResultEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1548,7 +1548,7 @@ class TestToolResultEvent:
         assert "file1" in embed.description
 
     def test_error_result_uses_red_color(self):
-        from turnstone.sdk.events import ToolResultEvent
+        from pebble.sdk.events import ToolResultEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1562,7 +1562,7 @@ class TestToolResultEvent:
         assert embed.color == discord.Color.red()
 
     def test_success_result_uses_dark_grey_color(self):
-        from turnstone.sdk.events import ToolResultEvent
+        from pebble.sdk.events import ToolResultEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1574,7 +1574,7 @@ class TestToolResultEvent:
         assert embed.color == discord.Color.dark_grey()
 
     def test_call_id_matching(self):
-        from turnstone.sdk.events import ToolResultEvent
+        from pebble.sdk.events import ToolResultEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1595,7 +1595,7 @@ class TestToolResultEvent:
         first_msg.edit.assert_not_awaited()
 
     def test_fifo_fallback_when_no_call_id(self):
-        from turnstone.sdk.events import ToolResultEvent
+        from pebble.sdk.events import ToolResultEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1617,7 +1617,7 @@ class TestToolResultEvent:
         second_msg.edit.assert_awaited_once()
 
     def test_edit_failure_falls_back_to_send(self):
-        from turnstone.sdk.events import ToolResultEvent
+        from pebble.sdk.events import ToolResultEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1643,7 +1643,7 @@ class TestApprovalResolved:
     """ApprovalResolvedEvent should disable buttons on the pending approval embed."""
 
     def _make_bot(self):
-        from turnstone.channels.discord.bot import TurnstoneBot
+        from pebble.channels.discord.bot import TurnstoneBot
 
         bot = MagicMock(spec=TurnstoneBot)
         bot.config = MagicMock()
@@ -1662,7 +1662,7 @@ class TestApprovalResolved:
         return bot
 
     def test_disables_buttons_on_timeout(self):
-        from turnstone.sdk.events import ApprovalResolvedEvent
+        from pebble.sdk.events import ApprovalResolvedEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1684,7 +1684,7 @@ class TestApprovalResolved:
         assert not bot._pending_approval_msgs
 
     def test_disables_buttons_on_approved(self):
-        from turnstone.sdk.events import ApprovalResolvedEvent
+        from pebble.sdk.events import ApprovalResolvedEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1706,7 +1706,7 @@ class TestApprovalResolved:
         assert "Approved" in edited_embed.title
 
     def test_no_pending_approval_is_noop(self):
-        from turnstone.sdk.events import ApprovalResolvedEvent
+        from pebble.sdk.events import ApprovalResolvedEvent
 
         bot = self._make_bot()
         thread = AsyncMock()
@@ -1723,8 +1723,8 @@ class TestChannelCLI:
         # No Discord/Slack token → standby: main() runs the gateway with zero
         # adapters instead of exiting (which would crash-loop under
         # `restart: unless-stopped`).
-        from turnstone.channels import cli
-        from turnstone.channels.cli import main
+        from pebble.channels import cli
+        from pebble.channels.cli import main
 
         captured: dict[str, object] = {}
 
@@ -1734,9 +1734,9 @@ class TestChannelCLI:
         with (
             patch.object(sys, "argv", ["turnstone-channel"]),
             patch.dict("os.environ", {}, clear=True),
-            patch("turnstone.core.storage._registry.init_storage"),
-            patch("turnstone.core.storage._registry.get_storage", return_value=MagicMock()),
-            patch("turnstone.channels._http.create_channel_app", return_value=MagicMock()),
+            patch("pebble.core.storage._registry.init_storage"),
+            patch("pebble.core.storage._registry.get_storage", return_value=MagicMock()),
+            patch("pebble.channels._http.create_channel_app", return_value=MagicMock()),
             patch.object(cli, "_run_gateway", _fake_gateway),
         ):
             main()  # must not raise SystemExit
@@ -1772,7 +1772,7 @@ def _make_view_interaction(user_id: int, footer: str | None) -> MagicMock:
 
 def _make_view_bot() -> MagicMock:
     """Build a TurnstoneBot double with just the surface the views read."""
-    from turnstone.channels.discord.bot import TurnstoneBot
+    from pebble.channels.discord.bot import TurnstoneBot
 
     bot = MagicMock(spec=TurnstoneBot)
     bot.router = MagicMock()
@@ -1786,11 +1786,11 @@ class TestApprovalViewOwnerCheck:
     """ApprovalView rejects clicks from anyone other than the session owner."""
 
     def test_owner_approve_allowed(self, monkeypatch):
-        from turnstone.channels.discord.views import ApprovalView
+        from pebble.channels.discord.views import ApprovalView
 
         # Avoid real disable_message_buttons (touches discord.ui internals).
         monkeypatch.setattr(
-            "turnstone.channels.discord.views._disable_buttons",
+            "pebble.channels.discord.views._disable_buttons",
             AsyncMock(),
         )
         view = ApprovalView(_make_view_bot())
@@ -1806,7 +1806,7 @@ class TestApprovalViewOwnerCheck:
         )
 
     def test_non_owner_rejected(self):
-        from turnstone.channels.discord.views import ApprovalView
+        from pebble.channels.discord.views import ApprovalView
 
         view = ApprovalView(_make_view_bot())
         interaction = _make_view_interaction(user_id=999, footer="ws-1|corr-1|42")
@@ -1820,7 +1820,7 @@ class TestApprovalViewOwnerCheck:
         assert msg_kwargs.kwargs.get("ephemeral") is True
 
     def test_legacy_footer_without_owner_rejected(self):
-        from turnstone.channels.discord.views import ApprovalView
+        from pebble.channels.discord.views import ApprovalView
 
         view = ApprovalView(_make_view_bot())
         # Pre-upgrade footer with only ws_id|correlation_id — fail closed.
@@ -1837,7 +1837,7 @@ class TestDiscordThreadOwnerCheck:
     @staticmethod
     def _make_cog_and_ts():
         """Build a MessageCog wired to a minimal TurnstoneBot double."""
-        from turnstone.channels.discord.cog import MessageCog
+        from pebble.channels.discord.cog import MessageCog
 
         bot = MagicMock()
         bot.user = MagicMock()

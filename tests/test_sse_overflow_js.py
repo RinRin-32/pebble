@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
-_SSE_OVERFLOW = _ROOT / "turnstone/shared_static/sse_overflow.js"
+_SSE_OVERFLOW = _ROOT / "pebble/shared_static/sse_overflow.js"
 
 
 def test_module_exports_constants_and_pure_helpers() -> None:

@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.output_guard_judge."""
+"""Tests for pebble.core.output_guard_judge."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ from unittest.mock import MagicMock
 
 from tests._session_helpers import as_stream
 from tests._session_helpers import mock_completion_result as _mock_result
-from turnstone.core import fence
-from turnstone.core.judge import JudgeConfig
-from turnstone.core.output_guard_judge import (
+from pebble.core import fence
+from pebble.core.judge import JudgeConfig
+from pebble.core.output_guard_judge import (
     _SYSTEM_PROMPT,
     OutputGuardJudge,
     OutputJudgeVerdict,
     _extract_json,
 )
-from turnstone.core.providers._protocol import ModelCapabilities
+from pebble.core.providers._protocol import ModelCapabilities
 
 
 def _make_provider(
@@ -372,7 +372,7 @@ class TestOversizeGuard:
     def test_zero_window_coerced_away_on_both_paths(self) -> None:
         """A config.toml context_window=0 (present but unusable) must not zero
         the guard: coerce to the session window (alias path) / the default."""
-        from turnstone.core.judge import _DEFAULT_JUDGE_CONTEXT_WINDOW
+        from pebble.core.judge import _DEFAULT_JUDGE_CONTEXT_WINDOW
 
         # Alias path: ModelConfig.context_window == 0 → session window.
         cfg = MagicMock()
@@ -450,7 +450,7 @@ class TestClientReuse:
     def test_real_lazy_init_caches_real_client(self) -> None:
         # Use the production _create_client path with create_client
         # itself monkeypatched at the module boundary.
-        from turnstone.core import providers as _providers
+        from pebble.core import providers as _providers
 
         config = JudgeConfig(output_guard_llm=True, output_guard_llm_timeout=5.0)
         judge = OutputGuardJudge(

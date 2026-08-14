@@ -13,8 +13,8 @@ import types
 import pytest
 from cryptography.fernet import Fernet
 
-import turnstone.core.config as cfg_mod
-from turnstone.core.mcp_crypto import (
+import pebble.core.config as cfg_mod
+from pebble.core.mcp_crypto import (
     MCPTokenCipher,
     MCPTokenStore,
     initialize_mcp_crypto_state,
@@ -86,7 +86,7 @@ class TestInitializeMcpCryptoState:
 
         state = types.SimpleNamespace()
         with (
-            caplog.at_level("ERROR", logger="turnstone.core.mcp_crypto"),
+            caplog.at_level("ERROR", logger="pebble.core.mcp_crypto"),
             pytest.raises(SystemExit) as exc_info,
         ):
             initialize_mcp_crypto_state(state, node_id="n1")
@@ -106,7 +106,7 @@ class TestInitializeMcpCryptoState:
 
         state = types.SimpleNamespace()
         with (
-            caplog.at_level("ERROR", logger="turnstone.core.mcp_crypto"),
+            caplog.at_level("ERROR", logger="pebble.core.mcp_crypto"),
             pytest.raises(SystemExit) as exc_info,
         ):
             initialize_mcp_crypto_state(state, node_id="n1")
@@ -134,7 +134,7 @@ class TestInitializeMcpCryptoState:
             )
         )
         with (
-            caplog.at_level("ERROR", logger="turnstone.core.mcp_crypto"),
+            caplog.at_level("ERROR", logger="pebble.core.mcp_crypto"),
             pytest.raises(SystemExit) as exc_info,
         ):
             initialize_mcp_crypto_state(state, node_id="n1")

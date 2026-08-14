@@ -17,7 +17,7 @@ care about.
 ## `kind` — authored audience metadata
 
 A row in `prompt_templates` carries a `kind` column (see
-[`turnstone/core/skill_kind.py`](../turnstone/core/skill_kind.py);
+[`pebble/core/skill_kind.py`](../pebble/core/skill_kind.py);
 migration 044 added the column).  Three values:
 
 | `SkillKind` enum        | Stored as       | Meaning                                                                    |
@@ -60,7 +60,7 @@ want the kind filter to surface them as such.
 ## Tool surface differences
 
 Coordinator sessions receive a **fixed** tool set, defined in
-`turnstone/core/tools.py` as `COORDINATOR_TOOLS`.  Nothing a skill
+`pebble/core/tools.py` as `COORDINATOR_TOOLS`.  Nothing a skill
 or MCP config can do adds to it.  Current members:
 
 | Tool                      | Category        | Notes                                                               |
@@ -103,7 +103,7 @@ Interactive skills compose on top of `base_interactive.md` — a
 close the loop.
 
 Coordinator skills compose on top of
-[`personas/orchestrator.md`](../turnstone/prompts/personas/orchestrator.md) —
+[`personas/orchestrator.md`](../pebble/prompts/personas/orchestrator.md) —
 an "orchestrator" framing: decompose, delegate, monitor, synthesise.
 The base text is short but sets the tone every coordinator skill
 inherits:

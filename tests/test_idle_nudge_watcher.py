@@ -2,7 +2,7 @@
 
 Drives a fake :class:`SessionManager` that mimics the real one's
 ``subscribe_to_state`` / ``get`` contract.  The watcher itself
-dispatches via ``turnstone.core.session_worker.send``; we patch that
+dispatches via ``pebble.core.session_worker.send``; we patch that
 module-level function to capture calls without spawning real threads.
 """
 
@@ -17,9 +17,9 @@ from unittest.mock import patch
 
 import pytest
 
-from turnstone.core.idle_nudge_watcher import IdleNudgeWatcher, wake_workstream_if_pending
-from turnstone.core.nudge_queue import NudgeQueue
-from turnstone.core.workstream import WorkstreamState
+from pebble.core.idle_nudge_watcher import IdleNudgeWatcher, wake_workstream_if_pending
+from pebble.core.nudge_queue import NudgeQueue
+from pebble.core.workstream import WorkstreamState
 
 
 class _FakeSession:
@@ -98,7 +98,7 @@ class TestIdleNudgeWatcher:
         mgr, ws = fake_mgr_and_ws
         watcher = IdleNudgeWatcher(mgr)
         watcher.start()
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             mgr.fire_state(ws.id, WorkstreamState.IDLE)
             assert mock_send.call_count == 0
 
@@ -107,7 +107,7 @@ class TestIdleNudgeWatcher:
         ws.session._nudge_queue.enqueue("idle_children", "your kids", "any")
         watcher = IdleNudgeWatcher(mgr)
         watcher.start()
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             mgr.fire_state(ws.id, WorkstreamState.IDLE)
             assert mock_send.call_count == 1
             kwargs = mock_send.call_args.kwargs
@@ -123,7 +123,7 @@ class TestIdleNudgeWatcher:
         ws.session._nudge_queue.enqueue("foo", "bar", "any")
         watcher = IdleNudgeWatcher(mgr)
         watcher.start()
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             for state in (
                 WorkstreamState.RUNNING,
                 WorkstreamState.THINKING,
@@ -137,7 +137,7 @@ class TestIdleNudgeWatcher:
         mgr, _ws = fake_mgr_and_ws
         watcher = IdleNudgeWatcher(mgr)
         watcher.start()
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             mgr.fire_state("ghost", WorkstreamState.IDLE)
             assert mock_send.call_count == 0
 
@@ -146,7 +146,7 @@ class TestIdleNudgeWatcher:
         ws.session = None  # workstream loaded but session not yet built
         watcher = IdleNudgeWatcher(mgr)
         watcher.start()
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             mgr.fire_state(ws.id, WorkstreamState.IDLE)
             assert mock_send.call_count == 0
 
@@ -156,7 +156,7 @@ class TestIdleNudgeWatcher:
         watcher.start()
         watcher.start()  # no-op
         ws.session._nudge_queue.enqueue("foo", "bar", "any")
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             mgr.fire_state(ws.id, WorkstreamState.IDLE)
             # Only one subscriber was registered despite the double-start.
             assert mock_send.call_count == 1
@@ -167,7 +167,7 @@ class TestIdleNudgeWatcher:
         watcher = IdleNudgeWatcher(mgr)
         watcher.start()
         watcher.shutdown()
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             mgr.fire_state(ws.id, WorkstreamState.IDLE)
             assert mock_send.call_count == 0
 
@@ -190,7 +190,7 @@ class TestWakeWorkstreamIfPending:
     def test_wakes_idle_ws_with_pending_entry(self, fake_mgr_and_ws):
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue.enqueue("watch_triggered", "output", "any")
-        with patch("turnstone.core.session_worker.send", return_value=True) as mock_send:
+        with patch("pebble.core.session_worker.send", return_value=True) as mock_send:
             assert wake_workstream_if_pending(ws) is True
             assert mock_send.call_count == 1
             kwargs = mock_send.call_args.kwargs
@@ -202,7 +202,7 @@ class TestWakeWorkstreamIfPending:
     def test_skips_session_none(self, fake_mgr_and_ws):
         _mgr, ws = fake_mgr_and_ws
         ws.session = None
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             assert wake_workstream_if_pending(ws) is False
             assert mock_send.call_count == 0
 
@@ -216,7 +216,7 @@ class TestWakeWorkstreamIfPending:
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue.enqueue("watch_triggered", "output", "any")
         ws._pending_sends.append(object())
-        with patch("turnstone.core.session_worker.send", return_value=True) as mock_send:
+        with patch("pebble.core.session_worker.send", return_value=True) as mock_send:
             assert wake_workstream_if_pending(ws, trigger="worker-exit") is False
             assert mock_send.call_count == 0
         # CLAIMED-entry window: list empty but the drain is alive (an
@@ -225,13 +225,13 @@ class TestWakeWorkstreamIfPending:
         # barrier's drain-alive term must hold the yield.
         ws._pending_sends.clear()
         ws._pending_drain = SimpleNamespace(is_alive=lambda: True)
-        with patch("turnstone.core.session_worker.send", return_value=True) as mock_send:
+        with patch("pebble.core.session_worker.send", return_value=True) as mock_send:
             assert wake_workstream_if_pending(ws, trigger="worker-exit") is False
             assert mock_send.call_count == 0
         # Barrier fully cleared (the drain retired) — the same call
         # dispatches.
         ws._pending_drain = None
-        with patch("turnstone.core.session_worker.send", return_value=True) as mock_send:
+        with patch("pebble.core.session_worker.send", return_value=True) as mock_send:
             assert wake_workstream_if_pending(ws, trigger="drain-exit") is True
             assert mock_send.call_count == 1
 
@@ -243,7 +243,7 @@ class TestWakeWorkstreamIfPending:
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue.enqueue("watch_triggered", "output", "any")
         ws._closed = True
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             assert wake_workstream_if_pending(ws) is False
             assert mock_send.call_count == 0
 
@@ -252,7 +252,7 @@ class TestWakeWorkstreamIfPending:
         ERROR stays parked for the operator — neither gets a wake."""
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue.enqueue("watch_triggered", "output", "any")
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             for state in (
                 WorkstreamState.RUNNING,
                 WorkstreamState.THINKING,
@@ -268,7 +268,7 @@ class TestWakeWorkstreamIfPending:
         synthetic empty user turn can't drain them, so no wake."""
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue.enqueue("tool_error", "check memories", "tool")
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             assert wake_workstream_if_pending(ws) is False
             assert mock_send.call_count == 0
 
@@ -285,7 +285,7 @@ class TestWakeWorkstreamIfPending:
 
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue = MagicMock()  # truthy has_pending, no real drain
-        with patch("turnstone.core.session_worker.send") as mock_send:
+        with patch("pebble.core.session_worker.send") as mock_send:
             assert wake_workstream_if_pending(ws) is False
             assert mock_send.call_count == 0
 
@@ -298,8 +298,8 @@ class TestWakeWorkstreamIfPending:
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue.enqueue("watch_triggered", "output", "any")
         with (
-            patch("turnstone.core.session_worker.send", return_value=True) as mock_send,
-            caplog.at_level(logging.INFO, logger="turnstone.core.idle_nudge_watcher"),
+            patch("pebble.core.session_worker.send", return_value=True) as mock_send,
+            caplog.at_level(logging.INFO, logger="pebble.core.idle_nudge_watcher"),
         ):
             assert wake_workstream_if_pending(ws, trigger="idle-transition") is True
             assert mock_send.call_count == 1
@@ -325,8 +325,8 @@ class TestWakeWorkstreamIfPending:
             return True
 
         with (
-            patch("turnstone.core.session_worker.send", side_effect=_reuse_send) as mock_send,
-            caplog.at_level(logging.INFO, logger="turnstone.core.idle_nudge_watcher"),
+            patch("pebble.core.session_worker.send", side_effect=_reuse_send) as mock_send,
+            caplog.at_level(logging.INFO, logger="pebble.core.idle_nudge_watcher"),
         ):
             assert wake_workstream_if_pending(ws, trigger="idle-transition") is True
             assert mock_send.call_count == 1
@@ -346,8 +346,8 @@ class TestWakeWorkstreamIfPending:
         _mgr, ws = fake_mgr_and_ws
         ws.session._nudge_queue.enqueue("watch_triggered", "output", "any")
         with (
-            patch("turnstone.core.session_worker.send", return_value=False) as mock_send,
-            caplog.at_level(logging.INFO, logger="turnstone.core.idle_nudge_watcher"),
+            patch("pebble.core.session_worker.send", return_value=False) as mock_send,
+            caplog.at_level(logging.INFO, logger="pebble.core.idle_nudge_watcher"),
         ):
             assert wake_workstream_if_pending(ws, trigger="watch-fire") is False
             assert mock_send.call_count == 1

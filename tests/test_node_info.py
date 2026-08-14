@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from turnstone.core import node_info
-from turnstone.core.node_info import (
+from pebble.core import node_info
+from pebble.core.node_info import (
     _collect_interfaces,
     _detect_aws_metadata,
     _detect_azure_metadata,
@@ -64,7 +64,7 @@ class TestCollectNodeInfo:
 
     def test_one_field_failure_does_not_block_others(self):
         """Individual field failures must not prevent other fields from collecting."""
-        with patch("turnstone.core.node_info.socket.gethostname", side_effect=OSError("boom")):
+        with patch("pebble.core.node_info.socket.gethostname", side_effect=OSError("boom")):
             info = collect_node_info()
         assert "hostname" not in info
         # Other fields should still be present
@@ -73,7 +73,7 @@ class TestCollectNodeInfo:
         assert "python" in info
 
     def test_none_value_excluded(self):
-        with patch("turnstone.core.node_info.os.cpu_count", return_value=None):
+        with patch("pebble.core.node_info.os.cpu_count", return_value=None):
             info = collect_node_info()
         assert "cpu_count" not in info
         assert "hostname" in info
@@ -81,7 +81,7 @@ class TestCollectNodeInfo:
     def test_interface_failure_does_not_block_fields(self):
         """Interface collection failure must not prevent scalar fields."""
         with patch(
-            "turnstone.core.node_info._collect_interfaces",
+            "pebble.core.node_info._collect_interfaces",
             side_effect=RuntimeError("boom"),
         ):
             info = collect_node_info()
@@ -113,7 +113,7 @@ class TestCollectInterfaces:
 
     def test_getaddrinfo_oserror_returns_empty(self):
         with patch(
-            "turnstone.core.node_info.socket.getaddrinfo",
+            "pebble.core.node_info.socket.getaddrinfo",
             side_effect=OSError("no network"),
         ):
             result = _collect_interfaces()
@@ -126,7 +126,7 @@ class TestCollectInterfaces:
             (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0)),
             (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", 0, 0, 0)),
         ]
-        with patch("turnstone.core.node_info.socket.getaddrinfo", return_value=mock_addrs):
+        with patch("pebble.core.node_info.socket.getaddrinfo", return_value=mock_addrs):
             result = _collect_interfaces()
         assert result == {}
 
@@ -564,14 +564,14 @@ class TestDetectCloudMetadata:
         assert result == {"cloud_provider": "aws"}
 
     def test_opt_out_skips_imds_but_keeps_provider(self, monkeypatch):
-        """``TURNSTONE_AUTO_CLOUD_METADATA=0`` skips the network probe
+        """``PEBBLE_AUTO_CLOUD_METADATA=0`` skips the network probe
         entirely.  ``cloud_provider`` from DMI still populates because
         it's a kernel interface, not a network call."""
-        monkeypatch.setenv("TURNSTONE_AUTO_CLOUD_METADATA", "0")
+        monkeypatch.setenv("PEBBLE_AUTO_CLOUD_METADATA", "0")
         monkeypatch.setattr(node_info, "_detect_cloud_provider_from_dmi", lambda: "gcp")
 
         def _imds_should_not_run(*a, **kw):
-            pytest.fail("IMDS probe must not run when TURNSTONE_AUTO_CLOUD_METADATA=0")
+            pytest.fail("IMDS probe must not run when PEBBLE_AUTO_CLOUD_METADATA=0")
 
         monkeypatch.setattr(node_info, "_imds_get", _imds_should_not_run)
         result = _detect_cloud_metadata()
@@ -733,7 +733,7 @@ class TestIMDSFieldSanitiser:
         assert out == "us-east-1 injected"
 
     def test_caps_length(self):
-        from turnstone.core.node_info import _IMDS_MAX_FIELD_CHARS
+        from pebble.core.node_info import _IMDS_MAX_FIELD_CHARS
 
         out = _imds_field("X" * (_IMDS_MAX_FIELD_CHARS * 4))
         assert out is not None

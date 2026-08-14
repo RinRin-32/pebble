@@ -20,14 +20,14 @@ from pathlib import Path
 import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
-_SHARED = _ROOT / "turnstone/shared_static"
+_SHARED = _ROOT / "pebble/shared_static"
 _SHELL_JS = _SHARED / "shell.js"
 _PANE_JS = _SHARED / "pane.js"
 _SHELL_CSS = _SHARED / "shell.css"
-_CONSOLE_INDEX = _ROOT / "turnstone/console/static/index.html"
-_CONSOLE_APP = _ROOT / "turnstone/console/static/app.js"
-_CONSOLE_ADMIN = _ROOT / "turnstone/console/static/admin.js"
-_UI_INDEX = _ROOT / "turnstone/ui/static/index.html"
+_CONSOLE_INDEX = _ROOT / "pebble/console/static/index.html"
+_CONSOLE_APP = _ROOT / "pebble/console/static/app.js"
+_CONSOLE_ADMIN = _ROOT / "pebble/console/static/admin.js"
+_UI_INDEX = _ROOT / "pebble/ui/static/index.html"
 
 _RAIL_JS = _SHARED / "rail.js"
 
@@ -159,7 +159,7 @@ def test_console_index_loads_shell_module_and_caps() -> None:
         "console index must load the shell ES module"
     )
     assert "/shared/shell.css" in body, "console index must link shell.css"
-    assert "TURNSTONE_SHELL_CAPS" in body, "console index must set the shell capability flags"
+    assert "PEBBLE_SHELL_CAPS" in body, "console index must set the shell capability flags"
 
 
 def test_persona_picker_surfaces_wired() -> None:
@@ -904,7 +904,7 @@ def test_pane_manager_split_engine() -> None:
     assert ".panes > section.pane" in css
     # pane-hosted coordinator sidebar drops below the chip's corner lane —
     # the chip sat exactly on the Children refresh button (user report)
-    coord_chrome = (_ROOT / "turnstone/console/static/coordinator/coord-chrome.css").read_text(
+    coord_chrome = (_ROOT / "pebble/console/static/coordinator/coord-chrome.css").read_text(
         encoding="utf-8"
     )
     assert ".pane-body.coord-chrome-root #coord-sidebar.sidebar" in coord_chrome
@@ -1042,7 +1042,7 @@ def test_coordinator_pane_reconnects_on_reopen() -> None:
     assert "this._ctl.reconnect()" in shell, (
         "the coordinator pane's onReopen must drive the controller's reconnect"
     )
-    coord = (_ROOT / "turnstone/console/static/coordinator/coordinator.js").read_text(
+    coord = (_ROOT / "pebble/console/static/coordinator/coordinator.js").read_text(
         encoding="utf-8"
     )
     assert "function reconnect()" in coord

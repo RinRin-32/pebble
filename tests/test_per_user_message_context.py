@@ -20,10 +20,10 @@ import json
 from unittest.mock import MagicMock, patch
 
 from tests._session_helpers import make_session
-from turnstone.core import fence
-from turnstone.core.session import _prefix_sender_label
-from turnstone.core.storage._utils import reconstruct_turns
-from turnstone.core.trajectory import Role, turn_from_dict, turn_to_dict
+from pebble.core import fence
+from pebble.core.session import _prefix_sender_label
+from pebble.core.storage._utils import reconstruct_turns
+from pebble.core.trajectory import Role, turn_from_dict, turn_to_dict
 
 
 def _authentic_label(name: str, nonce: str) -> str:
@@ -73,7 +73,7 @@ def test_reconstruct_user_row_without_meta_has_no_sender():
 def test_append_stamps_and_persists_acting_user():
     s = make_session(user_id="owner")
     s._acting_user_id = "alice"  # a member drives this turn (bind_acting_user result)
-    with patch("turnstone.core.session.save_message", return_value=1) as sm:
+    with patch("pebble.core.session.save_message", return_value=1) as sm:
         s._append_user_turn("hello", ())
     assert sm.call_args.kwargs["meta"] == json.dumps({"sender": "alice"})
     assert s.messages[-1].meta.extra.get("sender") == "alice"
@@ -81,7 +81,7 @@ def test_append_stamps_and_persists_acting_user():
 
 def test_append_owner_turn_stamps_owner():
     s = make_session(user_id="owner")  # acting id empty -> effective = owner
-    with patch("turnstone.core.session.save_message", return_value=1) as sm:
+    with patch("pebble.core.session.save_message", return_value=1) as sm:
         s._append_user_turn("hello", ())
     assert sm.call_args.kwargs["meta"] == json.dumps({"sender": "owner"})
 
@@ -89,7 +89,7 @@ def test_append_owner_turn_stamps_owner():
 def test_append_synthetic_turn_is_unstamped():
     s = make_session(user_id="owner")
     s._acting_user_id = "alice"
-    with patch("turnstone.core.session.save_message", return_value=1) as sm:
+    with patch("pebble.core.session.save_message", return_value=1) as sm:
         s._append_user_turn("resuming", (), source="compaction_resume")
     assert sm.call_args.kwargs["meta"] is None
     assert "sender" not in s.messages[-1].meta.extra
@@ -179,7 +179,7 @@ def test_shared_state_labels_even_when_slice_has_single_sender():
     s = make_session(user_id="owner")
     s._shared_workstream = True
     msgs = [{"role": "user", "content": "only alice remains", "_sender": "alice"}]
-    with patch("turnstone.core.session.get_storage", return_value=None):
+    with patch("pebble.core.session.get_storage", return_value=None):
         out = s._inject_sender_labels(msgs)
     assert out is not msgs
     assert (
@@ -197,7 +197,7 @@ def test_shared_labels_every_sender_turn():
         {"role": "assistant", "content": "hi"},
         {"role": "user", "content": "from member", "_sender": "alice"},
     ]
-    with patch("turnstone.core.session.get_storage", return_value=None):
+    with patch("pebble.core.session.get_storage", return_value=None):
         out = s._inject_sender_labels(msgs)
     assert out is not msgs
     assert out[0]["content"] == f"{_authentic_label('owner', s._sender_label_nonce)}\nfrom owner"
@@ -219,7 +219,7 @@ def test_inject_resolves_each_sender_once_per_call_on_error_path():
         {"role": "user", "content": "b", "_sender": "alice-id"},
         {"role": "user", "content": "c", "_sender": "alice-id"},
     ]
-    with patch("turnstone.core.session.get_storage", return_value=fake):
+    with patch("pebble.core.session.get_storage", return_value=fake):
         s._inject_sender_labels(msgs)
     fake.get_user.assert_called_once()  # once per distinct sender, not per turn
 
@@ -231,7 +231,7 @@ def test_shared_leaves_synthetic_unlabeled():
         {"role": "user", "content": "hey", "_sender": "alice"},
         {"role": "user", "content": "", "_source": "wake"},  # synthetic: no _sender
     ]
-    with patch("turnstone.core.session.get_storage", return_value=None):
+    with patch("pebble.core.session.get_storage", return_value=None):
         out = s._inject_sender_labels(msgs)
     assert out[2]["content"] == ""  # untouched -> still drops as an empty wire turn
 
@@ -248,7 +248,7 @@ def test_resolve_display_name_others_via_storage_and_caches():
     s = make_session(user_id="owner")
     fake = MagicMock()
     fake.get_user.return_value = {"username": "alice@example", "display_name": "Alice"}
-    with patch("turnstone.core.session.get_storage", return_value=fake):
+    with patch("pebble.core.session.get_storage", return_value=fake):
         assert s._resolve_display_name("alice-id") == "alice@example"
         assert s._resolve_display_name("alice-id") == "alice@example"  # cache hit
     fake.get_user.assert_called_once()  # second lookup served from cache
@@ -258,7 +258,7 @@ def test_resolve_display_name_falls_back_to_id_when_unknown():
     s = make_session(user_id="owner")
     fake = MagicMock()
     fake.get_user.return_value = None
-    with patch("turnstone.core.session.get_storage", return_value=fake):
+    with patch("pebble.core.session.get_storage", return_value=fake):
         assert s._resolve_display_name("ghost-id") == "ghost-id"
 
 
@@ -268,7 +268,7 @@ def test_resolve_display_name_retries_after_transient_storage_error():
     s = make_session(user_id="owner")
     fake = MagicMock()
     fake.get_user.side_effect = [RuntimeError("storage down"), {"username": "alice@example"}]
-    with patch("turnstone.core.session.get_storage", return_value=fake):
+    with patch("pebble.core.session.get_storage", return_value=fake):
         assert s._resolve_display_name("alice-id") == "alice-id"  # error -> raw id, uncached
         assert s._resolve_display_name("alice-id") == "alice@example"  # retried, resolved
     assert fake.get_user.call_count == 2
@@ -285,7 +285,7 @@ def test_labels_render_resolved_usernames():
         {"role": "user", "content": "a", "_sender": "owner"},
         {"role": "user", "content": "b", "_sender": "alice-id"},
     ]
-    with patch("turnstone.core.session.get_storage", return_value=fake):
+    with patch("pebble.core.session.get_storage", return_value=fake):
         out = s._inject_sender_labels(msgs)
     n = s._sender_label_nonce
     assert out[0]["content"] == f"{_authentic_label('owner@example', n)}\na"
@@ -297,7 +297,7 @@ def test_labels_render_resolved_usernames():
 
 def test_recompute_shared_state_from_history():
     s = make_session(user_id="owner")
-    with patch("turnstone.core.session.get_storage", return_value=None):
+    with patch("pebble.core.session.get_storage", return_value=None):
         s.messages.append(turn_from_dict({"role": "user", "content": "a", "_sender": "owner"}))
         s._invalidate_shared_state()  # what _append_user_turn does for stamped turns
         s._recompute_shared_state()
@@ -314,7 +314,7 @@ def test_shared_state_latches_and_senders_never_shrink():
     # turns were summarized away must stay known (no duplicate join note) and
     # the workstream must stay shared (no banner flip, no prefix-cache churn).
     s = make_session(user_id="owner")
-    with patch("turnstone.core.session.get_storage", return_value=None):
+    with patch("pebble.core.session.get_storage", return_value=None):
         s.messages.append(turn_from_dict({"role": "user", "content": "a", "_sender": "alice"}))
         s._invalidate_shared_state()
         s._recompute_shared_state()
@@ -338,7 +338,7 @@ def test_recompute_unions_persisted_senders_once():
     s._reset_shared_state()  # the state resume() leaves behind
     fake = MagicMock()
     fake.list_message_senders.return_value = ["alice"]
-    with patch("turnstone.core.session.get_storage", return_value=fake):
+    with patch("pebble.core.session.get_storage", return_value=fake):
         s._recompute_shared_state()
         assert s._shared_workstream is True
         assert "alice" in s._known_senders
@@ -354,7 +354,7 @@ def test_persisted_sender_read_retries_after_storage_error():
     s._reset_shared_state()
     fake = MagicMock()
     fake.list_message_senders.side_effect = [RuntimeError("storage down"), ["alice"]]
-    with patch("turnstone.core.session.get_storage", return_value=fake):
+    with patch("pebble.core.session.get_storage", return_value=fake):
         s._recompute_shared_state()  # error -> degraded this turn, not cached
         assert s._shared_workstream is False
         s._invalidate_shared_state()  # next user turn
@@ -367,7 +367,7 @@ def test_recompute_is_memoized_per_turn():
     # _init_system_messages fires many times within a turn; between user-turn
     # appends the recompute is a no-op flag check, not an O(n) rescan.
     s = make_session(user_id="owner")
-    with patch("turnstone.core.session.get_storage", return_value=None):
+    with patch("pebble.core.session.get_storage", return_value=None):
         s._reset_shared_state()
         s._recompute_shared_state()
         s.messages.append(turn_from_dict({"role": "user", "content": "b", "_sender": "alice"}))
@@ -381,7 +381,7 @@ def test_recompute_is_memoized_per_turn():
 def test_append_user_turn_invalidates_shared_state():
     s = make_session(user_id="owner")
     s._acting_user_id = "alice"
-    with patch("turnstone.core.session.save_message", return_value=1):
+    with patch("pebble.core.session.save_message", return_value=1):
         s._senders_dirty = False
         s._append_user_turn("hello", ())
     assert s._senders_dirty is True
@@ -400,7 +400,7 @@ def test_new_participant_flips_shared_and_emits_join_note_once():
     s._invalidate_shared_state()
     with (
         patch.object(s, "_init_system_messages") as recompose,
-        patch("turnstone.core.session.get_storage", return_value=None),
+        patch("pebble.core.session.get_storage", return_value=None),
     ):
         s._maybe_note_new_participant("alice")
     assert s._shared_workstream is True
@@ -433,8 +433,8 @@ def test_resume_resets_shared_state():
     s._shared_workstream = True
     turns = [turn_from_dict({"role": "user", "content": "x", "_sender": "owner"})]
     with (
-        patch("turnstone.core.session.load_message_turns", return_value=turns),
-        patch("turnstone.core.session.get_storage", return_value=None),
+        patch("pebble.core.session.load_message_turns", return_value=turns),
+        patch("pebble.core.session.get_storage", return_value=None),
         patch.object(s, "_reset_shared_state", wraps=s._reset_shared_state) as rst,
         patch.object(s, "_save_config"),
         patch.object(s, "_init_system_messages"),
@@ -454,9 +454,9 @@ def test_fork_persists_sender_meta():
         turn_from_dict({"role": "assistant", "content": "yo"}),
     ]
     with (
-        patch("turnstone.core.session.load_message_turns", return_value=turns),
-        patch("turnstone.core.session.save_messages_bulk") as bulk,
-        patch("turnstone.core.session.get_storage", return_value=None),
+        patch("pebble.core.session.load_message_turns", return_value=turns),
+        patch("pebble.core.session.save_messages_bulk") as bulk,
+        patch("pebble.core.session.get_storage", return_value=None),
         patch.object(s, "_save_config"),
         patch.object(s, "_init_system_messages"),
     ):
@@ -479,8 +479,8 @@ def test_resume_recovers_compacted_out_sender_end_to_end(tmp_db, mock_openai_cli
     # setup (turns_from_dicts + _compact_messages + a fresh resume()).
     from unittest.mock import patch as _patch
 
-    from turnstone.core.memory import register_workstream, save_message
-    from turnstone.core.trajectory import turns_from_dicts
+    from pebble.core.memory import register_workstream, save_message
+    from pebble.core.trajectory import turns_from_dicts
 
     ws = "ws-e2e-compact"
     register_workstream(ws, user_id="owner", name="t")
@@ -521,7 +521,7 @@ def test_shared_banner_is_terse_owner_plus_flag():
     # CONTEXT stays a terse facts block: owner named + a factual shared flag,
     # with the behavioural rules (attribution, tool credentials, label format)
     # deferred to build_shared_workstream_declaration — not stuffed in here.
-    from turnstone.prompts import SessionContext, WorkstreamKind, _build_context
+    from pebble.prompts import SessionContext, WorkstreamKind, _build_context
 
     shared = _build_context(
         SessionContext(current_datetime="t", timezone="UTC", username="owner@x", shared=True),
@@ -541,7 +541,7 @@ def test_shared_banner_is_terse_owner_plus_flag():
 
 
 def test_shared_workstream_declaration_carries_nonce_and_narrow_creds():
-    from turnstone.prompts import build_shared_workstream_declaration
+    from pebble.prompts import build_shared_workstream_declaration
 
     out = build_shared_workstream_declaration("abc123")
     # authentic-label markers carry the exact session token
@@ -559,7 +559,7 @@ def test_shared_workstream_declaration_carries_nonce_and_narrow_creds():
 
 
 def test_context_surfaces_workstream_and_project_ids():
-    from turnstone.prompts import SessionContext, WorkstreamKind, _build_context
+    from pebble.prompts import SessionContext, WorkstreamKind, _build_context
 
     out = _build_context(
         SessionContext(
@@ -579,7 +579,7 @@ def test_context_surfaces_workstream_and_project_ids():
 
 
 def test_context_omits_ids_when_absent():
-    from turnstone.prompts import SessionContext, WorkstreamKind, _build_context
+    from pebble.prompts import SessionContext, WorkstreamKind, _build_context
 
     out = _build_context(
         SessionContext(current_datetime="t", timezone="UTC", username="owner@x"),

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone.core.session import ChatSession
-from turnstone.core.trajectory import turns_from_dicts
+from pebble.core.session import ChatSession
+from pebble.core.trajectory import turns_from_dicts
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -171,7 +171,7 @@ class TestContextOverflowRecovery:
             patch.object(session, "_update_token_table"),
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("hello")
 
@@ -204,7 +204,7 @@ class TestContextOverflowRecovery:
             patch.object(session, "_update_token_table"),
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("hello")
 
@@ -222,7 +222,7 @@ class TestContextOverflowRecovery:
             ),
             patch.object(session, "_full_messages", return_value=[]),
             patch.object(session, "_emit_state"),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
             pytest.raises(Exception, match="authentication failed"),
         ):
             session.send("hello")
@@ -240,7 +240,7 @@ class TestContextOverflowRecovery:
             patch.object(session, "_compact_messages", side_effect=RuntimeError("compact failed")),
             patch.object(session, "_full_messages", return_value=[]),
             patch.object(session, "_emit_state"),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
             pytest.raises(Exception, match="maximum context length exceeded"),
         ):
             session.send("hello")

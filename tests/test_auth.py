@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.auth — bearer token authentication and cookies."""
+"""Tests for pebble.core.auth — bearer token authentication and cookies."""
 
 import os
 import queue
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from turnstone.core.auth import (
+from pebble.core.auth import (
     AUTH_COOKIE,
     AUTH_COOKIE_CONSOLE,
     AUTH_COOKIE_SERVER,
@@ -830,9 +830,9 @@ class TestServerAuth:
 
         from starlette.testclient import TestClient
 
-        import turnstone.server as srv_mod
-        from turnstone.core.metrics import MetricsCollector
-        from turnstone.core.workstream import WorkstreamState
+        import pebble.server as srv_mod
+        from pebble.core.metrics import MetricsCollector
+        from pebble.core.workstream import WorkstreamState
 
         srv_mod._metrics = MetricsCollector()
         srv_mod._metrics.model = "test-model"
@@ -855,7 +855,7 @@ class TestServerAuth:
         mock_mgr.list_all.return_value = [mock_ws]
         mock_mgr.max_active = 10
 
-        from turnstone.core.auth import JWT_AUD_SERVER
+        from pebble.core.auth import JWT_AUD_SERVER
 
         cls._jwt_secret = "test-jwt-secret-minimum-32-chars!"
         cls._read_hdr = {
@@ -976,8 +976,8 @@ class TestConsoleAuth:
 
         from starlette.testclient import TestClient
 
-        from turnstone.console.collector import ClusterCollector
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.collector import ClusterCollector
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
 
@@ -989,7 +989,7 @@ class TestConsoleAuth:
             "aggregate": {"total_tokens": 100},
         }
 
-        from turnstone.core.auth import JWT_AUD_CONSOLE
+        from pebble.core.auth import JWT_AUD_CONSOLE
 
         cls._jwt_secret = "test-jwt-secret-minimum-32-chars!"
         cls._read_hdr = {
@@ -1052,9 +1052,9 @@ class TestServerLogin:
 
         from starlette.testclient import TestClient
 
-        import turnstone.server as srv_mod
-        from turnstone.core.metrics import MetricsCollector
-        from turnstone.core.workstream import WorkstreamState
+        import pebble.server as srv_mod
+        from pebble.core.metrics import MetricsCollector
+        from pebble.core.workstream import WorkstreamState
 
         srv_mod._metrics = MetricsCollector()
         srv_mod._metrics.model = "test-model"
@@ -1078,7 +1078,7 @@ class TestServerLogin:
         mock_mgr.max_active = 10
 
         # Mock storage with a test user for password login
-        from turnstone.core.auth import hash_password
+        from pebble.core.auth import hash_password
 
         mock_storage = MagicMock()
         mock_storage.get_user_by_username.side_effect = lambda u: (
@@ -1342,9 +1342,9 @@ class TestConsoleLogin:
 
         from starlette.testclient import TestClient
 
-        from turnstone.console.collector import ClusterCollector
-        from turnstone.console.server import _load_static, create_app
-        from turnstone.core.auth import hash_password
+        from pebble.console.collector import ClusterCollector
+        from pebble.console.server import _load_static, create_app
+        from pebble.core.auth import hash_password
 
         _load_static()
 
@@ -1432,7 +1432,7 @@ class TestConsoleLogin:
 
 class TestLoginRateLimiter:
     def test_allows_under_limit(self):
-        from turnstone.core.auth import LoginRateLimiter
+        from pebble.core.auth import LoginRateLimiter
 
         limiter = LoginRateLimiter(max_attempts=3, window_seconds=60)
         for _ in range(3):
@@ -1445,7 +1445,7 @@ class TestLoginRateLimiter:
         assert retry > 0
 
     def test_different_keys_independent(self):
-        from turnstone.core.auth import LoginRateLimiter
+        from pebble.core.auth import LoginRateLimiter
 
         limiter = LoginRateLimiter(max_attempts=2, window_seconds=60)
         limiter.record("ip:a")
@@ -1456,7 +1456,7 @@ class TestLoginRateLimiter:
         assert ok_b
 
     def test_cleanup(self):
-        from turnstone.core.auth import LoginRateLimiter
+        from pebble.core.auth import LoginRateLimiter
 
         limiter = LoginRateLimiter(max_attempts=1, window_seconds=60)
         limiter.record("ip:old")
@@ -1466,7 +1466,7 @@ class TestLoginRateLimiter:
         assert ok
 
     def test_max_keys_protection(self):
-        from turnstone.core.auth import LoginRateLimiter
+        from pebble.core.auth import LoginRateLimiter
 
         limiter = LoginRateLimiter(max_attempts=5, window_seconds=60)
         limiter.MAX_KEYS = 2
@@ -1482,7 +1482,7 @@ class TestJWTAudienceIssuer:
     def test_create_jwt_includes_iss(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import JWT_ISSUER, create_jwt
+        from pebble.core.auth import JWT_ISSUER, create_jwt
 
         token = create_jwt("user1", frozenset({"read"}), "test", self.SECRET)
         payload = pyjwt.decode(
@@ -1493,7 +1493,7 @@ class TestJWTAudienceIssuer:
     def test_create_jwt_with_audience(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
+        from pebble.core.auth import JWT_AUD_SERVER, create_jwt
 
         token = create_jwt(
             "user1", frozenset({"read"}), "test", self.SECRET, audience=JWT_AUD_SERVER
@@ -1502,7 +1502,7 @@ class TestJWTAudienceIssuer:
         assert payload["aud"] == JWT_AUD_SERVER
 
     def test_validate_jwt_wrong_audience_rejected(self):
-        from turnstone.core.auth import JWT_AUD_CONSOLE, JWT_AUD_SERVER, create_jwt, validate_jwt
+        from pebble.core.auth import JWT_AUD_CONSOLE, JWT_AUD_SERVER, create_jwt, validate_jwt
 
         token = create_jwt(
             "user1", frozenset({"read"}), "test", self.SECRET, audience=JWT_AUD_SERVER
@@ -1511,7 +1511,7 @@ class TestJWTAudienceIssuer:
         assert result is None
 
     def test_validate_jwt_correct_audience_accepted(self):
-        from turnstone.core.auth import JWT_AUD_SERVER, create_jwt, validate_jwt
+        from pebble.core.auth import JWT_AUD_SERVER, create_jwt, validate_jwt
 
         token = create_jwt(
             "user1", frozenset({"read"}), "test", self.SECRET, audience=JWT_AUD_SERVER
@@ -1521,7 +1521,7 @@ class TestJWTAudienceIssuer:
         assert result.user_id == "user1"
 
     def test_validate_jwt_no_audience_backward_compat(self):
-        from turnstone.core.auth import create_jwt, validate_jwt
+        from pebble.core.auth import create_jwt, validate_jwt
 
         # Token without aud claim should be accepted when audience="" (backward compat)
         token = create_jwt("user1", frozenset({"read"}), "test", self.SECRET)
@@ -1534,7 +1534,7 @@ class TestJWTAudienceIssuer:
 
         import jwt as pyjwt
 
-        from turnstone.core.auth import JWT_ISSUER, validate_jwt
+        from pebble.core.auth import JWT_ISSUER, validate_jwt
 
         # Mint a token that "expired" 10 seconds ago — still within 30s leeway.
         now = int(time.time())
@@ -1560,7 +1560,7 @@ class TestJWTAudienceIssuer:
 
         import jwt as pyjwt
 
-        from turnstone.core.auth import JWT_ISSUER, validate_jwt
+        from pebble.core.auth import JWT_ISSUER, validate_jwt
 
         now = int(time.time())
         token = pyjwt.encode(
@@ -1581,7 +1581,7 @@ class TestJWTAudienceIssuer:
     def test_create_jwt_expiry_seconds(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import create_jwt
+        from pebble.core.auth import create_jwt
 
         token = create_jwt("user1", frozenset({"read"}), "test", self.SECRET, expiry_seconds=300)
         payload = pyjwt.decode(
@@ -1592,7 +1592,7 @@ class TestJWTAudienceIssuer:
     def test_create_jwt_expiry_seconds_overrides_hours(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import create_jwt
+        from pebble.core.auth import create_jwt
 
         token = create_jwt(
             "user1",
@@ -1611,7 +1611,7 @@ class TestJWTAudienceIssuer:
     def test_create_jwt_expiry_seconds_rejects_zero(self):
         import pytest
 
-        from turnstone.core.auth import create_jwt
+        from pebble.core.auth import create_jwt
 
         with pytest.raises(ValueError, match="expiry_seconds must be positive"):
             create_jwt("user1", frozenset({"read"}), "test", self.SECRET, expiry_seconds=0)
@@ -1619,7 +1619,7 @@ class TestJWTAudienceIssuer:
     def test_create_jwt_expiry_seconds_rejects_negative(self):
         import pytest
 
-        from turnstone.core.auth import create_jwt
+        from pebble.core.auth import create_jwt
 
         with pytest.raises(ValueError, match="expiry_seconds must be positive"):
             create_jwt("user1", frozenset({"read"}), "test", self.SECRET, expiry_seconds=-1)
@@ -1631,7 +1631,7 @@ class TestJWTVersionClaim:
     def test_create_jwt_with_version(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import create_jwt
+        from pebble.core.auth import create_jwt
 
         token = create_jwt("user1", frozenset({"read"}), "test", self.SECRET, version="1.2")
         payload = pyjwt.decode(
@@ -1642,7 +1642,7 @@ class TestJWTVersionClaim:
     def test_create_jwt_without_version(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import create_jwt
+        from pebble.core.auth import create_jwt
 
         token = create_jwt("user1", frozenset({"read"}), "test", self.SECRET)
         payload = pyjwt.decode(
@@ -1651,7 +1651,7 @@ class TestJWTVersionClaim:
         assert "ver" not in payload
 
     def test_validate_jwt_carries_token_version(self):
-        from turnstone.core.auth import create_jwt, validate_jwt
+        from pebble.core.auth import create_jwt, validate_jwt
 
         token = create_jwt("user1", frozenset({"read"}), "test", self.SECRET, version="1.2")
         result = validate_jwt(token, self.SECRET)
@@ -1660,7 +1660,7 @@ class TestJWTVersionClaim:
         assert result.token_version == "1.2"
 
     def test_validate_jwt_no_ver_returns_empty_token_version(self):
-        from turnstone.core.auth import create_jwt, validate_jwt
+        from pebble.core.auth import create_jwt, validate_jwt
 
         token = create_jwt("user1", frozenset({"read"}), "test", self.SECRET)
         result = validate_jwt(token, self.SECRET)
@@ -1668,7 +1668,7 @@ class TestJWTVersionClaim:
         assert result.token_version == ""
 
     def test_check_request_accepts_matching_version(self):
-        from turnstone.core.auth import JWT_AUD_SERVER, check_request, create_jwt
+        from pebble.core.auth import JWT_AUD_SERVER, check_request, create_jwt
 
         token = create_jwt(
             "user1",
@@ -1691,7 +1691,7 @@ class TestJWTVersionClaim:
         assert result is not None
 
     def test_check_request_accepts_no_ver_backward_compat(self):
-        from turnstone.core.auth import JWT_AUD_SERVER, check_request, create_jwt
+        from pebble.core.auth import JWT_AUD_SERVER, check_request, create_jwt
 
         # Token without ver claim should be accepted (backward compat)
         token = create_jwt(
@@ -1713,7 +1713,7 @@ class TestJWTVersionClaim:
         assert allowed
 
     def test_check_request_rejects_old_version_jwt(self):
-        from turnstone.core.auth import JWT_AUD_SERVER, check_request, create_jwt
+        from pebble.core.auth import JWT_AUD_SERVER, check_request, create_jwt
 
         token = create_jwt(
             "user1",
@@ -1739,7 +1739,7 @@ class TestJWTVersionClaim:
 
 class TestVersionSlot:
     def test_returns_major_minor(self):
-        from turnstone.core.auth import jwt_version_slot
+        from pebble.core.auth import jwt_version_slot
 
         slot = jwt_version_slot()
         parts = slot.split(".")
@@ -1748,8 +1748,8 @@ class TestVersionSlot:
     def test_strips_patch_and_prerelease(self):
         from unittest.mock import patch
 
-        with patch("turnstone.__version__", "2.3.1a5"):
-            from turnstone.core.auth import jwt_version_slot
+        with patch("pebble.__version__", "2.3.1a5"):
+            from pebble.core.auth import jwt_version_slot
 
             assert jwt_version_slot() == "2.3"
 
@@ -1758,7 +1758,7 @@ class TestServiceTokenManager:
     SECRET = "test-secret-that-is-at-least-32-chars"
 
     def test_auto_mints_on_first_access(self):
-        from turnstone.core.auth import ServiceTokenManager
+        from pebble.core.auth import ServiceTokenManager
 
         mgr = ServiceTokenManager(
             user_id="svc",
@@ -1771,7 +1771,7 @@ class TestServiceTokenManager:
         assert isinstance(token, str)
 
     def test_bearer_header_format(self):
-        from turnstone.core.auth import ServiceTokenManager
+        from pebble.core.auth import ServiceTokenManager
 
         mgr = ServiceTokenManager(
             user_id="svc",
@@ -1784,7 +1784,7 @@ class TestServiceTokenManager:
         assert header["Authorization"].startswith("Bearer ")
 
     def test_token_stable_within_window(self):
-        from turnstone.core.auth import ServiceTokenManager
+        from pebble.core.auth import ServiceTokenManager
 
         mgr = ServiceTokenManager(
             user_id="svc",
@@ -1798,7 +1798,7 @@ class TestServiceTokenManager:
         assert t1 == t2
 
     def test_token_rotates_near_expiry(self):
-        from turnstone.core.auth import ServiceTokenManager
+        from pebble.core.auth import ServiceTokenManager
 
         mgr = ServiceTokenManager(
             user_id="svc",
@@ -1819,7 +1819,7 @@ class TestServiceTokenManager:
     def test_audience_included(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import JWT_AUD_SERVER, ServiceTokenManager
+        from pebble.core.auth import JWT_AUD_SERVER, ServiceTokenManager
 
         mgr = ServiceTokenManager(
             user_id="svc",
@@ -1836,7 +1836,7 @@ class TestServiceTokenManager:
     def test_service_token_no_version_claim(self):
         import jwt as pyjwt
 
-        from turnstone.core.auth import ServiceTokenManager
+        from pebble.core.auth import ServiceTokenManager
 
         mgr = ServiceTokenManager(
             user_id="svc",
@@ -1852,42 +1852,42 @@ class TestServiceTokenManager:
 
 class TestIsSecureRequest:
     def test_https_scheme(self):
-        from turnstone.core.auth import is_secure_request
+        from pebble.core.auth import is_secure_request
 
         assert is_secure_request({}, scheme="https") is True
 
     def test_http_scheme(self):
-        from turnstone.core.auth import is_secure_request
+        from pebble.core.auth import is_secure_request
 
         assert is_secure_request({}, scheme="http") is False
 
     def test_x_forwarded_proto_https(self):
-        from turnstone.core.auth import is_secure_request
+        from pebble.core.auth import is_secure_request
 
         assert is_secure_request({"x-forwarded-proto": "https"}, scheme="http") is True
 
     def test_x_forwarded_proto_http(self):
-        from turnstone.core.auth import is_secure_request
+        from pebble.core.auth import is_secure_request
 
         assert is_secure_request({"x-forwarded-proto": "http"}, scheme="http") is False
 
 
 class TestSecretStrength:
     def test_short_secret_exits(self):
-        old = os.environ.get("TURNSTONE_JWT_SECRET", "")
-        os.environ["TURNSTONE_JWT_SECRET"] = "short"
+        old = os.environ.get("PEBBLE_JWT_SECRET", "")
+        os.environ["PEBBLE_JWT_SECRET"] = "short"
         try:
             with pytest.raises(SystemExit):
                 load_jwt_secret()
         finally:
             if old:
-                os.environ["TURNSTONE_JWT_SECRET"] = old
+                os.environ["PEBBLE_JWT_SECRET"] = old
             else:
-                os.environ.pop("TURNSTONE_JWT_SECRET", None)
+                os.environ.pop("PEBBLE_JWT_SECRET", None)
 
     def test_missing_secret_exits(self):
         with (
-            patch("turnstone.core.config.load_config", return_value={}),
+            patch("pebble.core.config.load_config", return_value={}),
             patch.dict(os.environ, {}, clear=True),
             pytest.raises(SystemExit),
         ):
@@ -1901,7 +1901,7 @@ class TestCorsConfigurable:
         """Without cors_origins, no Access-Control headers."""
         from starlette.testclient import TestClient
 
-        import turnstone.server as srv_mod
+        import pebble.server as srv_mod
 
         mgr = MagicMock()
         mgr.list_all.return_value = []
@@ -1922,7 +1922,7 @@ class TestCorsConfigurable:
         """With cors_origins, CORS headers are present."""
         from starlette.testclient import TestClient
 
-        import turnstone.server as srv_mod
+        import pebble.server as srv_mod
 
         mgr = MagicMock()
         mgr.list_all.return_value = []
@@ -1951,26 +1951,26 @@ class TestCorsConfigurable:
 
 class TestVerifyPassword:
     def test_valid_bcrypt_hash(self):
-        from turnstone.core.auth import hash_password, verify_password
+        from pebble.core.auth import hash_password, verify_password
 
         hashed = hash_password("mypassword")
         assert verify_password("mypassword", hashed) is True
         assert verify_password("wrongpassword", hashed) is False
 
     def test_oidc_sentinel_rejected(self):
-        from turnstone.core.auth import verify_password
+        from pebble.core.auth import verify_password
 
         # OIDC sentinel must return False, not crash with ValueError
         assert verify_password("anypassword", "!oidc") is False
 
     def test_non_bcrypt_hash_rejected(self):
-        from turnstone.core.auth import verify_password
+        from pebble.core.auth import verify_password
 
         assert verify_password("password", "not_a_hash") is False
         assert verify_password("password", "") is False
 
     def test_empty_password_against_oidc_sentinel(self):
-        from turnstone.core.auth import verify_password
+        from pebble.core.auth import verify_password
 
         assert verify_password("", "!oidc") is False
 
@@ -2006,7 +2006,7 @@ class TestRequirePermissionServiceScope:
 
     def test_service_scope_bypasses_permission(self):
         """Service-scoped tokens bypass all permission checks (returns None)."""
-        from turnstone.core.auth import AuthResult, require_permission
+        from pebble.core.auth import AuthResult, require_permission
 
         auth = AuthResult(
             user_id="svc-agent",
@@ -2019,7 +2019,7 @@ class TestRequirePermissionServiceScope:
 
     def test_without_service_scope_and_without_permission_returns_403(self):
         """Non-service tokens without the required permission get 403."""
-        from turnstone.core.auth import AuthResult, require_permission
+        from pebble.core.auth import AuthResult, require_permission
 
         auth = AuthResult(
             user_id="regular-user",
@@ -2033,7 +2033,7 @@ class TestRequirePermissionServiceScope:
 
     def test_without_service_scope_with_permission_returns_none(self):
         """Non-service tokens with the required permission pass."""
-        from turnstone.core.auth import AuthResult, require_permission
+        from pebble.core.auth import AuthResult, require_permission
 
         auth = AuthResult(
             user_id="admin-user",
@@ -2047,7 +2047,7 @@ class TestRequirePermissionServiceScope:
 
     def test_no_auth_result_returns_401(self):
         """Missing auth_result on request state returns 401."""
-        from turnstone.core.auth import require_permission
+        from pebble.core.auth import require_permission
 
         request = MagicMock()
         del request.state.auth_result  # ensure attribute is absent
@@ -2072,14 +2072,14 @@ class TestUserHasPermission:
     """
 
     def test_returns_true_when_user_holds_permission(self):
-        from turnstone.core.auth import user_has_permission
+        from pebble.core.auth import user_has_permission
 
         storage = MagicMock()
         storage.get_user_permissions.return_value = {"model.skills.write", "read"}
         assert user_has_permission("alice", "model.skills.write", storage=storage) is True
 
     def test_returns_false_when_user_lacks_permission(self):
-        from turnstone.core.auth import user_has_permission
+        from pebble.core.auth import user_has_permission
 
         storage = MagicMock()
         storage.get_user_permissions.return_value = {"read", "write"}
@@ -2087,7 +2087,7 @@ class TestUserHasPermission:
 
     def test_empty_user_id_returns_false_without_storage_lookup(self):
         """Empty user_id short-circuits — no anonymous permission holder."""
-        from turnstone.core.auth import user_has_permission
+        from pebble.core.auth import user_has_permission
 
         storage = MagicMock()
         assert user_has_permission("", "model.skills.write", storage=storage) is False
@@ -2095,7 +2095,7 @@ class TestUserHasPermission:
 
     def test_storage_failure_returns_false_fail_closed(self):
         """Roles backend hiccups must deny, not allow (fail-closed)."""
-        from turnstone.core.auth import user_has_permission
+        from pebble.core.auth import user_has_permission
 
         storage = MagicMock()
         storage.get_user_permissions.side_effect = RuntimeError("DB down")
@@ -2107,10 +2107,10 @@ class TestUserHasPermission:
         Only the model-tool path can land here — HTTP handlers run after
         the auth middleware which already requires storage.
         """
-        from turnstone.core import auth as _auth_mod
+        from pebble.core import auth as _auth_mod
 
         monkeypatch.setattr(
-            "turnstone.core.storage._registry.get_storage", lambda: None, raising=True
+            "pebble.core.storage._registry.get_storage", lambda: None, raising=True
         )
         assert _auth_mod.user_has_permission("alice", "model.skills.write") is False
 
@@ -2125,7 +2125,7 @@ class TestUserHasPermission:
         test should be rewritten to assert the invalidation contract — not
         deleted.
         """
-        from turnstone.core.auth import user_has_permission
+        from pebble.core.auth import user_has_permission
 
         storage = MagicMock()
         storage.get_user_permissions.return_value = {"model.skills.write"}

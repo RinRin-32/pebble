@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 
-_MIGRATIONS = str(Path(__file__).resolve().parent.parent / "turnstone/core/storage/migrations")
+_MIGRATIONS = str(Path(__file__).resolve().parent.parent / "pebble/core/storage/migrations")
 
 
 def _inspect_migrated(db_path: Path) -> sa.Inspector:
@@ -36,7 +36,7 @@ def _inspect_migrated(db_path: Path) -> sa.Inspector:
 
 
 def _inspect_create_all(db_path: Path) -> sa.Inspector:
-    from turnstone.core.storage._schema import metadata
+    from pebble.core.storage._schema import metadata
 
     engine = sa.create_engine(f"sqlite:///{db_path}")
     metadata.create_all(engine)

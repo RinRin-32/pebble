@@ -35,13 +35,13 @@ import httpx
 import pytest
 
 from tests.conftest import _run_on_loop, make_mcp_token_cipher, stop_loop_thread
-from turnstone.core.mcp_client import (
+from pebble.core.mcp_client import (
     MCPClientManager,
     _AuthCapture,
     _make_capturing_http_factory,
 )
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Fixtures and helpers (mirror conventions in test_mcp_user_pool.py)
@@ -205,7 +205,7 @@ class TestCarrierLifecycle:
         """
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         mgr, loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -248,7 +248,7 @@ class TestCarrierLifecycle:
             return TokenLookupResult(kind="token", token="access-aaa")
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ):
             mgr.call_tool_sync("mcp__pool-srv__do_thing", {}, user_id="user-1", timeout=5)
@@ -347,7 +347,7 @@ class TestForceRefresh:
         """
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         cipher = make_mcp_token_cipher()
         _seed_oauth_server(storage, name="srv-oauth")
@@ -361,7 +361,7 @@ class TestForceRefresh:
             return ("refreshed-token", "rotated-rrr", None)
 
         with patch(
-            "turnstone.core.mcp_oauth._refresh_and_persist",
+            "pebble.core.mcp_oauth._refresh_and_persist",
             side_effect=_fake_refresh_and_persist,
         ):
             # Without force_refresh: returns the cached token.
@@ -396,7 +396,7 @@ class TestForceRefresh:
         """
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         cipher = make_mcp_token_cipher()
         _seed_oauth_server(storage, name="srv-oauth")
@@ -435,7 +435,7 @@ class TestForceRefresh:
             return ("refreshed-token", "rotated-rrr", future_expires)
 
         with patch(
-            "turnstone.core.mcp_oauth._refresh_and_persist",
+            "pebble.core.mcp_oauth._refresh_and_persist",
             side_effect=_fake_refresh_and_persist,
         ):
             results = await asyncio.gather(
@@ -470,7 +470,7 @@ class TestForceRefresh:
         """
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import get_user_access_token_classified
+        from pebble.core.mcp_oauth import get_user_access_token_classified
 
         cipher = make_mcp_token_cipher()
         _seed_oauth_server(storage, name="srv-oauth")
@@ -496,7 +496,7 @@ class TestForceRefresh:
         with (
             patch.object(storage, "acquire_advisory_lock_sync", side_effect=_tracking_acquire),
             patch(
-                "turnstone.core.mcp_oauth._refresh_and_persist",
+                "pebble.core.mcp_oauth._refresh_and_persist",
                 side_effect=_fake_refresh_and_persist,
             ),
         ):
@@ -597,7 +597,7 @@ class TestDispatcherAuthFlows:
         _seed_user_token(storage, cipher)
         self._wire_pool(mgr, storage, cipher)
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         call_count = 0
 
@@ -632,7 +632,7 @@ class TestDispatcherAuthFlows:
         self._seed_pool_entry_with_call_tool(mgr, loop, _call_tool)
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ):
             result = mgr.call_tool_sync(
@@ -662,7 +662,7 @@ class TestDispatcherAuthFlows:
         _seed_user_token(storage, cipher)
         self._wire_pool(mgr, storage, cipher)
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         async def _fake_classified(
             **kwargs: Any,
@@ -679,7 +679,7 @@ class TestDispatcherAuthFlows:
 
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_fake_classified,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -710,7 +710,7 @@ class TestDispatcherAuthFlows:
         _seed_user_token(storage, cipher)
         self._wire_pool(mgr, storage, cipher)
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         async def _fake_classified(**kwargs: Any) -> TokenLookupResult:
             if kwargs.get("force_refresh"):
@@ -725,7 +725,7 @@ class TestDispatcherAuthFlows:
 
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_fake_classified,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -763,7 +763,7 @@ class TestDispatcherAuthFlows:
         _seed_user_token(storage, cipher)
         self._wire_pool(mgr, storage, cipher)
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         async def _fake_classified(
             **kwargs: Any,
@@ -782,7 +782,7 @@ class TestDispatcherAuthFlows:
 
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_fake_classified,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -814,7 +814,7 @@ class TestDispatcherAuthFlows:
         _seed_user_token(storage, cipher)
         self._wire_pool(mgr, storage, cipher)
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         async def _fake_classified(
             **_kwargs: Any,
@@ -837,7 +837,7 @@ class TestDispatcherAuthFlows:
 
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_fake_classified,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -867,7 +867,7 @@ class TestDispatcherAuthFlows:
         _seed_user_token(storage, cipher)
         self._wire_pool(mgr, storage, cipher)
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         async def _fake_classified(
             **_kwargs: Any,
@@ -882,7 +882,7 @@ class TestDispatcherAuthFlows:
 
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_fake_classified,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -917,7 +917,7 @@ class TestBreakerInvariant:
         """
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         mgr, loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -985,7 +985,7 @@ class TestBreakerInvariant:
         mgr._connect_one_pool = _fake_connect.__get__(mgr, type(mgr))  # type: ignore[method-assign]
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ):
             result_401_retry = mgr.call_tool_sync(
@@ -996,7 +996,7 @@ class TestBreakerInvariant:
 
         with (
             patch(
-                "turnstone.core.mcp_client.get_user_access_token_classified",
+                "pebble.core.mcp_client.get_user_access_token_classified",
                 side_effect=_fake_classified,
             ),
             pytest.raises(RuntimeError) as exc_info,
@@ -1026,7 +1026,7 @@ class TestStaticPathUnchanged:
         """
         import inspect
 
-        from turnstone.core import mcp_client
+        from pebble.core import mcp_client
 
         # The static path's streamablehttp_client call site lives in the
         # transport owner task (``_static_transport_owner``); ``_connect_one``
@@ -1155,7 +1155,7 @@ class TestCrossTaskRetryIsolation:
         the retry never fires, so only one ``_dispatch_pool`` invocation
         is recorded and the expected success result never returns.
         """
-        from turnstone.core.mcp_client import _PoolDispatchRetryRequested
+        from pebble.core.mcp_client import _PoolDispatchRetryRequested
 
         mgr, _loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -1222,7 +1222,7 @@ class TestRetryTimeoutBudget:
         second attempt's ``future.result(timeout=...)`` MUST receive a
         value strictly less than the original ``timeout``.
         """
-        from turnstone.core.mcp_client import _PoolDispatchRetryRequested
+        from pebble.core.mcp_client import _PoolDispatchRetryRequested
 
         mgr, _loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -1272,7 +1272,7 @@ class TestRetryTimeoutBudget:
         """``TimeoutError`` message uses the caller's original budget,
         even when the retry's trimmed window is what actually expired.
         """
-        from turnstone.core.mcp_client import _PoolDispatchRetryRequested
+        from pebble.core.mcp_client import _PoolDispatchRetryRequested
 
         mgr, _loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -1337,7 +1337,7 @@ def _install_capture_intercept(monkeypatch: pytest.MonkeyPatch) -> None:
     on this so the fake call_tool stub can mutate the same carrier object
     the dispatcher inspects after raising.
     """
-    from turnstone.core import mcp_client as mcp_client_mod
+    from pebble.core import mcp_client as mcp_client_mod
 
     original = mcp_client_mod.MCPClientManager._dispatch_pool_with_entry
 
@@ -1615,7 +1615,7 @@ class TestPoolPrimingAndTokenRotation:
         permanently cold ("connecting" / no tools / never-refreshed)."""
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         mgr, loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -1638,7 +1638,7 @@ class TestPoolPrimingAndTokenRotation:
             return TokenLookupResult(kind="token", token="bearer-refreshed")
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ):
             _run_on_loop(loop, mgr._prime_user_pools("user-1"))
@@ -1655,7 +1655,7 @@ class TestPoolPrimingAndTokenRotation:
         the token (kind=refresh_failed_transient) and lazy dispatch retries later."""
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import TokenLookupResult
+        from pebble.core.mcp_oauth import TokenLookupResult
 
         mgr, loop, _ = running_loop_mgr
         cipher = make_mcp_token_cipher()
@@ -1677,7 +1677,7 @@ class TestPoolPrimingAndTokenRotation:
             return TokenLookupResult(kind="refresh_failed_transient")
 
         with patch(
-            "turnstone.core.mcp_client.get_user_access_token_classified",
+            "pebble.core.mcp_client.get_user_access_token_classified",
             side_effect=_fake_classified,
         ):
             _run_on_loop(loop, mgr._prime_user_pools("user-1"))
@@ -1702,7 +1702,7 @@ class TestPoolPrimingAndTokenRotation:
         dispatch. Drives the REAL resolver (only the AS round-trip is stubbed)."""
         from unittest.mock import patch
 
-        from turnstone.core.mcp_oauth import (
+        from pebble.core.mcp_oauth import (
             _AMBIGUOUS_ESCALATION_THRESHOLD,
             MCPOAuthRefreshFailed,
             _refresh_backoff_state,
@@ -1730,7 +1730,7 @@ class TestPoolPrimingAndTokenRotation:
         # (1) PERMANENT during prime → REVOKED (genuinely dead → clean re-consent).
         _seed("perm-user")
         with patch(
-            "turnstone.core.mcp_oauth._refresh_and_persist",
+            "pebble.core.mcp_oauth._refresh_and_persist",
             side_effect=_raiser(_RefreshFailureClass.PERMANENT),
         ):
             perm = await get_user_access_token_classified(
@@ -1750,7 +1750,7 @@ class TestPoolPrimingAndTokenRotation:
             _AMBIGUOUS_ESCALATION_THRESHOLD - 1
         )
         with patch(
-            "turnstone.core.mcp_oauth._refresh_and_persist",
+            "pebble.core.mcp_oauth._refresh_and_persist",
             side_effect=_raiser(_RefreshFailureClass.AMBIGUOUS),
         ):
             amb = await get_user_access_token_classified(
@@ -1770,7 +1770,7 @@ class TestPoolPrimingAndTokenRotation:
             _AMBIGUOUS_ESCALATION_THRESHOLD - 1
         )
         with patch(
-            "turnstone.core.mcp_oauth._refresh_and_persist",
+            "pebble.core.mcp_oauth._refresh_and_persist",
             side_effect=_raiser(_RefreshFailureClass.AMBIGUOUS),
         ):
             lazy = await get_user_access_token_classified(
@@ -1992,7 +1992,7 @@ class TestOAuthUserServerStatus:
 
     @staticmethod
     def _warm(mgr: MCPClientManager, user_id: str, server: str, n_tools: int = 1) -> None:
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         entry = PoolEntryState(key=(user_id, server), open_lock=MagicMock())
         entry.session = MagicMock()
@@ -2080,7 +2080,7 @@ class TestOAuthUserServerStatus:
         via the aggregate view — not the per-user default (user_id=None), which
         would render every in-use oauth_user server disconnected/empty right after
         a successful refresh."""
-        from turnstone.server import _public_server_status
+        from pebble.server import _public_server_status
 
         mgr = MCPClientManager({})
         mgr._oauth_user_server_names = {"pool-srv"}

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_create_skill_resource,
     admin_delete_skill_resource,
     admin_get_skill,
@@ -24,8 +24,8 @@ from turnstone.console.server import (
     admin_list_skill_resources,
     admin_list_skills,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Auth middleware

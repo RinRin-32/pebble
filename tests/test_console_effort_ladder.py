@@ -15,7 +15,7 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from tests._coord_test_helpers import _AuthMiddleware
-from turnstone.console.server import admin_effort_ladder
+from pebble.console.server import admin_effort_ladder
 
 
 def _make_client() -> TestClient:

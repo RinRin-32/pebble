@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from unittest.mock import MagicMock
 
-from turnstone.core.session import ChatSession, _render_template
+from pebble.core.session import ChatSession, _render_template
 
 
 class NullUI:
@@ -152,7 +152,7 @@ class TestRenderTemplate:
 
 class TestDefaultTemplates:
     def test_default_templates_in_system_message(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "alpha", "You are a helpful assistant.", is_default=True)
@@ -164,7 +164,7 @@ class TestDefaultTemplates:
         assert "Always be concise." in content
 
     def test_default_templates_ordered_by_name(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t2", "b-template", "SECOND", is_default=True)
@@ -177,7 +177,7 @@ class TestDefaultTemplates:
         assert first_pos < second_pos
 
     def test_no_default_templates(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "alpha", "Not default.", is_default=False)
@@ -191,7 +191,7 @@ class TestDefaultTemplates:
         change mid-session, so they stay in the identity system message (with
         user instructions) — only a NAMED applied skill moves to a separate
         context message.  Template guidance still precedes user instructions."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "tpl", "TEMPLATE_CONTENT", is_default=True)
@@ -212,7 +212,7 @@ class TestDefaultTemplates:
 
 class TestExplicitTemplate:
     def test_explicit_template_replaces_defaults(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "default-tpl", "DEFAULT_CONTENT", is_default=True)
@@ -237,7 +237,7 @@ class TestExplicitTemplate:
 
 class TestTemplateVariables:
     def test_model_and_ws_id_substituted(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "vars-tpl", "Model: {{model}}, WS: {{ws_id}}", is_default=True)
@@ -248,7 +248,7 @@ class TestTemplateVariables:
         assert f"WS: {session.ws_id}" in content
 
     def test_node_id_substituted(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "node-tpl", "Node: {{node_id}}", is_default=True)
@@ -258,7 +258,7 @@ class TestTemplateVariables:
         assert "Node: node-42" in content
 
     def test_unknown_variable_preserved(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "unknown-tpl", "Val: {{unknown_var}}", is_default=True)
@@ -275,8 +275,8 @@ class TestTemplateVariables:
 
 class TestTemplatePersistence:
     def test_template_persisted_in_config(self, tmp_db):
-        from turnstone.core.memory import load_workstream_config
-        from turnstone.core.storage import get_storage
+        from pebble.core.memory import load_workstream_config
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "my-tpl", "TPL_CONTENT", is_default=False)
@@ -286,8 +286,8 @@ class TestTemplatePersistence:
         assert config["skill"] == "my-tpl"
 
     def test_template_restored_on_resume(self, tmp_db):
-        from turnstone.core.memory import save_message
-        from turnstone.core.storage import get_storage
+        from pebble.core.memory import save_message
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "my-tpl", "PERSISTED_TEMPLATE", is_default=False)
@@ -307,7 +307,7 @@ class TestTemplatePersistence:
         assert "PERSISTED_TEMPLATE" in content
 
     def test_empty_template_config_means_defaults(self, tmp_db):
-        from turnstone.core.memory import load_workstream_config
+        from pebble.core.memory import load_workstream_config
 
         session = _make_session()
         config = load_workstream_config(session.ws_id)
@@ -321,7 +321,7 @@ class TestTemplatePersistence:
 
 class TestTemplateSlashCommand:
     def test_template_set(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "my-tpl", "SLASH_TEMPLATE", is_default=False)
@@ -336,7 +336,7 @@ class TestTemplateSlashCommand:
         assert "SLASH_TEMPLATE" in content_after
 
     def test_template_clear(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "my-tpl", "EXPLICIT_TEMPLATE", is_default=False)
@@ -360,7 +360,7 @@ class TestTemplateSlashCommand:
         assert "not found" in ui.on_error.call_args[0][0].lower()
 
     def test_template_show_current(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "my-tpl", "content", is_default=False)
@@ -380,7 +380,7 @@ class TestTemplateSlashCommand:
 
 class TestMCPTemplates:
     def test_mcp_readonly_template_as_default(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(
@@ -399,7 +399,7 @@ class TestMCPTemplates:
         assert "MCP_CONTENT" in content
 
     def test_mcp_template_selectable_explicitly(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(
@@ -425,8 +425,8 @@ class TestMCPTemplates:
 
 class TestResumeDeletedTemplate:
     def test_resume_with_deleted_template_degrades_gracefully(self, tmp_db, caplog):
-        from turnstone.core.memory import save_message
-        from turnstone.core.storage import get_storage
+        from pebble.core.memory import save_message
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "ephemeral-tpl", "EPHEMERAL_CONTENT", is_default=False)
@@ -464,9 +464,9 @@ class TestSkillFactoryPassthrough:
         """SessionManager.create(skill=...) propagates to session factory."""
         import queue
 
-        from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-        from turnstone.core.session_manager import SessionManager
-        from turnstone.core.storage import get_storage
+        from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+        from pebble.core.session_manager import SessionManager
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "factory-tpl", "FACTORY_CONTENT", is_default=False)
@@ -495,8 +495,8 @@ class TestSkillFactoryPassthrough:
         """SessionManager.create() without skill passes None."""
         import queue
 
-        from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-        from turnstone.core.session_manager import SessionManager
+        from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+        from pebble.core.session_manager import SessionManager
 
         captured_skill = "sentinel"
 
@@ -518,7 +518,7 @@ class TestSkillFactoryPassthrough:
 
 class TestTemplateThreadSafety:
     def test_concurrent_template_and_system_message_init(self, tmp_db):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         db = get_storage()
         _create_template(db, "t1", "thread-tpl", "THREAD_TEMPLATE", is_default=False)

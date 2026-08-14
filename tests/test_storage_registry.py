@@ -5,14 +5,14 @@ from unittest.mock import patch
 import pytest
 import sqlalchemy as sa
 
-from turnstone.core.storage import (
+from pebble.core.storage import (
     StorageUnavailableError,
     get_storage,
     init_storage,
     reset_storage,
 )
-from turnstone.core.storage._postgresql import PostgreSQLBackend
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.storage._postgresql import PostgreSQLBackend
+from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +67,7 @@ class TestConnUnavailableLogging:
 
     def _make_backend(self, tmp_path):
         """Create a minimal SQLite backend for testing _conn()."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         return SQLiteBackend(str(tmp_path / "test.db"), create_tables=True)
 

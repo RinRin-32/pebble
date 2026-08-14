@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.api.console_schemas import (
+from pebble.api.console_schemas import (
     ListOrgsResponse,
     ListRolesResponse,
     ListToolPoliciesResponse,
@@ -27,8 +27,8 @@ from turnstone.api.console_schemas import (
     RoleInfo,
     ToolPolicyInfo,
 )
-from turnstone.api.schemas import StatusResponse
-from turnstone.console.server import (
+from pebble.api.schemas import StatusResponse
+from pebble.console.server import (
     admin_create_policy,
     admin_create_role,
     admin_delete_policy,
@@ -41,9 +41,9 @@ from turnstone.console.server import (
     admin_update_policy,
     admin_update_role,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
-from turnstone.sdk.console import AsyncTurnstoneConsole
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
+from pebble.sdk.console import AsyncTurnstoneConsole
 
 # ---------------------------------------------------------------------------
 # Auth bypass middleware — injects a full-access AuthResult on every request.
@@ -214,7 +214,7 @@ class TestRolesRoundTrip:
 
     @pytest.mark.anyio
     async def test_delete_nonexistent_role_raises(self, sdk_client: AsyncTurnstoneConsole) -> None:
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.sdk._types import TurnstoneAPIError
 
         with pytest.raises(TurnstoneAPIError) as exc_info:
             await sdk_client.delete_role("nonexistent")
@@ -222,7 +222,7 @@ class TestRolesRoundTrip:
 
     @pytest.mark.anyio
     async def test_update_nonexistent_role_raises(self, sdk_client: AsyncTurnstoneConsole) -> None:
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.sdk._types import TurnstoneAPIError
 
         with pytest.raises(TurnstoneAPIError) as exc_info:
             await sdk_client.update_role("nonexistent", display_name="Nope")
@@ -302,7 +302,7 @@ class TestPoliciesRoundTrip:
     async def test_delete_nonexistent_policy_raises(
         self, sdk_client: AsyncTurnstoneConsole
     ) -> None:
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.sdk._types import TurnstoneAPIError
 
         with pytest.raises(TurnstoneAPIError) as exc_info:
             await sdk_client.delete_policy("nonexistent")
@@ -312,7 +312,7 @@ class TestPoliciesRoundTrip:
     async def test_update_nonexistent_policy_raises(
         self, sdk_client: AsyncTurnstoneConsole
     ) -> None:
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.sdk._types import TurnstoneAPIError
 
         with pytest.raises(TurnstoneAPIError) as exc_info:
             await sdk_client.update_policy("nonexistent", name="Nope")
@@ -322,7 +322,7 @@ class TestPoliciesRoundTrip:
     async def test_create_policy_invalid_action_raises(
         self, sdk_client: AsyncTurnstoneConsole
     ) -> None:
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.sdk._types import TurnstoneAPIError
 
         with pytest.raises(TurnstoneAPIError) as exc_info:
             await sdk_client.create_policy("Bad", "tool_*", "yolo")
@@ -378,7 +378,7 @@ class TestOrgsRoundTrip:
 
     @pytest.mark.anyio
     async def test_get_nonexistent_org_raises(self, sdk_client: AsyncTurnstoneConsole) -> None:
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.sdk._types import TurnstoneAPIError
 
         with pytest.raises(TurnstoneAPIError) as exc_info:
             await sdk_client.get_org("nonexistent")
@@ -386,7 +386,7 @@ class TestOrgsRoundTrip:
 
     @pytest.mark.anyio
     async def test_update_nonexistent_org_raises(self, sdk_client: AsyncTurnstoneConsole) -> None:
-        from turnstone.sdk._types import TurnstoneAPIError
+        from pebble.sdk._types import TurnstoneAPIError
 
         with pytest.raises(TurnstoneAPIError) as exc_info:
             await sdk_client.update_org("nonexistent", display_name="Nope")

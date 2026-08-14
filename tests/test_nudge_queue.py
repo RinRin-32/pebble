@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from turnstone.core.nudge_queue import TOOL_DRAIN, USER_DRAIN, NudgeQueue
+from pebble.core.nudge_queue import TOOL_DRAIN, USER_DRAIN, NudgeQueue
 
 
 class TestEnqueueDrain:
@@ -128,7 +128,7 @@ class TestLenAndClear:
             ("background_shell_exit", "b"),
         ]
         # Metadata and valid_until ride the demotion; USER_DRAIN delivers.
-        from turnstone.core.nudge_queue import USER_DRAIN, WAKE_PENDING
+        from pebble.core.nudge_queue import USER_DRAIN, WAKE_PENDING
 
         assert not q.has_pending(WAKE_PENDING - {"user"})  # no 'any' left
         drained = q.drain(USER_DRAIN)
@@ -182,7 +182,7 @@ class TestLenAndClear:
         assert q.drain({"quiet"}) == []  # predicate survived the round-trip
 
     def test_quiet_is_outside_the_wake_gate(self):
-        from turnstone.core.nudge_queue import TOOL_DRAIN, USER_DRAIN, WAKE_PENDING
+        from pebble.core.nudge_queue import TOOL_DRAIN, USER_DRAIN, WAKE_PENDING
 
         q = NudgeQueue()
         q.enqueue("background_shell_exit", "b", "quiet")
@@ -509,7 +509,7 @@ class TestValidUntil:
     def test_valid_until_false_drops_with_info_log(self, caplog: pytest.LogCaptureFixture):
         q = NudgeQueue()
         q.enqueue("a", "1", "any", valid_until=lambda: False)
-        with caplog.at_level(logging.INFO, logger="turnstone.core.nudge_queue"):
+        with caplog.at_level(logging.INFO, logger="pebble.core.nudge_queue"):
             out = q.drain({"any"})
         assert out == []
         # Already removed from queue (drain partition removes BEFORE
@@ -538,7 +538,7 @@ class TestValidUntil:
             raise RuntimeError("predicate crash")
 
         q.enqueue("a", "1", "any", valid_until=boom)
-        with caplog.at_level(logging.WARNING, logger="turnstone.core.nudge_queue"):
+        with caplog.at_level(logging.WARNING, logger="pebble.core.nudge_queue"):
             out = q.drain({"any"})
         assert out == []
         # Crash-on-predicate is treated as "no longer valid" — drop, not propagate.

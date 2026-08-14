@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from turnstone.core.session import ChatSession
+from pebble.core.session import ChatSession
 
 
 def _stub(
@@ -307,7 +307,7 @@ def test_record_fatal_uses_enriched_message_for_known(monkeypatch):
         # under test produces no credentials.
         return text
 
-    import turnstone.core.memory as memory_mod
+    import pebble.core.memory as memory_mod
 
     monkeypatch.setattr(memory_mod, "persist_last_error", fake_persist)
     monkeypatch.setattr(memory_mod, "sanitize_error_text", fake_sanitize)
@@ -345,7 +345,7 @@ def test_record_fatal_falls_back_for_unknown(monkeypatch):
     def fake_sanitize(text: str, *, max_len: int = 1024) -> str:
         return text
 
-    import turnstone.core.memory as memory_mod
+    import pebble.core.memory as memory_mod
 
     monkeypatch.setattr(memory_mod, "persist_last_error", fake_persist)
     monkeypatch.setattr(memory_mod, "sanitize_error_text", fake_sanitize)

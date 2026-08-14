@@ -24,7 +24,7 @@ level -- what the LLM *means* to do with its legitimate access.
 ## Quick Start
 
 ```bash
-# Run turnstone-server in an OpenShell sandbox
+# Run pebble-server in an OpenShell sandbox
 openshell sandbox run \
   --policy deploy/openshell/turnstone-policy.yaml \
   --workdir /path/to/project \
@@ -74,7 +74,7 @@ control. Paths are locked at sandbox creation and cannot be changed at runtime.
 | `/usr`, `/lib`, `/lib64` | read-only | Python runtime, installed packages |
 | `/etc` | read-only | System config, SSL certificates |
 | `/proc`, `/dev/urandom` | read-only | Process info, entropy |
-| `~/.config/turnstone` | read-only | Config file (writes go to database) |
+| `~/.config/pebble` | read-only | Config file (writes go to database) |
 
 Landlock runs in `best_effort` mode by default -- degrades gracefully on kernels
 without Landlock support. Set `compatibility: hard_requirement` for production

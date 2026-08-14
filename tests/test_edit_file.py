@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.core.session import ChatSession
+from pebble.core.session import ChatSession
 
 
 @pytest.fixture

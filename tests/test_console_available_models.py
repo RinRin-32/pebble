@@ -7,12 +7,12 @@ model list:
 * ``channel_default_alias`` ← ``channels.default_model_alias``
 * ``coordinator_default_alias`` ← ``coordinator.model_alias``, falling
   back to ``default_alias`` when empty *or* pointing at a disabled /
-  removed alias (mirrors :mod:`turnstone.console.session_factory`).
+  removed alias (mirrors :mod:`pebble.console.session_factory`).
 * ``judge_default_alias`` ← ``judge.model``, falling back to the
   resolved coordinator alias when empty *or* pointing at a value that
   isn't an enabled alias.  ``judge.model`` is alias-only — same
   contract as the other model roles — and
-  :class:`turnstone.core.judge.IntentJudge` silently inherits the
+  :class:`pebble.core.judge.IntentJudge` silently inherits the
   session model when an unknown value is configured, so the API
   surfaces the resolved coordinator alias rather than echoing the
   misconfigured string.
@@ -32,8 +32,8 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from tests._coord_test_helpers import _AuthMiddleware, _FakeConfigStore
-from turnstone.console.server import list_available_models
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.console.server import list_available_models
+from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture

@@ -1,8 +1,8 @@
-"""Unit tests for the canonical ``Turn`` model (turnstone.core.trajectory)."""
+"""Unit tests for the canonical ``Turn`` model (pebble.core.trajectory)."""
 
 from __future__ import annotations
 
-from turnstone.core.trajectory import (
+from pebble.core.trajectory import (
     AttachmentRef,
     ProviderNative,
     Role,

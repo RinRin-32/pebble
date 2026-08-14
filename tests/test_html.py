@@ -1,6 +1,6 @@
-"""Tests for turnstone.core.web — strip_html."""
+"""Tests for pebble.core.web — strip_html."""
 
-from turnstone.core.web import strip_html
+from pebble.core.web import strip_html
 
 
 class TestStripHtml:

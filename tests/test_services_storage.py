@@ -35,7 +35,7 @@ class TestServiceRegistry:
 
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import services
+        from pebble.core.storage._schema import services
 
         old_time = (datetime.now(UTC) - timedelta(seconds=300)).strftime("%Y-%m-%dT%H:%M:%S")
         with storage._engine.connect() as conn:

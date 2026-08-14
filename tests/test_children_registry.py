@@ -1,4 +1,4 @@
-"""Unit tests for :class:`turnstone.core.children_registry.ChildrenRegistry`.
+"""Unit tests for :class:`pebble.core.children_registry.ChildrenRegistry`.
 
 The registry was lifted from ``CoordinatorAdapter`` in Stage 3 Step 1.
 Adapter-level coverage for the integrated behavior already lives in
@@ -14,7 +14,7 @@ import threading
 
 import pytest
 
-from turnstone.core.children_registry import ChildrenRegistry
+from pebble.core.children_registry import ChildrenRegistry
 
 
 class _Sentinel:

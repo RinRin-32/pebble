@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from turnstone.core import access
+from pebble.core import access
 
 
 class _FakeStore:

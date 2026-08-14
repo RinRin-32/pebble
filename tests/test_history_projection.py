@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from turnstone.core.history_decoration import (
+from pebble.core.history_decoration import (
     extract_reasoning_for_history,
     project_history_messages,
 )

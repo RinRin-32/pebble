@@ -15,8 +15,8 @@ from unittest.mock import MagicMock
 
 import jwt as pyjwt
 
-from turnstone.console.server import _proxy_auth_headers
-from turnstone.core.auth import JWT_AUD_SERVER, AuthResult
+from pebble.console.server import _proxy_auth_headers
+from pebble.core.auth import JWT_AUD_SERVER, AuthResult
 
 _SECRET = "x" * 64
 

@@ -5,7 +5,7 @@
 
 FROM python:3.14-slim
 
-LABEL org.opencontainers.image.title="turnstone" \
+LABEL org.opencontainers.image.title="pebble" \
       org.opencontainers.image.description="Multi-node AI orchestration platform"
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /usr/local/bin/uv
@@ -40,12 +40,12 @@ RUN uv sync --frozen --no-install-project --no-dev \
     --no-compile --extra all
 
 # Install the project itself
-COPY turnstone/ turnstone/
+COPY pebble/ pebble/
 RUN uv sync --frozen --no-dev \
     --no-compile --extra all
 
 # Compile bytecode in a separate step (avoids fd exhaustion during install)
-RUN python -m compileall -q .venv turnstone/
+RUN python -m compileall -q .venv pebble/
 
 # Add venv to PATH so entry points are found
 ENV PATH="/app/.venv/bin:$PATH"
@@ -82,7 +82,7 @@ RUN mkdir -p /home/turnstone/.local/share/opencode /home/turnstone/.claude \
 # Workspace mount point — bind-mount a host directory here
 RUN mkdir -p /workspace && chown turnstone:turnstone /workspace
 
-# Coding-agent CLIs for dispatch (turnstone/core/agents/*).  The image already
+# Coding-agent CLIs for dispatch (pebble/core/agents/*).  The image already
 # carries node+npm for these; each is optional at runtime — the adapter reports
 # a clean "not installed" instead of failing the workstream, so a slimmer build
 # can drop this layer.  Credentials are NOT baked in: they arrive per-run as env
@@ -106,4 +106,4 @@ RUN codegraph install -t claude,opencode,codex -y --location global || true
 ENTRYPOINT ["entrypoint.sh"]
 
 # Default command (overridden per service in compose.yaml)
-CMD ["turnstone-server", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["pebble-server", "--host", "0.0.0.0", "--port", "8080"]

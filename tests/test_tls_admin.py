@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.storage import get_storage, init_storage, reset_storage
+from pebble.core.storage import get_storage, init_storage, reset_storage
 
 lacme = pytest.importorskip("lacme")
 
@@ -24,7 +24,7 @@ def tls_manager():
     """Create an initialized TLSManager."""
     import asyncio
 
-    from turnstone.console.tls import TLSManager
+    from pebble.console.tls import TLSManager
 
     mgr = TLSManager(get_storage())
     asyncio.run(mgr.init_ca())
@@ -43,14 +43,14 @@ def _make_app(tls_manager):
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.routing import Route
 
-    from turnstone.console.server import (
+    from pebble.console.server import (
         tls_ca_cert,
         tls_ca_status,
         tls_delete_cert,
         tls_list_certs,
         tls_renew_cert,
     )
-    from turnstone.core.auth import AuthResult
+    from pebble.core.auth import AuthResult
 
     async def _grant_access(request, call_next):  # type: ignore[no-untyped-def]
         request.state.auth_result = AuthResult(
@@ -132,7 +132,7 @@ def _make_app_no_auth(tls_manager):
     from starlette.applications import Starlette
     from starlette.routing import Route
 
-    from turnstone.console.server import (
+    from pebble.console.server import (
         tls_ca_cert,
         tls_ca_status,
         tls_delete_cert,
@@ -160,14 +160,14 @@ def _make_app_read_only(tls_manager):
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.routing import Route
 
-    from turnstone.console.server import (
+    from pebble.console.server import (
         tls_ca_cert,
         tls_ca_status,
         tls_delete_cert,
         tls_list_certs,
         tls_renew_cert,
     )
-    from turnstone.core.auth import AuthResult
+    from pebble.core.auth import AuthResult
 
     async def _grant_read(request, call_next):  # type: ignore[no-untyped-def]
         request.state.auth_result = AuthResult(
@@ -238,7 +238,7 @@ def test_cli_bootstrap(tmp_path):
     """Test offline CA bootstrap."""
     import argparse
 
-    from turnstone.admin import _cmd_tls_bootstrap
+    from pebble.admin import _cmd_tls_bootstrap
 
     out = tmp_path / "certs"
     args = argparse.Namespace(out=str(out), issue=["app.internal", "pg.internal"])
@@ -255,7 +255,7 @@ def test_cli_bootstrap_no_issue(tmp_path):
     """Bootstrap with no --issue creates CA only."""
     import argparse
 
-    from turnstone.admin import _cmd_tls_bootstrap
+    from pebble.admin import _cmd_tls_bootstrap
 
     out = tmp_path / "certs"
     args = argparse.Namespace(out=str(out), issue=[])
@@ -273,7 +273,7 @@ def test_cli_bootstrap_no_issue(tmp_path):
 
 def test_database_ssl_config_map():
     """Database SSL keys are in the config map."""
-    from turnstone.core.config import _CONFIG_MAP
+    from pebble.core.config import _CONFIG_MAP
 
     db_map = _CONFIG_MAP["database"]
     assert "sslmode" in db_map
@@ -291,7 +291,7 @@ def test_tls_endpoints_require_auth(tls_manager):
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.console.server import tls_ca_status, tls_list_certs
+    from pebble.console.server import tls_ca_status, tls_list_certs
 
     # No auth middleware — request.state.auth_result will be missing
     app = Starlette(
@@ -315,7 +315,7 @@ def test_tls_endpoints_require_auth(tls_manager):
 
 def test_sdk_client_cert_requires_both():
     """SDK raises ValueError if only one of client_cert/client_key provided."""
-    from turnstone.sdk._base import _BaseClient
+    from pebble.sdk._base import _BaseClient
 
     with pytest.raises(ValueError, match="Both client_cert and client_key"):
         _BaseClient(

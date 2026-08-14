@@ -1,7 +1,7 @@
 """Tests for the SKILL.md parse admin API endpoint.
 
 The endpoint is a thin permission-checked wrapper around
-``turnstone.core.skill_parser.parse_skill_md``.  These tests cover the
+``pebble.core.skill_parser.parse_skill_md``.  These tests cover the
 routing, auth, and error-handling layers — parser semantics live in
 ``test_skill_parser.py``.
 """
@@ -23,8 +23,8 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import admin_parse_skill
-from turnstone.core.auth import AuthResult
+from pebble.console.server import admin_parse_skill
+from pebble.core.auth import AuthResult
 
 
 class _InjectAuthMiddleware(BaseHTTPMiddleware):

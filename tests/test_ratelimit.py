@@ -1,10 +1,10 @@
-"""Tests for turnstone.core.ratelimit — token-bucket rate limiter."""
+"""Tests for pebble.core.ratelimit — token-bucket rate limiter."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
-from turnstone.core.ratelimit import RateLimiter, TokenBucket
+from pebble.core.ratelimit import RateLimiter, TokenBucket
 
 # ---------------------------------------------------------------------------
 # TestTokenBucket
@@ -24,7 +24,7 @@ class TestTokenBucket:
         assert bucket.consume() is False
 
     def test_refill_over_time(self):
-        with patch("turnstone.core.ratelimit.time.monotonic") as mock_time:
+        with patch("pebble.core.ratelimit.time.monotonic") as mock_time:
             mock_time.return_value = 1000.0
             bucket = TokenBucket(rate=10.0, burst=2)
 
@@ -40,7 +40,7 @@ class TestTokenBucket:
             assert bucket.consume() is False
 
     def test_retry_after_calculation(self):
-        with patch("turnstone.core.ratelimit.time.monotonic") as mock_time:
+        with patch("pebble.core.ratelimit.time.monotonic") as mock_time:
             mock_time.return_value = 1000.0
             bucket = TokenBucket(rate=5.0, burst=1)
 
@@ -99,7 +99,7 @@ class TestRateLimiter:
         assert results == [True, True, True, False, False]
 
     def test_cleanup_removes_stale(self):
-        with patch("turnstone.core.ratelimit.time.monotonic") as mock_time:
+        with patch("pebble.core.ratelimit.time.monotonic") as mock_time:
             mock_time.return_value = 1000.0
             limiter = RateLimiter(enabled=True, rate=10.0, burst=5)
 
@@ -116,7 +116,7 @@ class TestRateLimiter:
             assert len(limiter._buckets) == 0
 
     def test_cleanup_keeps_recent(self):
-        with patch("turnstone.core.ratelimit.time.monotonic") as mock_time:
+        with patch("pebble.core.ratelimit.time.monotonic") as mock_time:
             mock_time.return_value = 1000.0
             limiter = RateLimiter(enabled=True, rate=10.0, burst=5)
 
@@ -143,20 +143,20 @@ class TestResolveClientIp:
     """X-Forwarded-For parsing with trusted proxy validation."""
 
     def test_no_trusted_proxies_returns_direct(self):
-        from turnstone.core.ratelimit import resolve_client_ip
+        from pebble.core.ratelimit import resolve_client_ip
 
         result = resolve_client_ip("192.168.1.1", "10.0.0.1", frozenset())
         assert result == "192.168.1.1"
 
     def test_no_xff_returns_direct(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("127.0.0.0/8")
         result = resolve_client_ip("127.0.0.1", "", trusted)
         assert result == "127.0.0.1"
 
     def test_trusted_proxy_extracts_xff(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("127.0.0.1/32")
         result = resolve_client_ip("127.0.0.1", "1.2.3.4", trusted)
@@ -164,7 +164,7 @@ class TestResolveClientIp:
 
     def test_untrusted_direct_ignores_xff(self):
         """If the direct client is not a trusted proxy, XFF is ignored (anti-spoof)."""
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("10.0.0.0/8")
         result = resolve_client_ip("203.0.113.5", "1.2.3.4", trusted)
@@ -172,7 +172,7 @@ class TestResolveClientIp:
 
     def test_chained_proxies(self):
         """XFF: 'client, proxy1, proxy2' with proxy1+proxy2 trusted → returns client."""
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("10.0.0.0/8")
         result = resolve_client_ip("10.0.0.3", "1.2.3.4, 10.0.0.1, 10.0.0.2", trusted)
@@ -180,28 +180,28 @@ class TestResolveClientIp:
 
     def test_all_trusted_returns_direct(self):
         """If all XFF entries are trusted proxies, fall back to direct IP."""
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("10.0.0.0/8")
         result = resolve_client_ip("10.0.0.3", "10.0.0.1, 10.0.0.2", trusted)
         assert result == "10.0.0.3"
 
     def test_invalid_direct_ip_returns_direct(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("10.0.0.0/8")
         result = resolve_client_ip("not-an-ip", "1.2.3.4", trusted)
         assert result == "not-an-ip"
 
     def test_invalid_xff_entry_skipped(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("10.0.0.0/8")
         result = resolve_client_ip("10.0.0.1", "garbage, 1.2.3.4", trusted)
         assert result == "1.2.3.4"
 
     def test_ipv6_trusted_proxy(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies, resolve_client_ip
+        from pebble.core.ratelimit import parse_trusted_proxies, resolve_client_ip
 
         trusted = parse_trusted_proxies("::1/128")
         result = resolve_client_ip("::1", "2001:db8::1", trusted)
@@ -210,30 +210,30 @@ class TestResolveClientIp:
 
 class TestParseTrustedProxies:
     def test_empty_string(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies
+        from pebble.core.ratelimit import parse_trusted_proxies
 
         assert parse_trusted_proxies("") == frozenset()
 
     def test_single_cidr(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies
+        from pebble.core.ratelimit import parse_trusted_proxies
 
         result = parse_trusted_proxies("10.0.0.0/8")
         assert len(result) == 1
 
     def test_multiple_cidrs(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies
+        from pebble.core.ratelimit import parse_trusted_proxies
 
         result = parse_trusted_proxies("10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16")
         assert len(result) == 3
 
     def test_single_ip_becomes_host_network(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies
+        from pebble.core.ratelimit import parse_trusted_proxies
 
         result = parse_trusted_proxies("127.0.0.1")
         assert len(result) == 1
 
     def test_invalid_entry_skipped(self):
-        from turnstone.core.ratelimit import parse_trusted_proxies
+        from pebble.core.ratelimit import parse_trusted_proxies
 
         result = parse_trusted_proxies("10.0.0.0/8, not-valid, 172.16.0.0/12")
         assert len(result) == 2

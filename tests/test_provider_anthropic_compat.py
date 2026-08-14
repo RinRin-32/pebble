@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tests._session_helpers import make_session as _make_session
-from turnstone.core.providers._anthropic import AnthropicProvider
-from turnstone.core.providers._protocol import ModelCapabilities
+from pebble.core.providers._anthropic import AnthropicProvider
+from pebble.core.providers._protocol import ModelCapabilities
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,7 +96,7 @@ class TestCompatWireShape:
     def setup_method(self) -> None:
         self.provider = AnthropicProvider(compat=True)
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_compat_no_web_search_swap_no_temp_force(self, mock_ensure: MagicMock) -> None:
         """No native web_search swap, no temperature=1 forcing, max_tokens param."""
         client = _capture_client()
@@ -128,7 +128,7 @@ class TestCompatWireShape:
         assert "max_tokens" in kwargs
         assert "max_completion_tokens" not in kwargs
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_extra_params_passthrough_to_extra_body(self, mock_ensure: MagicMock) -> None:
         """server_compat extra_body (chat_template_kwargs) reaches the SDK."""
         client = _capture_client()
@@ -143,7 +143,7 @@ class TestCompatWireShape:
         kwargs = client.messages.stream.call_args[1]
         assert kwargs["extra_body"] == {"chat_template_kwargs": {"thinking": False}}
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_internal_keys_not_leaked(self, mock_ensure: MagicMock) -> None:
         """Real-lane request bodies stay byte-identical with thinking overrides.
 
@@ -205,7 +205,7 @@ class TestCompatReasoningControl:
         extra_params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         client = _capture_client()
-        with patch("turnstone.core.providers._anthropic._ensure_anthropic"):
+        with patch("pebble.core.providers._anthropic._ensure_anthropic"):
             list(
                 self.provider.create_streaming(
                     client=client,
@@ -336,7 +336,7 @@ class TestCompatReasoningControl:
         """The public streaming entry shares _build_thinking_and_kwargs."""
         client = MagicMock()
         client.messages.stream.return_value.__enter__.return_value = iter([])
-        with patch("turnstone.core.providers._anthropic._ensure_anthropic"):
+        with patch("pebble.core.providers._anthropic._ensure_anthropic"):
             list(
                 self.provider.create_streaming(
                     client=client,
@@ -359,17 +359,17 @@ class TestCompatFactory:
     """create_provider / create_client routing for the compat lane."""
 
     def test_create_provider_anthropic_compatible(self) -> None:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         provider = create_provider("anthropic-compatible")
         assert provider.provider_name == "anthropic-compatible"
         assert provider is not create_provider("anthropic")
         assert create_provider("anthropic-compatible") is provider
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_create_client_anthropic_compatible(self, mock_ensure: MagicMock) -> None:
         """base_url forwards verbatim; empty api_key is omitted entirely."""
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_anthropic_cls = MagicMock()
         mock_mod = MagicMock()
@@ -379,12 +379,12 @@ class TestCompatFactory:
         create_client("anthropic-compatible", base_url="http://vllm-host:8000", api_key="")
         mock_anthropic_cls.assert_called_once_with(base_url="http://vllm-host:8000")
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_create_client_strips_v1_suffix(self, mock_ensure: MagicMock) -> None:
         """A /v1-suffixed base_url (openai-compatible muscle memory) is
         normalized for the compat lane — the SDK appends /v1/... itself,
         so the verbatim URL would request /v1/v1/messages and 404."""
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_anthropic_cls = MagicMock()
         mock_mod = MagicMock()
@@ -403,21 +403,21 @@ class TestCompatFactory:
         create_client("anthropic-compatible", base_url="/v1", api_key="")
         mock_anthropic_cls.assert_called_once_with(base_url="/v1")
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_create_client_requires_base_url(self, mock_ensure: MagicMock) -> None:
         """Empty base_url fails at construction — the local-only lane must
         never fall back to the SDK's https://api.anthropic.com default."""
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         with pytest.raises(ValueError, match="anthropic-compatible requires base_url"):
             create_client("anthropic-compatible", base_url="", api_key="dummy")
         mock_ensure.return_value.Anthropic.assert_not_called()
 
-    @patch("turnstone.core.providers._anthropic._ensure_anthropic")
+    @patch("pebble.core.providers._anthropic._ensure_anthropic")
     def test_create_client_real_lane_base_url_untouched(self, mock_ensure: MagicMock) -> None:
         """The real anthropic lane forwards base_url verbatim — the /v1
         normalization is compat-lane-only."""
-        from turnstone.core.providers import create_client
+        from pebble.core.providers import create_client
 
         mock_anthropic_cls = MagicMock()
         mock_mod = MagicMock()
@@ -436,7 +436,7 @@ class TestCompatFactory:
 class TestCliScope:
     def test_cli_rejects_compat_provider_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The lane is registry-only — the CLI --provider flag does not grow."""
-        from turnstone import cli
+        from pebble import cli
 
         monkeypatch.setattr(sys, "argv", ["turnstone", "--provider", "anthropic-compatible"])
         with pytest.raises(SystemExit) as excinfo:
@@ -454,8 +454,8 @@ class TestCompatSessionPlumbing:
 
     def test_per_model_capability_override_merge(self, tmp_db: Any) -> None:
         """Per-model capabilities win over _ANTHROPIC_COMPAT_DEFAULT fields."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
-        from turnstone.core.providers import create_provider
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.providers import create_provider
 
         cfg = ModelConfig(
             alias="vllm-messages",
@@ -481,8 +481,8 @@ class TestCompatSessionPlumbing:
 
     def test_session_extra_params_gate(self, tmp_db: Any) -> None:
         """server_compat extra_body forwards for the compat lane, not real Anthropic."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
-        from turnstone.core.providers import create_provider
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.providers import create_provider
 
         session = _make_session(reasoning_effort="medium")
         cfg = ModelConfig(
@@ -510,18 +510,18 @@ class TestCompatSessionPlumbing:
 
 @pytest.mark.live
 @pytest.mark.skipif(
-    not os.environ.get("TURNSTONE_LIVE_ANTHROPIC_COMPAT_URL"),
-    reason="TURNSTONE_LIVE_ANTHROPIC_COMPAT_URL not set",
+    not os.environ.get("PEBBLE_LIVE_ANTHROPIC_COMPAT_URL"),
+    reason="PEBBLE_LIVE_ANTHROPIC_COMPAT_URL not set",
 )
 class TestLiveCompatStream:
     """One real streamed turn against a vLLM /v1/messages endpoint."""
 
     def test_live_compat_streamed_turn(self) -> None:
-        from turnstone.core.providers import create_client, create_provider
+        from pebble.core.providers import create_client, create_provider
 
-        base_url = os.environ["TURNSTONE_LIVE_ANTHROPIC_COMPAT_URL"]
+        base_url = os.environ["PEBBLE_LIVE_ANTHROPIC_COMPAT_URL"]
         model = os.environ.get(
-            "TURNSTONE_LIVE_ANTHROPIC_COMPAT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"
+            "PEBBLE_LIVE_ANTHROPIC_COMPAT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"
         )
         client = create_client("anthropic-compatible", base_url=base_url, api_key="dummy")
         provider = create_provider("anthropic-compatible")

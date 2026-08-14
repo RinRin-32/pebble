@@ -1,25 +1,25 @@
-# Running a bare-metal turnstone-server under systemd
+# Running a bare-metal pebble-server under systemd
 
-These units run a `turnstone-server` **outside** Docker (e.g. on a box with a
+These units run a `pebble-server` **outside** Docker (e.g. on a box with a
 local GPU) so it joins an existing cluster — typically the docker-compose stack
 in [`compose.yaml`](../../compose.yaml). They are the hardened, production-shaped
-counterpart to the quick `turnstone-server …` invocation in
+counterpart to the quick `pebble-server …` invocation in
 [`docs/docker.md`](../../docs/docker.md) ("Join a bare-metal host").
 
 | File | Purpose |
 |------|---------|
-| `turnstone-server.service` | The hardened server unit (sandboxed; secrets via `config.toml`). |
+| `pebble-server.service` | The hardened server unit (sandboxed; secrets via `config.toml`). |
 | `turnstone.slice` | Shared memory/process budget for colocated Turnstone units. |
-| `turnstone-server.service.d/node.conf.example` | Per-host identity + cluster URLs drop-in (no secrets). |
+| `pebble-server.service.d/node.conf.example` | Per-host identity + cluster URLs drop-in (no secrets). |
 
 ## Cluster-side prerequisite
 
 The compose stack must publish Postgres, the console's ACME endpoint, and SearxNG
-on an address the bare-metal host can reach. Start it with `TURNSTONE_HOST_IP`
+on an address the bare-metal host can reach. Start it with `PEBBLE_HOST_IP`
 set to the compose host's LAN IP (default `127.0.0.1` keeps everything host-local):
 
 ```bash
-TURNSTONE_HOST_IP=<compose-host-ip> docker compose up -d
+PEBBLE_HOST_IP=<compose-host-ip> docker compose up -d
 ```
 
 ## Install (run as root on the bare-metal host)
@@ -30,7 +30,7 @@ useradd --system --no-create-home --shell /usr/sbin/nologin turnstone
 
 # 2. Install turnstone into a venv at /opt/turnstone-venv (lacme/mTLS is a core dep).
 uv venv /opt/turnstone-venv --python 3.12
-uv pip install --python /opt/turnstone-venv 'turnstone @ git+https://github.com/turnstonelabs/turnstone'
+uv pip install --python /opt/turnstone-venv 'turnstone @ git+https://github.com/RinRin-32/pebble'
 #   …or from a local checkout:  uv pip install --python /opt/turnstone-venv /path/to/turnstone
 
 # 3. Secrets — match the cluster's JWT secret + DB credentials (kept out of env).
@@ -49,16 +49,16 @@ chown turnstone:turnstone /etc/turnstone/config.toml
 chmod 600 /etc/turnstone/config.toml
 
 # 4. Units + per-host drop-in.
-cp turnstone-server.service turnstone.slice /etc/systemd/system/
-install -d /etc/systemd/system/turnstone-server.service.d
-cp turnstone-server.service.d/node.conf.example \
-   /etc/systemd/system/turnstone-server.service.d/node.conf
-$EDITOR /etc/systemd/system/turnstone-server.service.d/node.conf   # set the addresses
+cp pebble-server.service turnstone.slice /etc/systemd/system/
+install -d /etc/systemd/system/pebble-server.service.d
+cp pebble-server.service.d/node.conf.example \
+   /etc/systemd/system/pebble-server.service.d/node.conf
+$EDITOR /etc/systemd/system/pebble-server.service.d/node.conf   # set the addresses
 
 # 5. Go.
 systemctl daemon-reload
-systemctl enable --now turnstone-server.service
-journalctl -u turnstone-server -f          # watch it register + (if the cluster runs mTLS) enroll
+systemctl enable --now pebble-server.service
+journalctl -u pebble-server -f          # watch it register + (if the cluster runs mTLS) enroll
 ```
 
 `tls.enabled` is **not** set here — a joining node inherits it from the cluster's

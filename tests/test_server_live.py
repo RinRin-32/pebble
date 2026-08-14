@@ -30,14 +30,14 @@ import httpx
 import pytest
 from openai import OpenAI
 
-from turnstone.core.session import ChatSession
-from turnstone.core.storage import init_storage, reset_storage
+from pebble.core.session import ChatSession
+from pebble.core.storage import init_storage, reset_storage
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
-BASE_URL = os.environ.get("TURNSTONE_TEST_BASE_URL", "http://localhost:8000/v1")
+BASE_URL = os.environ.get("PEBBLE_TEST_BASE_URL", "http://localhost:8000/v1")
 
 
 @pytest.fixture(scope="module")
@@ -45,7 +45,7 @@ def live_client():
     """Create an OpenAI client pointed at the local backend (live tests only)."""
     return OpenAI(
         base_url=BASE_URL,
-        api_key=os.environ.get("TURNSTONE_TEST_API_KEY", "not-needed"),
+        api_key=os.environ.get("PEBBLE_TEST_API_KEY", "not-needed"),
     )
 
 
@@ -154,7 +154,7 @@ def tmp_db():
 
 def _make_session(client, model_id, tmp_db, **kwargs) -> tuple[ChatSession, RecordingUI]:
     """Create a ChatSession with RecordingUI and sensible test defaults."""
-    from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+    from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
     ui = RecordingUI()
     defaults = dict(
@@ -525,7 +525,7 @@ class TestSessionConfig:
         """Guard: an empty-toolset persona (writer/scribe) sends ZERO tool
         definitions on the wire — create() is called without a tools kwarg.
         Replaces the removed /creative fork's equivalent assertion."""
-        from turnstone.core.personas import PersonaSnapshot
+        from pebble.core.personas import PersonaSnapshot
 
         client = _mock_client()
         client.chat.completions.create.return_value = make_mock_stream(
@@ -592,7 +592,7 @@ _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
 
 def _server_jwt() -> str:
-    from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
+    from pebble.core.auth import JWT_AUD_SERVER, create_jwt
 
     return create_jwt(
         user_id="test-server-live",
@@ -621,9 +621,9 @@ class TestServerHealthMetrics:
 
         from starlette.testclient import TestClient
 
-        import turnstone.server as srv_mod
-        from turnstone.core.metrics import MetricsCollector
-        from turnstone.core.workstream import WorkstreamState
+        import pebble.server as srv_mod
+        from pebble.core.metrics import MetricsCollector
+        from pebble.core.workstream import WorkstreamState
 
         srv_mod._metrics = MetricsCollector()
         srv_mod._metrics.model = "test-model"
@@ -796,10 +796,10 @@ class TestServerRateLimiting:
 
         from starlette.testclient import TestClient
 
-        import turnstone.server as srv_mod
-        from turnstone.core.metrics import MetricsCollector
-        from turnstone.core.ratelimit import RateLimiter
-        from turnstone.core.workstream import WorkstreamState
+        import pebble.server as srv_mod
+        from pebble.core.metrics import MetricsCollector
+        from pebble.core.ratelimit import RateLimiter
+        from pebble.core.workstream import WorkstreamState
 
         srv_mod._metrics = MetricsCollector()
         srv_mod._metrics.model = "test-model"

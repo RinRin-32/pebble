@@ -13,7 +13,7 @@ import base64
 import sqlalchemy as sa
 from cryptography.fernet import Fernet
 
-from turnstone.core.mcp_crypto import (
+from pebble.core.mcp_crypto import (
     MCPTokenCipher,
     MCPTokenCipherConfig,
     MCPTokenStore,

@@ -3,11 +3,11 @@ service-auth boundary from silent drift.
 
 Covers:
 
-- ``_effective_user_filter`` on ``turnstone.console.server`` — the
+- ``_effective_user_filter`` on ``pebble.console.server`` — the
   three-way return (None / caller_uid / DENY_EMPTY_SUB) and the four
   decision branches (admin, service-scope, blank-sub non-service,
   normal uid).
-- ``_effective_user_filter`` on ``turnstone.server`` — mirror of the
+- ``_effective_user_filter`` on ``pebble.server`` — mirror of the
   above minus the admin bypass (node-side has no admin concept).
 - ``_verify_collector_service_scope`` — 409 probe OK path,
   403 drift → ``collector_scope_error`` set + ERROR log,
@@ -28,7 +28,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from turnstone.core.auth import AuthResult
+from pebble.core.auth import AuthResult
 
 # ---------------------------------------------------------------------------
 # Shared builders
@@ -71,19 +71,19 @@ def _request_with_auth(
 
 class TestServerEffectiveUserFilter:
     def test_service_scope_returns_none(self):
-        from turnstone.server import _effective_user_filter
+        from pebble.server import _effective_user_filter
 
         req = _request_with_auth(user_id="console-proxy", scopes=frozenset({"service"}))
         assert _effective_user_filter(req) is None
 
     def test_scoped_caller_returns_uid(self):
-        from turnstone.server import _effective_user_filter
+        from pebble.server import _effective_user_filter
 
         req = _request_with_auth(user_id="alice", scopes=frozenset({"read"}))
         assert _effective_user_filter(req) == "alice"
 
     def test_blank_sub_non_service_returns_deny(self):
-        from turnstone.server import DENY_EMPTY_SUB, _effective_user_filter
+        from pebble.server import DENY_EMPTY_SUB, _effective_user_filter
 
         req = _request_with_auth(user_id="", scopes=frozenset({"read"}))
         assert _effective_user_filter(req) is DENY_EMPTY_SUB
@@ -92,7 +92,7 @@ class TestServerEffectiveUserFilter:
         """Server-side has no admin-permissions concept — ``admin.users``
         must NOT bypass the tenant filter on node endpoints.  Only the
         service scope crosses tenants."""
-        from turnstone.server import _effective_user_filter
+        from pebble.server import _effective_user_filter
 
         req = _request_with_auth(
             user_id="alice",
@@ -130,7 +130,7 @@ class TestVerifyCollectorServiceScope:
         """A 409 response means the scope gate passed; the probe's
         deliberately-wrong node_id tripped the identity check only
         after auth was accepted.  This is the happy path."""
-        from turnstone.console.server import _verify_collector_service_scope
+        from pebble.console.server import _verify_collector_service_scope
 
         app = _scope_probe_app(
             services=[
@@ -157,7 +157,7 @@ class TestVerifyCollectorServiceScope:
         probe must (1) set ``app.state.collector_scope_error`` non-empty
         with a remediation hint and (2) log at ERROR so operators see
         the drift at boot rather than chasing empty-dashboard reports."""
-        from turnstone.console.server import _verify_collector_service_scope
+        from pebble.console.server import _verify_collector_service_scope
 
         app = _scope_probe_app(services=[{"service_id": "node-1", "url": "http://node-1:8001"}])
 
@@ -165,7 +165,7 @@ class TestVerifyCollectorServiceScope:
             return httpx.Response(403, text='{"error":"service scope required"}')
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        with caplog.at_level(logging.ERROR, logger="turnstone.console.server"):
+        with caplog.at_level(logging.ERROR, logger="pebble.console.server"):
             await _verify_collector_service_scope(app, client)
 
         err = app.state.collector_scope_error
@@ -181,7 +181,7 @@ class TestVerifyCollectorServiceScope:
     async def test_401_also_sets_scope_error(self):
         """401 (JWT audience / secret mismatch) is the same configuration
         class as 403 — refuse to serve."""
-        from turnstone.console.server import _verify_collector_service_scope
+        from pebble.console.server import _verify_collector_service_scope
 
         app = _scope_probe_app(services=[{"service_id": "node-1", "url": "http://node-1:8001"}])
 
@@ -197,11 +197,11 @@ class TestVerifyCollectorServiceScope:
         """Single-node or pre-discovery states have no upstream to
         probe.  The self-check must NOT refuse to serve — the dashboard
         simply has no cluster data to render yet."""
-        from turnstone.console.server import _verify_collector_service_scope
+        from pebble.console.server import _verify_collector_service_scope
 
         app = _scope_probe_app(services=[])
         client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _r: httpx.Response(500)))
-        with caplog.at_level(logging.INFO, logger="turnstone.console.server"):
+        with caplog.at_level(logging.INFO, logger="pebble.console.server"):
             await _verify_collector_service_scope(app, client)
         assert app.state.collector_scope_error == ""
 
@@ -210,7 +210,7 @@ class TestVerifyCollectorServiceScope:
         """Transient httpx.ConnectError during probe is a "cluster is
         coming up" state; it must NOT be confused with scope drift.
         Leave ``collector_scope_error`` empty and log a warning."""
-        from turnstone.console.server import _verify_collector_service_scope
+        from pebble.console.server import _verify_collector_service_scope
 
         app = _scope_probe_app(services=[{"service_id": "node-1", "url": "http://node-1:8001"}])
 
@@ -230,7 +230,7 @@ class TestVerifyCollectorServiceScope:
 class TestClusterDashboardGate:
     @pytest.mark.anyio
     async def test_cluster_snapshot_503_when_scope_error(self):
-        from turnstone.console.server import cluster_snapshot
+        from pebble.console.server import cluster_snapshot
 
         request = MagicMock()
         request.app.state.collector_scope_error = "collector token rejected by node-1"
@@ -244,7 +244,7 @@ class TestClusterDashboardGate:
 
     @pytest.mark.anyio
     async def test_cluster_snapshot_200_when_scope_ok(self):
-        from turnstone.console.server import cluster_snapshot
+        from pebble.console.server import cluster_snapshot
 
         request = MagicMock()
         request.app.state.collector_scope_error = ""
@@ -264,7 +264,7 @@ class TestDashboardCache4xxLogLevel:
         """A 4xx from the upstream dashboard fetch must log at WARNING
         with the upstream body preview — silence here hides auth/scope
         drift behind an empty dashboard."""
-        from turnstone.console.server import _NodeDashboardCache
+        from pebble.console.server import _NodeDashboardCache
 
         cache = _NodeDashboardCache()
 
@@ -272,7 +272,7 @@ class TestDashboardCache4xxLogLevel:
             return httpx.Response(403, text='{"error":"service scope required"}')
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        with caplog.at_level(logging.WARNING, logger="turnstone.console.server"):
+        with caplog.at_level(logging.WARNING, logger="pebble.console.server"):
             payload = await cache.get("node-1", "http://node-1:8001", client, {})
 
         assert payload is None  # 4xx → no payload cached
@@ -289,7 +289,7 @@ class TestDashboardCache4xxLogLevel:
     @pytest.mark.anyio
     async def test_200_does_not_log(self, caplog):
         """The happy path stays quiet — only 4xx raises the log floor."""
-        from turnstone.console.server import _NodeDashboardCache
+        from pebble.console.server import _NodeDashboardCache
 
         cache = _NodeDashboardCache()
 
@@ -297,7 +297,7 @@ class TestDashboardCache4xxLogLevel:
             return httpx.Response(200, json={"workstreams": []})
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        with caplog.at_level(logging.WARNING, logger="turnstone.console.server"):
+        with caplog.at_level(logging.WARNING, logger="pebble.console.server"):
             payload = await cache.get("node-1", "http://node-1:8001", client, {})
 
         assert payload == {"workstreams": []}
@@ -309,7 +309,7 @@ class TestDashboardCache4xxLogLevel:
         operator scope fix shows up on the next request instead of
         after the cache expires.  Regression lock for the per-node
         ``asyncio.Lock`` already handling hot-loop protection."""
-        from turnstone.console.server import _NodeDashboardCache
+        from pebble.console.server import _NodeDashboardCache
 
         cache = _NodeDashboardCache()
         calls = {"n": 0}
@@ -340,7 +340,7 @@ class TestFetchLiveBlock4xxLogLevel:
         and fall through to the direct-fetch path inside
         ``_fetch_live_block``.  4xx there must surface at WARNING —
         the silence the cache path previously had also applied here."""
-        from turnstone.console.server import _fetch_live_block
+        from pebble.console.server import _fetch_live_block
 
         def handler(_req: httpx.Request) -> httpx.Response:
             return httpx.Response(401, text='{"error":"JWT audience mismatch"}')
@@ -363,11 +363,11 @@ class TestFetchLiveBlock4xxLogLevel:
         # router wiring to resolve node_id → URL.  monkeypatch handles
         # the restore automatically.
         monkeypatch.setattr(
-            "turnstone.console.server._get_server_url",
+            "pebble.console.server._get_server_url",
             lambda _req, _nid: "http://node-1:8001",
         )
 
-        with caplog.at_level(logging.WARNING, logger="turnstone.console.server"):
+        with caplog.at_level(logging.WARNING, logger="pebble.console.server"):
             live = await _fetch_live_block(
                 request, {"node_id": "node-1", "kind": "interactive"}, "ws-abc"
             )
@@ -396,7 +396,7 @@ class TestProxySseNon200LogLevel:
         operators need the drift in ops logs too."""
         from starlette.requests import Request
 
-        from turnstone.console.server import _proxy_sse
+        from pebble.console.server import _proxy_sse
 
         def handler(_req: httpx.Request) -> httpx.Response:
             return httpx.Response(403, text='{"error":"service scope required\\n"}')
@@ -423,7 +423,7 @@ class TestProxySseNon200LogLevel:
         # fallback empty-dict path since _proxy_auth_headers sees no
         # auth_result.
 
-        with caplog.at_level(logging.WARNING, logger="turnstone.console.server"):
+        with caplog.at_level(logging.WARNING, logger="pebble.console.server"):
             response = await _proxy_sse(request, "http://node-1:8001", "events", api_prefix="api")
             # Drain the streaming body so the async gen executes.
             async for _ in response.body_iterator:  # type: ignore[attr-defined]
@@ -458,7 +458,7 @@ class TestProxySseLastEventIdForwarding:
         """Browser sends ``Last-Event-ID``; upstream node must receive it."""
         from starlette.requests import Request
 
-        from turnstone.console.server import _proxy_sse
+        from pebble.console.server import _proxy_sse
 
         captured_headers: dict[str, str] = {}
 
@@ -504,7 +504,7 @@ class TestProxySseLastEventIdForwarding:
         accidentally injecting a stale or fabricated value."""
         from starlette.requests import Request
 
-        from turnstone.console.server import _proxy_sse
+        from pebble.console.server import _proxy_sse
 
         captured_headers: dict[str, str] = {}
 
@@ -550,7 +550,7 @@ class TestProxySseLastEventIdForwarding:
 class TestClusterEventsSseGate:
     @pytest.mark.anyio
     async def test_cluster_events_sse_503_when_scope_error(self):
-        from turnstone.console.server import cluster_events_sse
+        from pebble.console.server import cluster_events_sse
 
         request = MagicMock()
         request.app.state.collector_scope_error = (
@@ -578,8 +578,8 @@ class TestDenySentinelSharedIdentity:
         Only the server + core surfaces consume the sentinel after the
         trusted-team unification — the console no longer gates on
         row ownership, so its ``_effective_user_filter`` was removed."""
-        from turnstone.core.auth import DENY_EMPTY_SUB as CORE_DENY
-        from turnstone.server import DENY_EMPTY_SUB as SERVER_DENY
+        from pebble.core.auth import DENY_EMPTY_SUB as CORE_DENY
+        from pebble.server import DENY_EMPTY_SUB as SERVER_DENY
 
         assert CORE_DENY is SERVER_DENY
 
@@ -595,7 +595,7 @@ class TestBoundedBodyPreviewScrub:
         logs or in the operator-facing 503 ``collector_scope_error``
         — otherwise an attacker-controllable upstream can forge
         additional log lines or embed fake remediation text."""
-        from turnstone.console.server import _bounded_body_preview
+        from pebble.console.server import _bounded_body_preview
 
         preview = _bounded_body_preview("line-a\nline-b\r\nNUL\x00TAB\t")
         assert "\n" not in preview
@@ -608,13 +608,13 @@ class TestBoundedBodyPreviewScrub:
         assert "line-b" in preview
 
     def test_accepts_bytes_and_decodes(self):
-        from turnstone.console.server import _bounded_body_preview
+        from pebble.console.server import _bounded_body_preview
 
         preview = _bounded_body_preview(b"hello\nworld")
         assert preview == "hello world"
 
     def test_caps_at_requested_length(self):
-        from turnstone.console.server import _bounded_body_preview
+        from pebble.console.server import _bounded_body_preview
 
         preview = _bounded_body_preview("x" * 1000, cap=50)
         assert len(preview) == 50
@@ -630,7 +630,7 @@ class TestCoordinatorMetricsDenyShape:
         """The DENY short-circuit in coordinator_metrics must emit the
         same key set as the success path so strict-schema consumers
         don't break on the blank-sub branch."""
-        from turnstone.console.server import _coordinator_metrics_payload
+        from pebble.console.server import _coordinator_metrics_payload
 
         zero = _coordinator_metrics_payload(ws_id="a" * 32)
         happy = _coordinator_metrics_payload(
@@ -660,7 +660,7 @@ class TestProbeUrlAllowlist:
         """Probe URL picker must reject non-http(s) schemes so a
         poisoned service-registry entry can't redirect the probe
         through a ``file://`` or ``gs://`` transport."""
-        from turnstone.console.server import _probe_candidate_url
+        from pebble.console.server import _probe_candidate_url
 
         url, nid = _probe_candidate_url([{"service_id": "node-x", "url": "file:///etc/passwd"}])
         assert (url, nid) == ("", "")
@@ -669,7 +669,7 @@ class TestProbeUrlAllowlist:
         """169.254.0.0/16 is the cloud metadata range; a poisoned
         entry pointing there would turn the probe into an SSRF to
         IMDS."""
-        from turnstone.console.server import _probe_candidate_url
+        from pebble.console.server import _probe_candidate_url
 
         url, nid = _probe_candidate_url(
             [{"service_id": "node-x", "url": "http://169.254.169.254:80"}]
@@ -679,7 +679,7 @@ class TestProbeUrlAllowlist:
     def test_accepts_loopback_for_dev(self):
         """Single-box dev setups register the node at 127.0.0.1 — the
         allowlist must let that through."""
-        from turnstone.console.server import _probe_candidate_url
+        from pebble.console.server import _probe_candidate_url
 
         url, nid = _probe_candidate_url([{"service_id": "node-x", "url": "http://127.0.0.1:8001"}])
         assert nid == "node-x"
@@ -688,7 +688,7 @@ class TestProbeUrlAllowlist:
     def test_skips_malformed_entries(self):
         """Entries missing url or service_id are skipped so the loop
         falls through to the next candidate."""
-        from turnstone.console.server import _probe_candidate_url
+        from pebble.console.server import _probe_candidate_url
 
         url, nid = _probe_candidate_url(
             [

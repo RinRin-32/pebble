@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.core.config_store import ConfigStore
-from turnstone.core.settings_registry import SETTINGS
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.config_store import ConfigStore
+from pebble.core.settings_registry import SETTINGS
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -129,7 +129,7 @@ class TestDelete:
 class TestReload:
     def test_picks_up_external_storage_changes(self, storage, store):
         # Write directly to storage, bypassing ConfigStore
-        from turnstone.core.settings_registry import serialize_value
+        from pebble.core.settings_registry import serialize_value
 
         storage.upsert_system_setting(
             key="tools.timeout",

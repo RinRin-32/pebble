@@ -1,7 +1,7 @@
 """Tests for the shared session HTTP route registrar.
 
-Verifies that :func:`turnstone.core.session_routes.register_session_routes`
-and :func:`turnstone.core.session_routes.register_coord_verbs` mount
+Verifies that :func:`pebble.core.session_routes.register_session_routes`
+and :func:`pebble.core.session_routes.register_coord_verbs` mount
 the right route table per the supplied handler bundles, and that the
 console's ``create_app`` exposes the unified ``/v1/api/workstreams/``
 URL shape (the legacy ``/v1/api/coordinator/`` shape is gone).
@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from turnstone.core.session_routes import (
+from pebble.core.session_routes import (
     AttachmentHandlers,
     CoordOnlyVerbHandlers,
     SharedSessionVerbHandlers,
@@ -207,8 +207,8 @@ def test_console_create_app_only_mounts_unified_workstream_paths() -> None:
     unified ``/api/workstreams/`` shape — no path under
     ``/api/coordinator/`` should remain (deleted in Step 0.4)."""
     from tests._coord_test_helpers import MockStorage
-    from turnstone.console.collector import ClusterCollector
-    from turnstone.console.server import create_app
+    from pebble.console.collector import ClusterCollector
+    from pebble.console.server import create_app
 
     collector = ClusterCollector(storage=MockStorage(), discovery_interval=999)
     app = create_app(collector=collector)

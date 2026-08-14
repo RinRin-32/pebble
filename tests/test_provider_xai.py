@@ -31,16 +31,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.core.model_registry import _detect_openai_compat, _select_best_model
-from turnstone.core.providers import (
+from pebble.core.model_registry import _detect_openai_compat, _select_best_model
+from pebble.core.providers import (
     create_client,
     create_provider,
     list_known_models,
     lookup_model_capabilities,
 )
-from turnstone.core.providers._openai_common import resolve_server_side_tools
-from turnstone.core.providers._protocol import ModelCapabilities
-from turnstone.core.providers._xai import (
+from pebble.core.providers._openai_common import resolve_server_side_tools
+from pebble.core.providers._protocol import ModelCapabilities
+from pebble.core.providers._xai import (
     _GROK_DEFAULT,
     GROK_CAPABILITIES,
     XAI_DEFAULT_BASE_URL,
@@ -320,7 +320,7 @@ class TestExtraHeadersForwarding:
         assert kwargs.get("extra_headers") == {"x-grok-conv-id": "ws_xyz"}
 
     def test_chat_streaming_forwards_extra_headers(self) -> None:
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         chat_provider = OpenAIChatCompletionsProvider()
         client = MagicMock()

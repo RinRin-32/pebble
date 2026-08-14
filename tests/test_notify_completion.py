@@ -22,15 +22,15 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import (
+from pebble.console.server import (
     admin_create_schedule,
     admin_get_schedule,
     admin_update_schedule,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
-from turnstone.core.trajectory import turns_from_dicts
-from turnstone.server import (
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
+from pebble.core.trajectory import turns_from_dicts
+from pebble.server import (
     _deliver_notification,
     _extract_last_assistant_content,
     _fire_notify_targets,
@@ -320,9 +320,9 @@ class TestDeliverNotification:
 
 
 class TestFireNotifyTargets:
-    @patch("turnstone.server._deliver_notification")
+    @patch("pebble.server._deliver_notification")
     @patch(
-        "turnstone.core.session._notify_auth_headers",
+        "pebble.core.session._notify_auth_headers",
         return_value={"Authorization": "Bearer x"},
     )
     def test_fires_for_each_target(self, mock_auth, mock_deliver):
@@ -336,7 +336,7 @@ class TestFireNotifyTargets:
             ]
         )
 
-        with patch("turnstone.core.storage.get_storage") as mock_storage:
+        with patch("pebble.core.storage.get_storage") as mock_storage:
             mock_storage.return_value = MagicMock()
             _fire_notify_targets(ws, "Task completed successfully")
 
@@ -350,14 +350,14 @@ class TestFireNotifyTargets:
         second_payload = mock_deliver.call_args_list[1][0][1]
         assert second_payload["target"]["channel_id"] == "222"
 
-    @patch("turnstone.server._deliver_notification")
+    @patch("pebble.server._deliver_notification")
     def test_empty_targets_skipped(self, mock_deliver):
         ws = MagicMock()
         ws.notify_targets = "[]"
         _fire_notify_targets(ws, "content")
         mock_deliver.assert_not_called()
 
-    @patch("turnstone.server._deliver_notification")
+    @patch("pebble.server._deliver_notification")
     def test_empty_content_delivers_fallback(self, mock_deliver):
         """Empty content should still deliver with a fallback message."""
         ws = MagicMock()
@@ -367,7 +367,7 @@ class TestFireNotifyTargets:
         payload = mock_deliver.call_args[0][1]
         assert "no output captured" in payload["message"]
 
-    @patch("turnstone.server._deliver_notification")
+    @patch("pebble.server._deliver_notification")
     def test_invalid_json_targets_skipped(self, mock_deliver):
         ws = MagicMock()
         ws.notify_targets = "not json"
@@ -428,7 +428,7 @@ class TestSchedulerDispatch:
         mock_client = MagicMock()
         mock_client.create_workstream.return_value = mock_resp
 
-        from turnstone.console.scheduler import TaskScheduler
+        from pebble.console.scheduler import TaskScheduler
 
         scheduler = TaskScheduler(collector, storage)
 

@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from turnstone.core.access import CAPABILITY_CODE_DISPATCH, can_dispatch_code
+from pebble.core.access import CAPABILITY_CODE_DISPATCH, can_dispatch_code
 
 
 class _Store:
@@ -76,7 +76,7 @@ class _FakeSession:
         self._user_id = user_id
         self._acting_user_id = acting
 
-    from turnstone.core.session import ChatSession as _CS
+    from pebble.core.session import ChatSession as _CS
 
     _code_dispatch_denied = _CS._code_dispatch_denied
 
@@ -103,13 +103,13 @@ class TestSessionHelper:
     def test_enabled_and_granted_allows(self, monkeypatch: pytest.MonkeyPatch) -> None:
         store = _Store({"u": [CAPABILITY_CODE_DISPATCH]})
         monkeypatch.setattr(
-            "turnstone.core.storage._registry.get_storage", lambda: store
+            "pebble.core.storage._registry.get_storage", lambda: store
         )
         assert _session(_FakeConfig(True), user_id="u")._code_dispatch_denied() == ""
 
     def test_enabled_without_grant_denies(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "turnstone.core.storage._registry.get_storage", lambda: _Store()
+            "pebble.core.storage._registry.get_storage", lambda: _Store()
         )
         denial = _session(_FakeConfig(True), user_id="u")._code_dispatch_denied()
         assert denial and "Code dispatch" in denial
@@ -118,7 +118,7 @@ class TestSessionHelper:
         def boom() -> Any:
             raise RuntimeError("no storage bound")
 
-        monkeypatch.setattr("turnstone.core.storage._registry.get_storage", boom)
+        monkeypatch.setattr("pebble.core.storage._registry.get_storage", boom)
         assert _session(_FakeConfig(True), user_id="u")._code_dispatch_denied() != ""
 
     def test_acting_user_wins_over_session_user(
@@ -128,7 +128,7 @@ class TestSessionHelper:
         # from the linked member, so the grant must be read against the actor.
         store = _Store({"member": [CAPABILITY_CODE_DISPATCH]})
         monkeypatch.setattr(
-            "turnstone.core.storage._registry.get_storage", lambda: store
+            "pebble.core.storage._registry.get_storage", lambda: store
         )
         allowed = _session(_FakeConfig(True), user_id="gateway", acting="member")
         assert allowed._code_dispatch_denied() == ""

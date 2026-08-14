@@ -29,7 +29,7 @@ _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
 
 def _make_jwt(user_id: str) -> str:
-    from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
+    from pebble.core.auth import JWT_AUD_SERVER, create_jwt
 
     return create_jwt(
         user_id=user_id,
@@ -46,12 +46,12 @@ def app_client(tmp_path):
     and a fresh SQLite storage."""
     import sqlalchemy as sa
 
-    import turnstone.server as srv_mod
-    from turnstone.core.memory import register_workstream
-    from turnstone.core.metrics import MetricsCollector
-    from turnstone.core.storage import init_storage, reset_storage
-    from turnstone.core.storage._registry import get_storage
-    from turnstone.core.storage._schema import workstreams as ws_tbl
+    import pebble.server as srv_mod
+    from pebble.core.memory import register_workstream
+    from pebble.core.metrics import MetricsCollector
+    from pebble.core.storage import init_storage, reset_storage
+    from pebble.core.storage._registry import get_storage
+    from pebble.core.storage._schema import workstreams as ws_tbl
 
     # Fresh DB per test
     db_path = tmp_path / "test.db"
@@ -88,7 +88,7 @@ def app_client(tmp_path):
     )
     # Pending uploads live in the process-global per-node buffer now; clear it
     # so staged uploads can't leak across tests.
-    from turnstone.core.attachment_buffer import get_attachment_buffer
+    from pebble.core.attachment_buffer import get_attachment_buffer
 
     get_attachment_buffer().clear()
 
@@ -387,7 +387,7 @@ class TestGetContent:
         # explicit owner (user_id == ""), one user's attachment must
         # not be fetchable by another user via id-guessing.
         client, _ = app_client
-        from turnstone.core.memory import register_workstream
+        from pebble.core.memory import register_workstream
 
         register_workstream("ws-shared", name="shared")
         a_aid = _upload(client, "ws-shared", "userA", "secret.md", b"S", "text/markdown")
@@ -442,7 +442,7 @@ class TestGetThumbnail:
         # kind is image (reaches make_thumbnail) but the render yields None.
         client, _ = app_client
         aid = _upload(client, "ws-A", "userA", "t.png", PNG_1x1, "image/png")
-        monkeypatch.setattr("turnstone.core.thumbnails.make_thumbnail", lambda *a, **k: None)
+        monkeypatch.setattr("pebble.core.thumbnails.make_thumbnail", lambda *a, **k: None)
         resp = client.get(self._thumb_url("ws-A", aid), headers=_auth("userA"))
         assert resp.status_code == 415
 
@@ -455,7 +455,7 @@ class TestGetThumbnail:
 
     def test_thumbnail_unowned_ws_user_isolation_404(self, app_client):
         client, _ = app_client
-        from turnstone.core.memory import register_workstream
+        from pebble.core.memory import register_workstream
 
         register_workstream("ws-shared-thumb", name="shared")
         aid = _upload(client, "ws-shared-thumb", "userA", "s.png", PNG_1x1, "image/png")
@@ -494,7 +494,7 @@ class TestDelete:
 class TestSendMessageAttachments:
     def _wire_ws(self, mgr, ws_id: str, user_id: str):
         """Install a mock Workstream that captures session.send kwargs."""
-        from turnstone.core.workstream import WorkstreamState
+        from pebble.core.workstream import WorkstreamState
 
         session = MagicMock()
         session._cancel_event = threading.Event()
@@ -686,7 +686,7 @@ class TestQueuedSendWithAttachments:
         Captures args passed to queue_message so the test can assert on
         ordered attachment_ids.
         """
-        from turnstone.core.workstream import WorkstreamState
+        from pebble.core.workstream import WorkstreamState
 
         captured: dict = {}
 
@@ -757,8 +757,8 @@ class TestBusyWorkerAttachments:
 
     def _wire_busy_ws(self, mgr, ws_id: str):
         """Mock ws whose worker is always alive (forces the queue path)."""
-        from turnstone.core.session import ChatSession
-        from turnstone.core.workstream import WorkstreamState
+        from pebble.core.session import ChatSession
+        from pebble.core.workstream import WorkstreamState
 
         session = ChatSession(
             client=MagicMock(),
@@ -822,7 +822,7 @@ class TestServiceScopedActorFlow:
         client, mgr = app_client
 
         # Service token: has the 'service' scope
-        from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
+        from pebble.core.auth import JWT_AUD_SERVER, create_jwt
 
         service_token = create_jwt(
             user_id="svc-bot",
@@ -844,7 +844,7 @@ class TestServiceScopedActorFlow:
         assert resp.status_code == 200
         aid = resp.json()["attachment_id"]
 
-        from turnstone.core.attachment_buffer import get_attachment_buffer
+        from pebble.core.attachment_buffer import get_attachment_buffer
 
         # Staged under the owner uid (userA), not the service caller (svc-bot).
         assert get_attachment_buffer().get(aid, ws_id="ws-A", user_id="userA") is not None
@@ -900,13 +900,13 @@ def voice_app_client(tmp_path):
     """
     import sqlalchemy as sa
 
-    import turnstone.server as srv_mod
-    from turnstone.core.memory import register_workstream
-    from turnstone.core.metrics import MetricsCollector
-    from turnstone.core.model_registry import ModelConfig, ModelRegistry
-    from turnstone.core.storage import init_storage, reset_storage
-    from turnstone.core.storage._registry import get_storage
-    from turnstone.core.storage._schema import workstreams as ws_tbl
+    import pebble.server as srv_mod
+    from pebble.core.memory import register_workstream
+    from pebble.core.metrics import MetricsCollector
+    from pebble.core.model_registry import ModelConfig, ModelRegistry
+    from pebble.core.storage import init_storage, reset_storage
+    from pebble.core.storage._registry import get_storage
+    from pebble.core.storage._schema import workstreams as ws_tbl
 
     db_path = tmp_path / "voice.db"
     reset_storage()
@@ -1094,7 +1094,7 @@ def _seed_committed(ws_id: str, kind: str, mime: str, body: bytes, filename: str
     save + a tool row whose ref-list names it (the serving ownership gate)."""
     import hashlib
 
-    from turnstone.core.memory import save_attachment, save_message, set_message_attachments
+    from pebble.core.memory import save_attachment, save_message, set_message_attachments
 
     aid = hashlib.sha256(b"preview:" + body).hexdigest()
     save_attachment(aid, filename, mime, len(body), kind, body, "tool")

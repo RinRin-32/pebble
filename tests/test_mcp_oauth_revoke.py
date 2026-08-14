@@ -1,4 +1,4 @@
-"""Tests for :func:`turnstone.core.mcp_oauth.revoke_token_at_as`.
+"""Tests for :func:`pebble.core.mcp_oauth.revoke_token_at_as`.
 
 The helper is best-effort RFC 7009 token revocation. It must:
 - skip cleanly when the AS metadata doesn't advertise a revocation endpoint
@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
-from turnstone.core.mcp_oauth import (
+from pebble.core.mcp_oauth import (
     ASMetadata,
     MCPOAuthDiscoveryError,
     _attempt_upstream_revoke,
@@ -54,7 +54,7 @@ class TestRevocationUnsupported:
         client = MagicMock(spec=httpx.AsyncClient)
         client.post = AsyncMock()
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -76,7 +76,7 @@ class TestRevocationSuccess:
         client = MagicMock(spec=httpx.AsyncClient)
         client.post = AsyncMock(return_value=_mk_response(200))
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -129,7 +129,7 @@ class TestRevocationSuccess:
         client = MagicMock(spec=httpx.AsyncClient)
         client.post = AsyncMock(return_value=_mk_response(204))
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -150,7 +150,7 @@ class TestRevocationFailureLogged:
         client = MagicMock(spec=httpx.AsyncClient)
         client.post = AsyncMock(return_value=_mk_response(status))
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -196,7 +196,7 @@ class TestRevocationExceptionPaths:
         client = MagicMock(spec=httpx.AsyncClient)
         client.post = AsyncMock(side_effect=httpx.ConnectError("boom"))
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -221,7 +221,7 @@ class TestRevocationExceptionPaths:
         client = MagicMock(spec=httpx.AsyncClient)
         client.post = AsyncMock(side_effect=httpx.TimeoutException("slow"))
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -251,7 +251,7 @@ class TestRevocationExceptionPaths:
 
         client.post = AsyncMock(side_effect=_slow)
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -284,7 +284,7 @@ class TestRevocationExceptionPaths:
         client = MagicMock(spec=httpx.AsyncClient)
         client.post = AsyncMock(side_effect=httpx.ConnectError("boom"))
 
-        with patch("turnstone.core.mcp_oauth.log") as mock_log:
+        with patch("pebble.core.mcp_oauth.log") as mock_log:
             asyncio.run(
                 revoke_token_at_as(
                     as_metadata=as_meta,
@@ -356,8 +356,8 @@ class TestAttemptUpstreamRevokeNeverRaises:
             raise RuntimeError("network blew up")
 
         with (
-            patch("turnstone.core.mcp_oauth.discover_authorization_server", side_effect=_boom),
-            patch("turnstone.core.mcp_oauth.log") as mock_log,
+            patch("pebble.core.mcp_oauth.discover_authorization_server", side_effect=_boom),
+            patch("pebble.core.mcp_oauth.log") as mock_log,
         ):
             # MUST NOT raise.
             asyncio.run(_attempt_upstream_revoke(**args))
@@ -387,10 +387,10 @@ class TestAttemptUpstreamRevokeNeverRaises:
 
         with (
             patch(
-                "turnstone.core.mcp_oauth.discover_authorization_server",
+                "pebble.core.mcp_oauth.discover_authorization_server",
                 side_effect=_disc_fail,
             ),
-            patch("turnstone.core.mcp_oauth.log") as mock_log,
+            patch("pebble.core.mcp_oauth.log") as mock_log,
         ):
             asyncio.run(_attempt_upstream_revoke(**args))
 

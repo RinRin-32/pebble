@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.web_search — pluggable web search backends."""
+"""Tests for pebble.core.web_search — pluggable web search backends."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from turnstone.core.web_search import (
+from pebble.core.web_search import (
     MCPSearchClient,
     SearXNGClient,
     _format_searxng,
@@ -127,7 +127,7 @@ class TestSearXNGClient:
             captured["params"] = dict(request.url.params)
             return httpx.Response(200, json=SEARXNG_JSON)
 
-        with patch("turnstone.core.web_search.httpx.get", _mock_httpx_get(handler)):
+        with patch("pebble.core.web_search.httpx.get", _mock_httpx_get(handler)):
             client = SearXNGClient(
                 "http://searxng:8080", engines="duckduckgo,wikipedia", timeout=10
             )
@@ -147,7 +147,7 @@ class TestSearXNGClient:
             captured["params"] = dict(request.url.params)
             return httpx.Response(200, json={"results": []})
 
-        with patch("turnstone.core.web_search.httpx.get", _mock_httpx_get(handler)):
+        with patch("pebble.core.web_search.httpx.get", _mock_httpx_get(handler)):
             SearXNGClient("http://searxng:8080").search("q", category="it")
 
         assert captured["params"]["categories"] == "it"
@@ -159,7 +159,7 @@ class TestSearXNGClient:
             captured["params"] = dict(request.url.params)
             return httpx.Response(200, json={"results": []})
 
-        with patch("turnstone.core.web_search.httpx.get", _mock_httpx_get(handler)):
+        with patch("pebble.core.web_search.httpx.get", _mock_httpx_get(handler)):
             SearXNGClient("http://searxng:8080").search("q", category="general")
 
         assert "categories" not in captured["params"]
@@ -171,7 +171,7 @@ class TestSearXNGClient:
             captured["params"] = dict(request.url.params)
             return httpx.Response(200, json={"results": []})
 
-        with patch("turnstone.core.web_search.httpx.get", _mock_httpx_get(handler)):
+        with patch("pebble.core.web_search.httpx.get", _mock_httpx_get(handler)):
             SearXNGClient("http://searxng:8080", engines="").search("q")
 
         assert "engines" not in captured["params"]
@@ -183,7 +183,7 @@ class TestSearXNGClient:
             captured["url"] = str(request.url)
             return httpx.Response(200, json={"results": []})
 
-        with patch("turnstone.core.web_search.httpx.get", _mock_httpx_get(handler)):
+        with patch("pebble.core.web_search.httpx.get", _mock_httpx_get(handler)):
             SearXNGClient("http://searxng:8080/").search("q")
 
         assert captured["url"].startswith("http://searxng:8080/search")  # no // dupe
@@ -195,7 +195,7 @@ class TestSearXNGClient:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(403, text="forbidden")
 
-        with patch("turnstone.core.web_search.httpx.get", _mock_httpx_get(handler)):
+        with patch("pebble.core.web_search.httpx.get", _mock_httpx_get(handler)):
             client = SearXNGClient("http://searxng:8080")
             with pytest.raises(httpx.HTTPStatusError):
                 client.search("q")
@@ -406,7 +406,7 @@ class TestWebSearchReranking:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json=_results("A", "B"))
 
-        with patch("turnstone.core.web_search.httpx.get", _mock_httpx_get(handler)):
+        with patch("pebble.core.web_search.httpx.get", _mock_httpx_get(handler)):
             out = SearXNGClient("http://searxng:8080").search("q", reranker=lambda q, d: [1, 0])
 
         assert out.index("[B]") < out.index("[A]")  # reranker applied via search()

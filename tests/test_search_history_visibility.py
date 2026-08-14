@@ -29,7 +29,7 @@ from __future__ import annotations
 import pytest
 
 from tests._session_helpers import make_session
-from turnstone.core.auth import WorkstreamProjectVisibility
+from pebble.core.auth import WorkstreamProjectVisibility
 
 NEEDLE = "zebrafinch"
 
@@ -187,7 +187,7 @@ class TestRecallScopePlumbing:
 
     def test_exec_searches_as_pinned_user(self, monkeypatch):
         calls: list[str | None] = []
-        monkeypatch.setattr("turnstone.core.session.search_history", self._recorder(calls))
+        monkeypatch.setattr("pebble.core.session.search_history", self._recorder(calls))
         session = make_session(user_id="owner")
         item = session._prepare_recall("c1", {"query": "x"})
         session._exec_recall(item)
@@ -196,7 +196,7 @@ class TestRecallScopePlumbing:
     def test_exec_refuses_unpinned_item(self, monkeypatch):
         """Fail loudly rather than fall back to a tenant-wide search."""
         calls: list[str | None] = []
-        monkeypatch.setattr("turnstone.core.session.search_history", self._recorder(calls))
+        monkeypatch.setattr("pebble.core.session.search_history", self._recorder(calls))
         session = make_session(user_id="owner")
         item = session._prepare_recall("c1", {"query": "x"})
         del item["scope_user_id"]

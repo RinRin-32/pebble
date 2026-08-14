@@ -6,7 +6,7 @@ from io import BytesIO
 
 import pytest
 
-from turnstone.core.thumbnails import make_thumbnail
+from pebble.core.thumbnails import make_thumbnail
 
 PNG_1x1 = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -76,7 +76,7 @@ class TestMakeThumbnail:
 
         from PIL import Image
 
-        monkeypatch.setattr("turnstone.core.thumbnails._MAX_IMAGE_PIXELS", 50)
+        monkeypatch.setattr("pebble.core.thumbnails._MAX_IMAGE_PIXELS", 50)
         buf = BytesIO()
         Image.new("RGB", (6, 10)).save(buf, format="PNG")  # 60 px, in (50, 100]
         assert make_thumbnail(buf.getvalue(), "image") is None
@@ -87,7 +87,7 @@ class TestMakeThumbnail:
 
         from PIL import Image
 
-        monkeypatch.setattr("turnstone.core.thumbnails._MAX_IMAGE_PIXELS", 64)
+        monkeypatch.setattr("pebble.core.thumbnails._MAX_IMAGE_PIXELS", 64)
         buf = BytesIO()
         Image.new("RGB", (8, 8)).save(buf, format="PNG")  # 64 px == cap
         out = make_thumbnail(buf.getvalue(), "image")

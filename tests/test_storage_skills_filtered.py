@@ -43,7 +43,7 @@ def _create_skill(
         with storage._conn() as conn:
             import sqlalchemy as sa
 
-            from turnstone.core.storage._schema import prompt_templates
+            from pebble.core.storage._schema import prompt_templates
 
             conn.execute(
                 sa.update(prompt_templates)

@@ -16,9 +16,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
-from turnstone.server import (
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
+from pebble.server import (
     add_project_member_endpoint,
     create_project,
     delete_project_endpoint,
@@ -69,7 +69,7 @@ def storage(tmp_path: Path) -> SQLiteBackend:
 
 @pytest.fixture
 def client(storage: SQLiteBackend) -> Iterator[TestClient]:
-    import turnstone.core.storage._registry as reg
+    import pebble.core.storage._registry as reg
 
     old = reg._storage
     reg._storage = storage
@@ -161,7 +161,7 @@ class TestProjectApi:
     ) -> None:
         # The ACL's capability check reads from storage (not the injected
         # AuthResult); grant it so this test isolates the owner-vs-member gate.
-        from turnstone.core import auth
+        from pebble.core import auth
 
         monkeypatch.setattr(auth, "user_has_permission", lambda *a, **k: True)
         # Alice owns this one → she may flip visibility.

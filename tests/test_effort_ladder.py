@@ -7,8 +7,8 @@ the wire, which is what the UI annotations lean on.
 
 from __future__ import annotations
 
-from turnstone.core.providers._protocol import ModelCapabilities
-from turnstone.core.providers.effort_ladder import (
+from pebble.core.providers._protocol import ModelCapabilities
+from pebble.core.providers.effort_ladder import (
     KNOB_VALUES,
     effort_ladder,
     effort_ladder_for_model,

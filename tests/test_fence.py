@@ -1,10 +1,10 @@
-"""Tests for turnstone.core.fence — the shared nonce-delimited fence primitive."""
+"""Tests for pebble.core.fence — the shared nonce-delimited fence primitive."""
 
 from __future__ import annotations
 
 import pytest
 
-from turnstone.core import fence
+from pebble.core import fence
 
 
 class TestMintNonce:

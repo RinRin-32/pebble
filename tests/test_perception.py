@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from tests._session_helpers import as_stream, mock_completion_result
-from turnstone.core import perception
+from pebble.core import perception
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -32,7 +32,7 @@ class _StubProvider:
         self.last_resolve: Any = None
 
     def get_capabilities(self, model: str) -> Any:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         return ModelCapabilities()
 

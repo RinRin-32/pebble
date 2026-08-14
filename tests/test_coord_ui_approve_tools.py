@@ -20,7 +20,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 from tests.conftest import resolve_when_pending
-from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
+from pebble.console.coordinator_ui import ConsoleCoordinatorUI
 
 
 def _make_items(*specs: tuple[str, str], needs_approval: bool = True) -> list[dict[str, Any]]:
@@ -38,12 +38,12 @@ def _make_items(*specs: tuple[str, str], needs_approval: bool = True) -> list[di
 
 
 def _patch_storage(storage: Any):
-    return patch("turnstone.core.storage._registry.get_storage", return_value=storage)
+    return patch("pebble.core.storage._registry.get_storage", return_value=storage)
 
 
 def _patch_policies(verdicts: dict[str, str]):
     return patch(
-        "turnstone.core.policy.evaluate_tool_policies_batch",
+        "pebble.core.policy.evaluate_tool_policies_batch",
         return_value=verdicts,
     )
 
@@ -174,7 +174,7 @@ def test_coord_record_judge_metric_fires_console_metrics() -> None:
     ``ConsoleMetrics`` judge counter when the class attribute is wired,
     so coord verdicts surface on the console's /metrics endpoint
     alongside the per-node series."""
-    from turnstone.console.metrics import ConsoleMetrics
+    from pebble.console.metrics import ConsoleMetrics
 
     cm = ConsoleMetrics()
     ui = ConsoleCoordinatorUI(ws_id="coord-1", user_id="u1")
@@ -205,7 +205,7 @@ def test_coord_on_intent_verdict_fires_metric_for_llm_tier() -> None:
     ``on_intent_verdict``. Coord overrides it to fire the same
     ``record_judge_verdict`` call WebUI does — different tier label,
     same cluster-wide histogram."""
-    from turnstone.console.metrics import ConsoleMetrics
+    from pebble.console.metrics import ConsoleMetrics
 
     cm = ConsoleMetrics()
     ui = ConsoleCoordinatorUI(ws_id="coord-1", user_id="u1")

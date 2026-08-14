@@ -2,7 +2,7 @@
 
 The console pushes a ``models_changed`` cluster event whenever a model
 definition is created / updated / deleted / reloaded, or whenever a
-setting in :data:`turnstone.console.server._MODEL_AFFECTING_SETTING_KEYS`
+setting in :data:`pebble.console.server._MODEL_AFFECTING_SETTING_KEYS`
 is updated or reset.  Connected browsers refetch ``/v1/api/models`` on
 receipt so the home composer dropdown + admin Models → Roles sub-tab
 reflect alias edits without a manual reload.
@@ -28,7 +28,7 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from tests._coord_test_helpers import _AuthMiddleware
-from turnstone.console.server import (
+from pebble.console.server import (
     _MODEL_AFFECTING_SETTING_KEYS,
     admin_create_model_definition,
     admin_delete_model_definition,
@@ -37,7 +37,7 @@ from turnstone.console.server import (
     admin_update_model_definition,
     admin_update_setting,
 )
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture

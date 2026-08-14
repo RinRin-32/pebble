@@ -1,8 +1,8 @@
-"""Tests for turnstone.core.skill_scanner."""
+"""Tests for pebble.core.skill_scanner."""
 
 from __future__ import annotations
 
-from turnstone.core.skill_scanner import SCANNER_VERSION, ScanResult, scan_skill
+from pebble.core.skill_scanner import SCANNER_VERSION, ScanResult, scan_skill
 
 
 class TestScanSkillTiers:

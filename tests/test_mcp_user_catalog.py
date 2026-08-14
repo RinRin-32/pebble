@@ -26,7 +26,7 @@ import httpx
 import pytest
 
 from tests.conftest import _run_on_loop
-from turnstone.core.mcp_client import (
+from pebble.core.mcp_client import (
     MCPClientManager,
     PoolEntryState,
     _AuthCapture,
@@ -94,7 +94,7 @@ def _build_mock_transport_factory(
         return _factory
 
     monkeypatch.setattr(
-        "turnstone.core.mcp_client._make_capturing_http_factory",
+        "pebble.core.mcp_client._make_capturing_http_factory",
         _wrapped_factory,
     )
 
@@ -762,7 +762,7 @@ def test_refresh_pool_server_tools_isolates_user(
     _patch_tcp_probe(mgr, monkeypatch)
 
     # Pre-seed a static-path entry to assert it stays untouched.
-    from turnstone.core.mcp_client import StaticServerState
+    from pebble.core.mcp_client import StaticServerState
 
     sentinel_static = StaticServerState(name="static-srv", session=MagicMock())
     sentinel_static.tools = [
@@ -840,7 +840,7 @@ def test_static_path_byte_identical_with_oauth_user_disabled(
     """
     mgr, _loop, _ = running_loop_mgr
     # Seed the static-path catalog directly (no pool plumbing needed).
-    from turnstone.core.mcp_client import StaticServerState
+    from pebble.core.mcp_client import StaticServerState
 
     sentinel = StaticServerState(name="static-srv", session=MagicMock())
     static_tool = {
@@ -1546,7 +1546,7 @@ def test_refresh_pool_server_resources_isolates_user(
     _patch_tcp_probe(mgr, monkeypatch)
 
     # Pre-seed a static-path resource so we can assert it's untouched.
-    from turnstone.core.mcp_client import StaticServerState
+    from pebble.core.mcp_client import StaticServerState
 
     sentinel_static = StaticServerState(name="static-srv", session=MagicMock())
     sentinel_static.resources = [
@@ -1603,7 +1603,7 @@ def test_refresh_pool_server_prompts_isolates_user(
     _patch_tcp_probe(mgr, monkeypatch)
 
     # Pre-seed a static-path prompt and another user's pool prompt.
-    from turnstone.core.mcp_client import StaticServerState
+    from pebble.core.mcp_client import StaticServerState
 
     sentinel = StaticServerState(name="static-srv", session=MagicMock())
     sentinel.prompts = [

@@ -3,7 +3,7 @@
 import itertools
 import json
 
-from turnstone.core.storage._utils import reconstruct_messages
+from pebble.core.storage._utils import reconstruct_messages
 
 _row_ids = itertools.count(1)
 

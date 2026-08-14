@@ -610,7 +610,7 @@ class TestMigration060AttachmentBackfill:
 
         mig_path = (
             Path(__file__).resolve().parent.parent
-            / "turnstone/core/storage/migrations/versions/060_unwrap_tool_envelopes.py"
+            / "pebble/core/storage/migrations/versions/060_unwrap_tool_envelopes.py"
         )
         spec = importlib.util.spec_from_file_location("_mig_060_batch", mig_path)
         assert spec is not None and spec.loader is not None

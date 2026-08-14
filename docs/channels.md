@@ -1,6 +1,6 @@
 # Channel Integrations
 
-The `turnstone-channel` gateway connects external messaging platforms to
+The `pebble-channel` gateway connects external messaging platforms to
 turnstone workstreams via direct HTTP to the server (single-node) or the
 console routing proxy (multi-node). Each platform adapter translates
 platform-native events (messages, button clicks, slash commands) into
@@ -9,7 +9,7 @@ platform's UI.
 
 Discord and Slack adapters ship today. The adapter protocol is designed
 so new platforms can be added with only a new package under
-`turnstone/channels/<platform>/`.
+`pebble/channels/<platform>/`.
 
 ---
 
@@ -19,24 +19,24 @@ so new platforms can be added with only a new package under
 Discord Gateway        Slack (Socket Mode WebSocket)
        \                  /
         v                v
-       turnstone-channel  (one or more adapters)
+       pebble-channel  (one or more adapters)
               |
               v
-       turnstone-server   (direct HTTP)
+       pebble-server   (direct HTTP)
               or
-       turnstone-console  (routing proxy, multi-node)
+       pebble-console  (routing proxy, multi-node)
 ```
 
-A single `turnstone-channel` process can run multiple adapters
+A single `pebble-channel` process can run multiple adapters
 simultaneously (e.g. Discord + Slack) — pass the tokens for each
 platform you want to enable.
 
 Key components:
 
-- **ChannelAdapter protocol** (`turnstone/channels/_protocol.py`) — generic
+- **ChannelAdapter protocol** (`pebble/channels/_protocol.py`) — generic
   interface for any messaging platform. Defines `start()`, `stop()`,
   `send()`, and `send_notification()`.
-- **ChannelRouter** (`turnstone/channels/_routing.py`) — maps
+- **ChannelRouter** (`pebble/channels/_routing.py`) — maps
   channel/thread IDs to turnstone workstream IDs. Handles workstream
   creation via HTTP, stale route detection, and user identity resolution.
 - **channel_users table** — maps `(channel_type, channel_user_id)` to a
@@ -75,14 +75,14 @@ Key components:
 **Environment variables** (recommended for Docker):
 
 ```bash
-TURNSTONE_DISCORD_TOKEN=your-bot-token-here
-TURNSTONE_DISCORD_GUILD=123456789  # optional, restrict to one guild
+PEBBLE_DISCORD_TOKEN=your-bot-token-here
+PEBBLE_DISCORD_GUILD=123456789  # optional, restrict to one guild
 ```
 
 **CLI flags** (bare-metal):
 
 ```bash
-turnstone-channel \
+pebble-channel \
   --discord-token "your-bot-token" \
   --discord-guild 123456789 \
   --server-url http://localhost:8080
@@ -92,8 +92,8 @@ turnstone-channel \
 
 ```bash
 # In .env file:
-TURNSTONE_DISCORD_TOKEN=your-bot-token
-TURNSTONE_DISCORD_GUILD=123456789
+PEBBLE_DISCORD_TOKEN=your-bot-token
+PEBBLE_DISCORD_GUILD=123456789
 ```
 
 Then start the stack:
@@ -103,7 +103,7 @@ docker compose up
 ```
 
 The `channel` gateway runs by default; the Discord adapter activates once
-`TURNSTONE_DISCORD_TOKEN` is set.
+`PEBBLE_DISCORD_TOKEN` is set.
 
 ### 3. Link User Accounts
 
@@ -111,7 +111,7 @@ Discord users must link their account to a turnstone user before they can
 interact with the bot. Unlinked users' messages are silently ignored.
 
 1. The user must have a turnstone API token — created via the admin panel
-   or `turnstone-admin create-token`
+   or `pebble-admin create-token`
 2. In Discord, the user runs `/link`. A modal appears prompting for the
    API token (the token is never visible in Discord audit logs because it
    is submitted via modal, not as a slash command argument).
@@ -152,16 +152,16 @@ pip install 'turnstone[slack]'
 **Environment variables** (recommended for Docker):
 
 ```bash
-TURNSTONE_SLACK_TOKEN=xoxb-...        # Bot User OAuth Token
-TURNSTONE_SLACK_APP_TOKEN=xapp-...    # App-Level Token (Socket Mode)
-TURNSTONE_SLACK_CHANNELS=             # optional, comma-separated channel IDs
-TURNSTONE_SLACK_SLASH_COMMAND=/turnstone
+PEBBLE_SLACK_TOKEN=xoxb-...        # Bot User OAuth Token
+PEBBLE_SLACK_APP_TOKEN=xapp-...    # App-Level Token (Socket Mode)
+PEBBLE_SLACK_CHANNELS=             # optional, comma-separated channel IDs
+PEBBLE_SLACK_SLASH_COMMAND=/turnstone
 ```
 
 **CLI flags** (bare-metal):
 
 ```bash
-turnstone-channel \
+pebble-channel \
   --slack-token "xoxb-..." \
   --slack-app-token "xapp-..." \
   --slack-slash-command /turnstone \
@@ -240,21 +240,21 @@ still requiring manual approval for others).
 
 | CLI Flag | Env Var | Default | Description |
 |----------|---------|---------|-------------|
-| `--discord-token` | `TURNSTONE_DISCORD_TOKEN` | — | Discord bot token (required to enable Discord) |
+| `--discord-token` | `PEBBLE_DISCORD_TOKEN` | — | Discord bot token (required to enable Discord) |
 | `--discord-guild` | — | `0` (all guilds) | Restrict to a single Discord guild |
 | `--discord-channels` | — | empty (all) | Comma-separated Discord channel IDs to allow |
-| `--slack-token` | `TURNSTONE_SLACK_TOKEN` | — | Slack Bot User OAuth token (`xoxb-…`, required to enable Slack) |
-| `--slack-app-token` | `TURNSTONE_SLACK_APP_TOKEN` | — | Slack App-Level token (`xapp-…`, required with `--slack-token`) |
-| `--slack-channels` | `TURNSTONE_SLACK_CHANNELS` | empty (all) | Comma-separated Slack channel IDs to allow |
-| `--slack-slash-command` | `TURNSTONE_SLACK_SLASH_COMMAND` | `/turnstone` | Slash command name registered in the Slack app |
-| `--server-url` | `TURNSTONE_SERVER_URL` | `http://localhost:8080` | Server URL (single-node) |
-| `--console-url` | `TURNSTONE_CONSOLE_URL` | — | Console URL (multi-node routing proxy) |
+| `--slack-token` | `PEBBLE_SLACK_TOKEN` | — | Slack Bot User OAuth token (`xoxb-…`, required to enable Slack) |
+| `--slack-app-token` | `PEBBLE_SLACK_APP_TOKEN` | — | Slack App-Level token (`xapp-…`, required with `--slack-token`) |
+| `--slack-channels` | `PEBBLE_SLACK_CHANNELS` | empty (all) | Comma-separated Slack channel IDs to allow |
+| `--slack-slash-command` | `PEBBLE_SLACK_SLASH_COMMAND` | `/turnstone` | Slash command name registered in the Slack app |
+| `--server-url` | `PEBBLE_SERVER_URL` | `http://localhost:8080` | Server URL (single-node) |
+| `--console-url` | `PEBBLE_CONSOLE_URL` | — | Console URL (multi-node routing proxy) |
 | `--model` | — | server default | Default model for new workstreams |
 | `--auto-approve` | — | `false` | Auto-approve ALL tool calls (skips approval buttons entirely) |
 | `--http-host` | — | `127.0.0.1` | HTTP server bind address for notify endpoint |
-| `--http-port` | `TURNSTONE_CHANNEL_PORT` | `8091` | HTTP server port |
-| `--log-level` | `TURNSTONE_LOG_LEVEL` | `INFO` | Log level |
-| `--log-format` | `TURNSTONE_LOG_FORMAT` | `auto` | Log format (`auto`/`json`/`text`) |
+| `--http-port` | `PEBBLE_CHANNEL_PORT` | `8091` | HTTP server port |
+| `--log-level` | `PEBBLE_LOG_LEVEL` | `INFO` | Log level |
+| `--log-format` | `PEBBLE_LOG_FORMAT` | `auto` | Log format (`auto`/`json`/`text`) |
 
 At least one of `--discord-token` or `--slack-token` must be supplied.
 Passing both starts both adapters in the same process.
@@ -325,7 +325,7 @@ gateway directly over HTTP:
 1. The LLM calls the `notify` tool with a message and target
 2. `_exec_notify()` queries the `services` table for healthy channel
    gateways (heartbeat within the last 120 seconds)
-3. The server mints a service JWT (`aud: turnstone-channel`) via
+3. The server mints a service JWT (`aud: pebble-channel`) via
    `ServiceTokenManager` and POSTs to the first healthy gateway. The
    payload includes the originating `ws_id` for reply routing.
 4. The gateway validates the JWT, resolves the target, and calls
@@ -383,10 +383,10 @@ The `services` table schema:
 ### Security
 
 - **Authentication** — the gateway's `POST /v1/api/notify` endpoint
-  requires authentication. Configure `TURNSTONE_JWT_SECRET` so the
-  server can mint JWTs with `aud: turnstone-channel` automatically.
+  requires authentication. Configure `PEBBLE_JWT_SECRET` so the
+  server can mint JWTs with `aud: pebble-channel` automatically.
   If the secret is not set, the gateway fails closed and rejects all
-  requests with 401. Server JWTs (`aud: turnstone-server`) are
+  requests with 401. Server JWTs (`aud: pebble-server`) are
   rejected.
 - **Rate limit** — maximum 5 notifications per turn. The counter only
   increments on successful delivery, so failures don't consume the
@@ -428,11 +428,11 @@ own `_on_ws_event` dispatcher using SDK-native APIs.
 
 To add a new platform:
 
-1. Create `turnstone/channels/<platform>/` package
+1. Create `pebble/channels/<platform>/` package
 2. Implement the `ChannelAdapter` protocol
 3. Add a `--<platform>-token` flag and detection logic in
-   `turnstone/channels/cli.py`
+   `pebble/channels/cli.py`
 4. Add the optional dependency in `pyproject.toml` (e.g.
    `turnstone[slack]`)
 
-See `turnstone/channels/discord/` as a reference implementation.
+See `pebble/channels/discord/` as a reference implementation.

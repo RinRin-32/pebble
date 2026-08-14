@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.healthcheck — passive backend health tracking."""
+"""Tests for pebble.core.healthcheck — passive backend health tracking."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-from turnstone.core.healthcheck import BackendHealthTracker, HealthTrackerRegistry
+from pebble.core.healthcheck import BackendHealthTracker, HealthTrackerRegistry
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -22,8 +22,8 @@ def mock_metrics() -> Generator[MagicMock]:
     """Patch the metrics singleton so set_backend_status exists."""
     m = MagicMock()
     with (
-        patch("turnstone.core.healthcheck.metrics", m, create=True),
-        patch("turnstone.core.metrics.metrics", m, create=True),
+        patch("pebble.core.healthcheck.metrics", m, create=True),
+        patch("pebble.core.metrics.metrics", m, create=True),
     ):
         yield m
 
@@ -169,7 +169,7 @@ class TestHealthTrackerRegistry:
 
     def test_get_tracker_for_alias(self, mock_metrics: MagicMock) -> None:
         """get_tracker_for_alias looks up by model config's backend."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         models = {
             "cloud": ModelConfig(

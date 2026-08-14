@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from turnstone.cli import TerminalUI
+from pebble.cli import TerminalUI
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -34,11 +34,11 @@ class TestCLIPolicyEnforcement:
 
         with (
             patch(
-                "turnstone.core.policy.evaluate_tool_policies_batch",
+                "pebble.core.policy.evaluate_tool_policies_batch",
                 return_value={"bash": "deny"},
             ),
             patch(
-                "turnstone.core.storage._registry.get_storage",
+                "pebble.core.storage._registry.get_storage",
                 return_value=MagicMock(),
             ),
         ):
@@ -55,11 +55,11 @@ class TestCLIPolicyEnforcement:
 
         with (
             patch(
-                "turnstone.core.policy.evaluate_tool_policies_batch",
+                "pebble.core.policy.evaluate_tool_policies_batch",
                 return_value={"read_file": "allow"},
             ),
             patch(
-                "turnstone.core.storage._registry.get_storage",
+                "pebble.core.storage._registry.get_storage",
                 return_value=MagicMock(),
             ),
         ):
@@ -74,7 +74,7 @@ class TestCLIPolicyEnforcement:
 
         with (
             patch(
-                "turnstone.core.storage._registry.get_storage",
+                "pebble.core.storage._registry.get_storage",
                 return_value=None,
             ),
             patch("builtins.input", return_value="y"),

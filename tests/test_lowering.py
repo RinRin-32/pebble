@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from turnstone.core.lowering import (
+from pebble.core.lowering import (
     CANCELLED_TOOL_RESULT,
     _find_orphaned_tool_calls,
     repair_wire_messages,

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`turnstone-server` exposes a browser-based chat UI backed by a
+`pebble-server` exposes a browser-based chat UI backed by a
 **Starlette** ASGI application served by **uvicorn**. The server uses
 **Server-Sent Events (SSE)** via `sse-starlette` for real-time streaming
 and **HTTP POST** for user actions.
@@ -44,7 +44,7 @@ Async variant: `AsyncTurnstoneServer` / `AsyncTurnstoneConsole`.
 **TypeScript** (`sdk/typescript/`):
 
 ```typescript
-import { TurnstoneServer } from "@turnstone/sdk";
+import { TurnstoneServer } from "@pebble/sdk";
 
 const client = new TurnstoneServer({ baseUrl: "http://localhost:8080", token: "tok_xxx" });
 const ws = await client.createWorkstream({ name: "demo" });
@@ -64,7 +64,7 @@ Include a token in one of two ways:
 
 - **Bearer header**: `Authorization: Bearer <token>`
 - **Cookie**: the surface-scoped auth cookie — `turnstone_auth_server` on
-  turnstone-server, `turnstone_auth_console` on turnstone-console (set
+  pebble-server, `turnstone_auth_console` on pebble-console (set
   automatically by the login endpoint). The names differ so the two surfaces,
   when co-hosted on one origin, don't overwrite each other's session.
 
@@ -106,7 +106,7 @@ Authenticate with credentials and receive a JWT. Accepts two credential formats:
 ```
 
 The response also sets a surface-scoped HttpOnly cookie containing the JWT
-(`turnstone_auth_server` on turnstone-server, `turnstone_auth_console` on turnstone-console).
+(`turnstone_auth_server` on pebble-server, `turnstone_auth_console` on pebble-console).
 
 **Response (failure):** `401`
 
@@ -205,7 +205,7 @@ this endpoint.
 ```
 
 The response also sets a surface-scoped HttpOnly cookie containing the JWT
-(`turnstone_auth_server` on turnstone-server, `turnstone_auth_console` on turnstone-console).
+(`turnstone_auth_server` on pebble-server, `turnstone_auth_console` on pebble-console).
 
 **Response (already set up):** `409`
 
@@ -2303,7 +2303,7 @@ turnstone_tool_calls_total{tool="read_file"} 3
 
 ## Console Routing Proxy Endpoints
 
-These endpoints are served by the console (`turnstone-console`) and proxy
+These endpoints are served by the console (`pebble-console`) and proxy
 requests to the correct server node via rendezvous (HRW) hashing over the
 live service registry. In multi-node deployments, clients (SDK, channel
 gateway) talk to the console instead of individual server nodes.

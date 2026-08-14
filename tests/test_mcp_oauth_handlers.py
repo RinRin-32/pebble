@@ -24,15 +24,15 @@ from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
 from tests.conftest import make_mcp_token_cipher
-from turnstone.core.auth import AuthResult
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.mcp_oauth import (
+from pebble.core.auth import AuthResult
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.mcp_oauth import (
     _validate_return_url,
     handle_mcp_oauth_authorize,
     handle_mcp_oauth_callback,
 )
-from turnstone.core.oidc import OIDCConfig
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.oidc import OIDCConfig
+from pebble.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     from starlette.requests import Request

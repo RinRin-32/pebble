@@ -20,12 +20,12 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.core.auth import AuthResult
-from turnstone.core.history_decoration import (
+from pebble.core.auth import AuthResult
+from pebble.core.history_decoration import (
     decorate_history_messages,
     project_history_messages,
 )
-from turnstone.core.session_routes import (
+from pebble.core.session_routes import (
     SessionEndpointConfig,
     make_detail_handler,
     make_export_handler,
@@ -36,9 +36,9 @@ from turnstone.core.session_routes import (
     make_rewind_handler,
     make_set_title_handler,
 )
-from turnstone.core.storage._sqlite import SQLiteBackend
-from turnstone.core.workstream import WorkstreamKind
-from turnstone.server import (
+from pebble.core.storage._sqlite import SQLiteBackend
+from pebble.core.workstream import WorkstreamKind
+from pebble.server import (
     _interactive_tenant_check,
     delete_workstream_endpoint,
     list_interface_settings,
@@ -74,7 +74,7 @@ def storage(tmp_path):
 @pytest.fixture
 def _inject_storage(storage):
     """Swap global storage registry for the test backend."""
-    import turnstone.core.storage._registry as reg
+    import pebble.core.storage._registry as reg
 
     old = reg._storage
     reg._storage = storage
@@ -157,13 +157,13 @@ def open_client(_inject_storage):
     callback (the tests assert HTTP-shape only, not the SSE replay).
 
     The alias resolver is wrapped in a lazy lookup so each test's
-    ``@patch("turnstone.core.memory.resolve_workstream")`` is
+    ``@patch("pebble.core.memory.resolve_workstream")`` is
     visible at request time. A direct function reference would
     bind to the unpatched original at fixture-construction time.
     """
 
     def _lazy_alias_resolver(ws_id: str) -> str | None:
-        from turnstone.core.memory import resolve_workstream
+        from pebble.core.memory import resolve_workstream
 
         return resolve_workstream(ws_id)
 
@@ -411,7 +411,7 @@ class TestDeleteWorkstream:
         client, _ = delete_client
         storage.register_workstream("ws-abc", "node-1", name="test", user_id="test-user")
         with patch(
-            "turnstone.core.memory.delete_workstream",
+            "pebble.core.memory.delete_workstream",
             side_effect=RuntimeError("secret internal detail"),
         ):
             r = client.post("/v1/api/workstreams/ws-abc/delete")
@@ -536,7 +536,7 @@ class TestRefreshWorkstreamTitle:
         mock_ws.user_id = "test-user"
         mock_ws.session = MagicMock()
         mock_mgr.get.return_value = mock_ws
-        with patch("turnstone.core.memory.get_workstream_display_name", return_value="Old Title"):
+        with patch("pebble.core.memory.get_workstream_display_name", return_value="Old Title"):
             r = client.post("/v1/api/workstreams/ws-abc/refresh-title")
         assert r.status_code == 200
         mock_ws.session.request_title_refresh.assert_called_once_with("Old Title")
@@ -562,7 +562,7 @@ class TestRefreshWorkstreamTitle:
 
 
 class TestOpenWorkstream:
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_already_loaded(self, mock_resolve, open_client):
         """The lifted body returns ``ws.name`` directly on the
         already-loaded shortcut path (not a display-alias re-lookup).
@@ -584,14 +584,14 @@ class TestOpenWorkstream:
         assert r.json()["ws_id"] == "ws-abc"
         assert r.json()["name"] == "My WS"
 
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_not_found(self, mock_resolve, open_client):
         client, mock_mgr, gq = open_client
         mock_resolve.return_value = None
         r = client.post("/v1/api/workstreams/nonexistent/open")
         assert r.status_code == 404
 
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_no_storage_row(self, mock_resolve, open_client, _inject_storage):
         """``mgr.open`` returns ``None`` for missing storage rows, kind
         mismatches, and tombstoned rows — all surface as 404 with
@@ -611,7 +611,7 @@ class TestOpenWorkstream:
         assert r.status_code == 404
         assert "not found" in r.json()["error"].lower()
 
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_calls_mgr_open_not_mgr_create(self, mock_resolve, open_client):
         """Post-P3 reckoning item #3: interactive ``open`` must route
         through ``mgr.open()`` (which fires ``emit_rehydrated``), not
@@ -633,7 +633,7 @@ class TestOpenWorkstream:
         mock_mgr.open.assert_called_once_with("ws-resolved")
         mock_mgr.create.assert_not_called()
 
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_resolves_alias_before_lookup(self, mock_resolve, open_client):
         """``cfg.open_resolve_alias`` runs first — the path-param can
         be a user-friendly alias that resolves to a hex id, and the
@@ -654,7 +654,7 @@ class TestOpenWorkstream:
         mock_mgr.get.assert_called_once_with("ws-canonical-id")
         mock_mgr.open.assert_called_once_with("ws-canonical-id")
 
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_post_load_callback_fires_with_request_and_ws(self, mock_resolve, _inject_storage):
         """``cfg.open_post_load`` is the kind-specific hook for
         post-mgr.open work (interactive uses it for UI replay +
@@ -674,7 +674,7 @@ class TestOpenWorkstream:
             captured.append((ws_obj.id, ws_obj.name))
 
         def _lazy_alias(ws_id: str) -> str | None:
-            from turnstone.core.memory import resolve_workstream
+            from pebble.core.memory import resolve_workstream
 
             return resolve_workstream(ws_id)
 
@@ -726,7 +726,7 @@ class TestOpenWorkstream:
         assert r.status_code == 200
         assert captured == [("ws-fresh", "fresh-name")]
 
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_500_message_uses_kind_noun_from_cfg(self, mock_resolve, _inject_storage):
         """``cfg.audit_action_prefix`` ("workstream" interactive,
         "coordinator" coord) is woven into the 500 error string so
@@ -742,7 +742,7 @@ class TestOpenWorkstream:
         from starlette.testclient import TestClient
 
         def _lazy_alias(ws_id: str) -> str | None:
-            from turnstone.core.memory import resolve_workstream
+            from pebble.core.memory import resolve_workstream
 
             return resolve_workstream(ws_id)
 
@@ -783,7 +783,7 @@ class TestOpenWorkstream:
         # Exception text is NOT echoed (no internal-detail leak).
         assert "session factory blew up" not in body["error"]
 
-    @patch("turnstone.core.memory.resolve_workstream")
+    @patch("pebble.core.memory.resolve_workstream")
     def test_open_swallows_post_load_exception(self, mock_resolve, _inject_storage):
         """A bug in ``open_post_load`` must NOT block the open from
         returning 200 — the workstream is already loaded by mgr.open
@@ -799,7 +799,7 @@ class TestOpenWorkstream:
             raise RuntimeError("post-load blew up")
 
         def _lazy_alias(ws_id: str) -> str | None:
-            from turnstone.core.memory import resolve_workstream
+            from pebble.core.memory import resolve_workstream
 
             return resolve_workstream(ws_id)
 
@@ -923,7 +923,7 @@ class TestUpdateInterfaceSetting:
 #
 # Stage 2 ``history`` / ``detail`` verb lift adds these endpoints to the
 # interactive surface as a feature gain (pre-lift only coord exposed
-# them). The lifted factories live in :mod:`turnstone.core.session_routes`;
+# them). The lifted factories live in :mod:`pebble.core.session_routes`;
 # coord parity coverage lives in :mod:`tests.test_coordinator_endpoints`.
 # These tests pin the interactive wiring against the same factory.
 
@@ -1894,7 +1894,7 @@ class TestTenantCheckOnReadEndpoints:
         """
         import asyncio
 
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         ws_id = "ws-cold-cache-hist"
         _inject_storage.register_workstream(ws_id, kind="interactive", user_id="test-user")
@@ -1940,7 +1940,7 @@ class TestTenantCheckOnReadEndpoints:
         """
         import asyncio
 
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         ws_id = "ws-cold-cache-detail"
         _inject_storage.register_workstream(ws_id, kind="interactive", user_id="test-user")

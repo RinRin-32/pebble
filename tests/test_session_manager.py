@@ -27,8 +27,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.core.session_manager import SessionKindAdapter, SessionManager
-from turnstone.core.workstream import (
+from pebble.core.session_manager import SessionKindAdapter, SessionManager
+from pebble.core.workstream import (
     BULK_CLOSE_STATE_VALUES,
     Workstream,
     WorkstreamKind,
@@ -567,7 +567,7 @@ def test_commit_create_after_discard_is_no_op(caplog) -> None:
     assert discarded is True
     assert adapter.events_of("created") == []
 
-    with caplog.at_level(logging.WARNING, logger="turnstone.core.session_manager"):
+    with caplog.at_level(logging.WARNING, logger="pebble.core.session_manager"):
         mgr.commit_create(ws)
 
     # No event emitted — the tracked-ws check failed.
@@ -591,7 +591,7 @@ def test_commit_create_is_idempotent_on_duplicate_call(caplog) -> None:
     mgr.commit_create(ws)
     assert [e.ws_id for e in adapter.events_of("created")] == [ws.id]
 
-    with caplog.at_level(logging.WARNING, logger="turnstone.core.session_manager"):
+    with caplog.at_level(logging.WARNING, logger="pebble.core.session_manager"):
         mgr.commit_create(ws)
 
     # Still exactly one created event — the guard short-circuited
@@ -622,7 +622,7 @@ def test_discard_after_emit_created_warns_but_releases_slot(caplog) -> None:
     ws = mgr.create(user_id="u1", name="created-then-discarded")
     assert [e.ws_id for e in adapter.events_of("created")] == [ws.id]
 
-    with caplog.at_level(logging.WARNING, logger="turnstone.core.session_manager"):
+    with caplog.at_level(logging.WARNING, logger="pebble.core.session_manager"):
         result = mgr.discard(ws.id)
 
     # Slot released (caller-bug doesn't strand capacity).
@@ -1461,7 +1461,7 @@ class TestSessionManagerWithStateWriter:
     def _make_with_writer(
         self, *, flush_interval: float = 0.05
     ) -> tuple[SessionManager, FakeStorage, Any]:
-        from turnstone.core.state_writer import StateWriter
+        from pebble.core.state_writer import StateWriter
 
         storage = FakeStorage()
         writer = StateWriter(storage, flush_interval=flush_interval)

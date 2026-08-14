@@ -26,7 +26,7 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-from turnstone.console.server import _coord_idle_cleanup_thread
+from pebble.console.server import _coord_idle_cleanup_thread
 
 if TYPE_CHECKING:
     from collections.abc import Callable

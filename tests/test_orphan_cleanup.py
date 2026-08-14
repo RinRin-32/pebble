@@ -12,7 +12,7 @@ import hashlib
 
 import pytest
 
-from turnstone.admin import _cmd_orphan_conversations
+from pebble.admin import _cmd_orphan_conversations
 
 
 def _orphan(backend, ws_id: str, n: int = 2) -> None:
@@ -58,7 +58,7 @@ class TestOrphanScan:
         # Timestamps are insertion-ordered ISO text; rewrite to force ordering.
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import conversations
+        from pebble.core.storage._schema import conversations
 
         with backend._conn() as conn:
             conn.execute(
@@ -126,7 +126,7 @@ class TestOrphanPurge:
         backend.delete_orphan_conversations(["ghost1"])
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import workstream_config
+        from pebble.core.storage._schema import workstream_config
 
         with backend._conn() as conn:
             left = conn.execute(
@@ -149,7 +149,7 @@ class TestOrphanPurge:
 
     def test_purge_chunks_large_input(self, backend, monkeypatch):
         """IN-lists are chunked (SQLite bind-parameter limits) without losing rows."""
-        import turnstone.core.storage._utils as storage_utils
+        import pebble.core.storage._utils as storage_utils
 
         monkeypatch.setattr(storage_utils, "_PURGE_CHUNK", 2)
         for i in range(5):
@@ -176,7 +176,7 @@ class TestAdminVerb:
 
     def test_scan_reports_and_does_not_delete(self, backend, monkeypatch, capsys):
         _orphan(backend, "ghost1", n=2)
-        monkeypatch.setattr("turnstone.admin._get_storage", lambda args: backend)
+        monkeypatch.setattr("pebble.admin._get_storage", lambda args: backend)
         _cmd_orphan_conversations(self._args())
         out = capsys.readouterr().out
         assert "ghost1" in out
@@ -185,7 +185,7 @@ class TestAdminVerb:
 
     def test_delete_yes_purges(self, backend, monkeypatch, capsys):
         _orphan(backend, "ghost1", n=2)
-        monkeypatch.setattr("turnstone.admin._get_storage", lambda args: backend)
+        monkeypatch.setattr("pebble.admin._get_storage", lambda args: backend)
         ns = self._args()
         ns.delete = True
         ns.yes = True
@@ -196,7 +196,7 @@ class TestAdminVerb:
 
     def test_delete_confirmation_abort(self, backend, monkeypatch, capsys):
         _orphan(backend, "ghost1", n=1)
-        monkeypatch.setattr("turnstone.admin._get_storage", lambda args: backend)
+        monkeypatch.setattr("pebble.admin._get_storage", lambda args: backend)
         monkeypatch.setattr("builtins.input", lambda prompt: "n")
         ns = self._args()
         ns.delete = True
@@ -216,7 +216,7 @@ class TestAdminVerb:
             return scan
 
         monkeypatch.setattr(backend, "list_orphan_conversations", list_then_register)
-        monkeypatch.setattr("turnstone.admin._get_storage", lambda args: backend)
+        monkeypatch.setattr("pebble.admin._get_storage", lambda args: backend)
         ns = self._args()
         ns.delete = True
         ns.yes = True
@@ -227,6 +227,6 @@ class TestAdminVerb:
         assert len(backend.load_messages("ghost2")) == 3
 
     def test_clean_db_message(self, backend, monkeypatch, capsys):
-        monkeypatch.setattr("turnstone.admin._get_storage", lambda args: backend)
+        monkeypatch.setattr("pebble.admin._get_storage", lambda args: backend)
         _cmd_orphan_conversations(self._args())
         assert "No orphan conversation rows." in capsys.readouterr().out

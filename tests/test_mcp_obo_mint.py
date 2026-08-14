@@ -44,10 +44,10 @@ import httpx
 import pytest
 
 from tests.conftest import make_mcp_token_cipher
-from turnstone.core.mcp_crypto import MCPTokenStore
-from turnstone.core.mcp_oauth import get_obo_access_token_classified
-from turnstone.core.oidc import OIDCConfig
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.mcp_crypto import MCPTokenStore
+from pebble.core.mcp_oauth import get_obo_access_token_classified
+from pebble.core.oidc import OIDCConfig
+from pebble.core.storage._sqlite import SQLiteBackend
 
 USER = "user-1"
 SERVER = "srv-obo"
@@ -147,7 +147,7 @@ def _seed_cache_row(
         # path need a row that is unambiguously from the past.
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import mcp_user_tokens
+        from pebble.core.storage._schema import mcp_user_tokens
 
         backdated = (datetime.now(UTC) - timedelta(seconds=created_seconds_ago)).strftime(_ISO)
         storage = state.auth_storage
@@ -501,7 +501,7 @@ class TestRfc8693Leg:
         expiry falls back to a bounded default so the row re-mints soon."""
         from datetime import datetime as _dt
 
-        from turnstone.core.mcp_oauth import _OBO_DEFAULT_TTL_SECONDS
+        from pebble.core.mcp_oauth import _OBO_DEFAULT_TTL_SECONDS
 
         _seed_obo_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -826,7 +826,7 @@ class TestFailureHandling:
         over-sized CLIENT-error body is now classified AMBIGUOUS by status, so it
         still advances the ambiguous streak and escalates to the honest re-login
         / admin remedy after the threshold."""
-        from turnstone.core.mcp_oauth import _refresh_backoff_state
+        from pebble.core.mcp_oauth import _refresh_backoff_state
 
         _seed_obo_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -862,7 +862,7 @@ class TestFailureHandling:
         state = _make_app_state(storage, http_client=client, oidc_config=_make_oidc_config())
         _seed_credential(state)
 
-        with caplog.at_level(logging.WARNING, logger="turnstone.mcp"):
+        with caplog.at_level(logging.WARNING, logger="pebble.mcp"):
             result = _mint(state)
 
         assert result.kind == "refresh_failed"
@@ -925,7 +925,7 @@ class TestFailureHandling:
         _seed_credential(state)
         _seed_cache_row(state, expires_in_seconds=-1000, access_token="stale-at")  # forces a mint
 
-        from turnstone.core.mcp_oauth import _clear_refresh_backoff
+        from pebble.core.mcp_oauth import _clear_refresh_backoff
 
         async def _run() -> None:
             # First dispatch: deletes the (stale) cache row + audits once.
@@ -951,7 +951,7 @@ class TestFailureHandling:
         can re-mint / pick up a cluster-mate's token) rather than fail transient."""
         import time
 
-        from turnstone.core.mcp_oauth import _refresh_backoff_state
+        from pebble.core.mcp_oauth import _refresh_backoff_state
 
         _seed_obo_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)
@@ -1151,7 +1151,7 @@ class TestFailureHandling:
         async def _fake_discover(cfg: Any, *, client: Any = None) -> Any:
             return healed
 
-        with patch("turnstone.core.oidc.discover_oidc", new=_fake_discover):
+        with patch("pebble.core.oidc.discover_oidc", new=_fake_discover):
             result = _mint(state)
 
         assert result.kind == "token"
@@ -1166,7 +1166,7 @@ class TestFailureHandling:
         MCPTokenDecryptError escape the classified-result contract."""
         from unittest.mock import patch
 
-        from turnstone.core.mcp_crypto import MCPTokenDecryptError
+        from pebble.core.mcp_crypto import MCPTokenDecryptError
 
         _seed_obo_server(storage)
         client = MagicMock(spec=httpx.AsyncClient)

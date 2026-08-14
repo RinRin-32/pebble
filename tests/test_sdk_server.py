@@ -1,4 +1,4 @@
-"""Tests for turnstone.sdk.server — server client with mocked HTTP transport."""
+"""Tests for pebble.sdk.server — server client with mocked HTTP transport."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import json
 import httpx
 import pytest
 
-from turnstone.sdk._types import TurnstoneAPIError
-from turnstone.sdk.server import AsyncTurnstoneServer
+from pebble.sdk._types import TurnstoneAPIError
+from pebble.sdk.server import AsyncTurnstoneServer
 
 
 def _mock_transport(
@@ -240,7 +240,7 @@ async def test_list_saved_workstreams():
         assert len(resp.workstreams) == 1
         ws = resp.workstreams[0]
         # enriched fields deserialize onto the model, incl. kind -> enum
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         assert ws.model_alias == "m1"
         assert ws.launch_skill == "news"

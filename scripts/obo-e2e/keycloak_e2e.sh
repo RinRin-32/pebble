@@ -46,14 +46,14 @@ $KC create users -r spike -s username=e2e-user -s enabled=true -s email=e2e@spik
   -s emailVerified=true -s firstName=E2E -s lastName=User >/dev/null
 $KC set-password -r spike --username e2e-user --new-password e2e-pw >/dev/null
 
-TURNSTONE_UUID=$($KC get clients -r spike -q clientId=turnstone --fields id --format csv --noquotes)
+PEBBLE_UUID=$($KC get clients -r spike -q clientId=turnstone --fields id --format csv --noquotes)
 # Audience client scopes for mcp-a and mcp-b ONLY (mcp-c stays unconsented → E6).
 for t in mcp-a mcp-b; do
   SID=$($KC create client-scopes -r spike -s name=aud-$t -s protocol=openid-connect -i)
   $KC create "client-scopes/$SID/protocol-mappers/models" -r spike -s name=aud-$t \
     -s protocol=openid-connect -s protocolMapper=oidc-audience-mapper \
     -s "config={\"included.client.audience\":\"$t\",\"access.token.claim\":\"true\"}" >/dev/null
-  $KC update "clients/$TURNSTONE_UUID/optional-client-scopes/$SID" -r spike >/dev/null
+  $KC update "clients/$PEBBLE_UUID/optional-client-scopes/$SID" -r spike >/dev/null
 done
 
 echo ">> running the product e2e harness..."

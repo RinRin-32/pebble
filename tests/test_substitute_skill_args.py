@@ -4,7 +4,7 @@ substitution applied to skill bodies at load time.
 Covers every placeholder form Turnstone implements — including the
 ``${TURNSTONE_*}`` canonical env vars and the ``${CLAUDE_SESSION_ID}`` /
 ``${CLAUDE_EFFORT}`` back-compat aliases (there is deliberately NO
-``CLAUDE_SKILL_DIR`` alias), ``${TURNSTONE_SKILL_DIR}`` resolution when the
+``CLAUDE_SKILL_DIR`` alias), ``${PEBBLE_SKILL_DIR}`` resolution when the
 caller supplies a materialized bundle path, plus the spec's "append
 ARGUMENTS at end if no placeholder" rule and the single-pass guarantee
 against re-expansion of user-supplied values that happen to contain
@@ -13,7 +13,7 @@ placeholder syntax.
 
 from __future__ import annotations
 
-from turnstone.core.session import _substitute_skill_args
+from pebble.core.session import _substitute_skill_args
 
 
 def _sub(content: str, *, args: str = "", names: list[str] | None = None) -> str:
@@ -146,21 +146,21 @@ class TestEnvironmentAliases:
     Claude Code / skills.sh keep resolving.  Both map to one value."""
 
     def test_turnstone_session_id(self) -> None:
-        assert _sub("session ${TURNSTONE_SESSION_ID}") == "session ws-abc"
+        assert _sub("session ${PEBBLE_SESSION_ID}") == "session ws-abc"
 
     def test_turnstone_effort(self) -> None:
-        assert _sub("effort ${TURNSTONE_EFFORT}") == "effort high"
+        assert _sub("effort ${PEBBLE_EFFORT}") == "effort high"
 
     def test_canonical_and_alias_agree(self) -> None:
-        assert _sub("${CLAUDE_SESSION_ID}") == _sub("${TURNSTONE_SESSION_ID}") == "ws-abc"
-        assert _sub("${CLAUDE_EFFORT}") == _sub("${TURNSTONE_EFFORT}") == "high"
+        assert _sub("${CLAUDE_SESSION_ID}") == _sub("${PEBBLE_SESSION_ID}") == "ws-abc"
+        assert _sub("${CLAUDE_EFFORT}") == _sub("${PEBBLE_EFFORT}") == "high"
 
     def test_unknown_turnstone_var_left_as_literal(self) -> None:
-        assert _sub("${TURNSTONE_UNKNOWN_FOO}") == "${TURNSTONE_UNKNOWN_FOO}"
+        assert _sub("${PEBBLE_UNKNOWN_FOO}") == "${PEBBLE_UNKNOWN_FOO}"
 
 
 class TestSkillDir:
-    """``${TURNSTONE_SKILL_DIR}`` resolves to the materialized bundle path when
+    """``${PEBBLE_SKILL_DIR}`` resolves to the materialized bundle path when
     the caller supplies one (it materializes resources BEFORE substituting) and
     degrades to a literal placeholder when the skill bundles no resources.
     ``${CLAUDE_SKILL_DIR}`` is NOT a turnstone alias — it always stays literal
@@ -168,7 +168,7 @@ class TestSkillDir:
 
     def test_turnstone_skill_dir_resolves(self) -> None:
         out = _substitute_skill_args(
-            "cd ${TURNSTONE_SKILL_DIR}/scripts",
+            "cd ${PEBBLE_SKILL_DIR}/scripts",
             arguments_str="",
             arg_names=[],
             ws_id="ws-abc",
@@ -179,7 +179,7 @@ class TestSkillDir:
 
     def test_claude_skill_dir_not_aliased(self) -> None:
         # Even with a materialized bundle, ${CLAUDE_SKILL_DIR} is left literal:
-        # turnstone owns TURNSTONE_SKILL_DIR only, so the two never diverge from
+        # turnstone owns PEBBLE_SKILL_DIR only, so the two never diverge from
         # the bash env (which likewise never sets CLAUDE_SKILL_DIR).
         out = _substitute_skill_args(
             "cd ${CLAUDE_SKILL_DIR}",
@@ -194,7 +194,7 @@ class TestSkillDir:
     def test_skill_dir_left_literal_when_unset(self) -> None:
         # Default skill_dir="" → placeholder stays literal (graceful),
         # not an empty path.
-        assert _sub("${TURNSTONE_SKILL_DIR}") == "${TURNSTONE_SKILL_DIR}"
+        assert _sub("${PEBBLE_SKILL_DIR}") == "${PEBBLE_SKILL_DIR}"
         assert _sub("${CLAUDE_SKILL_DIR}") == "${CLAUDE_SKILL_DIR}"
 
 
@@ -259,7 +259,7 @@ class TestSubstituteArgsToggle:
 
     def test_env_still_resolves(self) -> None:
         out = _substitute_skill_args(
-            "id ${TURNSTONE_SESSION_ID} at ${TURNSTONE_EFFORT} in ${TURNSTONE_SKILL_DIR}",
+            "id ${PEBBLE_SESSION_ID} at ${PEBBLE_EFFORT} in ${PEBBLE_SKILL_DIR}",
             arguments_str="",
             arg_names=[],
             ws_id="ws-abc",

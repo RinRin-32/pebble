@@ -1,0 +1,648 @@
+/* composer_queue.js — shared optimistic-queue UI for the chat composer.
+ *
+ * Used by both:
+ *   - pebble/shared_static/interactive.js (interactive Pane)
+ *   - pebble/console/static/coordinator/coordinator.js (coord IIFE)
+ *
+ * What this owns:
+ *   - The queued-message bubble's DOM shape (msg-queued / queued-badge
+ *     / queued-dismiss) and its dismiss-while-in-flight state machine.
+ *   - The on-idle sweep that strips queued styling once the worker
+ *     drains (caller invokes onIdleEdge() on the busy → idle edge).
+ *
+ * What this does NOT own:
+ *   - Sending. Caller renders the bubble before the POST, then later
+ *     calls bind(el, msgId) when the server's response carries the id,
+ *     promote(el) when the response settled the message another way
+ *     (e.g. an "ok"/unknown status), or remove(el) on a reject path.
+ *   - Busy state. The shape is "addQueuedMessage on send, settle on
+ *     response / promote on idle"; caller orchestrates around its busy flag.
+ *
+ * Dismiss contract: a queued card is NEVER removed before the server
+ * confirms the cancel. Clicking × marks the card "dismissing" (aria-disabled
+ * × + aria-busy); the bubble only leaves the DOM on a confirmed `removed`.
+ * On `not_found` (already drained) it is promoted to a normal sent bubble
+ * with an "already sent" notice; on any error/timeout the × is re-enabled
+ * so the user can retry. This avoids the trust-eroding divergence of a
+ * card that shows "cancelled" while the message is still delivered.
+ *
+ * Caller options:
+ *   messagesEl: HTMLElement — chat log container.
+ *   getWsId:    () => string — current ws id (function so the
+ *               interactive pane can swap tabs without re-instantiating).
+ *   getBase:    optional () => string — node-proxy URL prefix ("" local,
+ *               "/node/{id}" proxied). Applied to the dequeue DELETE so it
+ *               reaches the node that owns the session. Default "".
+ *   wrapInBody: bool — when true (coord), wrap the queued content in a
+ *               .msg-body div to match the surrounding .msg shape; when
+ *               false (interactive), append children directly to the
+ *               .msg element. Default false to match the historical
+ *               interactive shape.
+ *   authFetch:  optional override (default window.authFetch).
+ *   onAfterDequeue: optional () => void — re-sync the composer's staged
+ *               attachment chips (interactive and coord both wire it to
+ *               attachments.rehydrate). Fires only on a confirmed `removed`
+ *               — the one verdict that mutated server-side queue state;
+ *               `not_found`/error change nothing, so re-fetching would be
+ *               wasted. Queued messages are text-only, so this isn't undoing
+ *               an attachment reservation — there is none.
+ *   onNotice:   optional (msg) => void — surfaces a user-facing notice
+ *               (e.g. a toast): "already sent" when a dismiss lost the race
+ *               to delivery, or "couldn't remove" when the DELETE failed.
+ *   onIdle:     optional () => void — fires inside onIdleEdge() after
+ *               the bubble sweep, so the consumer can run its own
+ *               edge-only cleanup (e.g. clearing cancel/force-stop
+ *               timers) without re-implementing edge detection.
+ *
+ * Returned controller surface:
+ *   addQueuedMessage(text, priority) -> el
+ *       priority: "important" | anything-else (treated as "notice")
+ *   bind(el, msgId, opts)
+ *       Server returned status:queued + msg_id. Stamps msgId so the × can
+ *       dequeue; if the user already clicked × (pre-bind) runs the
+ *       confirming delete now; if the idle sweep already promoted the
+ *       bubble (already delivered), leaves it untouched.
+ *       opts (optional): { deferred, attachedCount } from the send
+ *       response — deferred chips are skipped by the idle sweep (they
+ *       settle via settleDeferred instead), and attachedCount feeds the
+ *       discarded-attachments notice on a confirmed retract. This is the
+ *       ONLY channel for both facts; consumers must not stash expandos
+ *       on the element.
+ *   promote(el)
+ *       Settle an optimistic bubble as a normal sent message — used by the
+ *       consumer when the send response wasn't "queued" (e.g. an "ok"
+ *       stale-busy race) so a pre-bind × can't strand the card.
+ *   remove(el)
+ *       Drop the bubble (busy / queue_full / connection-error path).
+ *   settleDeferred(msgId, folded)
+ *       Consume a `message_dispatched` pane event: the deferred send left
+ *       the parked list. folded=false → fresh turn spawned; promote (the
+ *       ×'s window is over — a late DELETE resolves via not_found).
+ *       folded=true → interjection fold-in; clear ONLY the deferred flag
+ *       so the chip resumes the normal queued lifecycle (DELETE still
+ *       genuinely removes it until the seam drains; the idle sweep
+ *       promotes it at the turn edge). No-op when no live chip carries
+ *       msgId (other tabs, replays) or a dismiss is in flight.
+ *   onIdleEdge()
+ *       Caller invokes once per busy → idle transition. Promotes every
+ *       not-in-flight queued bubble and then fires the onIdle hook.
+ *       Skips deferred chips ("idle ⇒ drained" is untrue for them — they
+ *       dispatch when the server-side drain runs, possibly minutes later)
+ *       and unbound chips (POST round-trip still in flight — a quick
+ *       command window can close inside it; the response arms settle
+ *       every unbound chip, so the sweep never needs to).
+ */
+export function createQueueController(opts) {
+  if (!opts || !opts.messagesEl)
+    throw new Error("createQueueController: messagesEl required");
+  if (typeof opts.getWsId !== "function")
+    throw new Error("createQueueController: getWsId must be a function");
+  var messagesEl = opts.messagesEl;
+  var getWsId = opts.getWsId;
+  var wrapInBody = !!opts.wrapInBody;
+  // Node-proxy URL prefix for the active tab ("" local, "/node/{id}"
+  // proxied). Mirrors composer_attachments's getBase so the dequeue
+  // DELETE lands on the node that owns the ChatSession, not the console
+  // root — without it, x-delete on a proxied interactive workstream
+  // 404s and the queued message is never removed (it gets delivered).
+  var getBase =
+    typeof opts.getBase === "function"
+      ? opts.getBase
+      : function () {
+          return "";
+        };
+  var onAfterDequeue =
+    typeof opts.onAfterDequeue === "function" ? opts.onAfterDequeue : null;
+  var onIdle = typeof opts.onIdle === "function" ? opts.onIdle : null;
+  var onNotice = typeof opts.onNotice === "function" ? opts.onNotice : null;
+  // Live queued bubbles — the idle sweep iterates this instead of querying
+  // the whole messages container (see onIdleEdge).
+  var _liveQueued = new Set();
+  // Settles that arrived before bind() could stamp the chip: the order
+  // barrier lets a deferred entry dispatch within milliseconds of its ack,
+  // so the SSE message_dispatched can beat the POST response's .then —
+  // without this, the chip would stay flagged deferred and the idle sweep
+  // would skip it forever. bind() reconciles and deletes. Expiry is
+  // TTL-based, NOT a size cap: when a window closes with many deferred
+  // sends, the drain settles them FIFO in one burst — this tab's own
+  // raced settle parks FIRST and a count cap would evict exactly it as
+  // the foreign settles (other tabs' messages, which never get consumed
+  // here) pile in behind. 30s dominates every path that can still
+  // consume an entry: bind() runs off the send POST, client-aborted at
+  // 15s in both panes. Growth is rate-bounded (settle frequency × TTL);
+  // stale foreign entries expire on the next insert's purge.
+  var PRE_BIND_SETTLE_TTL_MS = 30000;
+  var _preBindSettles = new Map(); // msgId -> {folded, at}
+  // Upper bound on the dequeue DELETE so a wedged proxied node (the exact
+  // case this flow targets) can't leave a card stuck "dismissing" forever.
+  var DELETE_TIMEOUT_MS = 15000;
+  // Lazy authFetch lookup — see composer_attachments.js for the
+  // rationale; same load-order robustness applies here.
+  function _authFetch(url, init) {
+    var fn = opts.authFetch || window.authFetch;
+    return fn(url, init);
+  }
+
+  function _scrollIntoView() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function _deleteRequest(msgId) {
+    var wsId = getWsId();
+    if (!wsId || !msgId) return null;
+    var base = getBase() || "";
+    var init = {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msg_id: msgId }),
+    };
+    // Abort on timeout so the promise always settles — without this a hung
+    // request leaves the × disabled + aria-busy with no recovery path.
+    var ctrl =
+      typeof AbortController === "function" ? new AbortController() : null;
+    var timer = null;
+    if (ctrl) {
+      init.signal = ctrl.signal;
+      timer = setTimeout(function () {
+        ctrl.abort();
+      }, DELETE_TIMEOUT_MS);
+    }
+    var p = _authFetch(
+      base + "/v1/api/workstreams/" + encodeURIComponent(wsId) + "/send",
+      init,
+    );
+    if (timer) {
+      return p.finally(function () {
+        clearTimeout(timer);
+      });
+    }
+    // No AbortController (old runtime): can't cancel the fetch, but still
+    // bound the promise — race a rejecting timeout so a hung request settles
+    // into _confirmDequeue's catch (re-enable + notice). The fetch keeps
+    // running; its result is then ignored.
+    var fbTimer = null;
+    return Promise.race([
+      p,
+      new Promise(function (_resolve, reject) {
+        fbTimer = setTimeout(function () {
+          reject(new Error("dequeue_timeout"));
+        }, DELETE_TIMEOUT_MS);
+      }),
+    ]).finally(function () {
+      clearTimeout(fbTimer);
+    });
+  }
+
+  function addQueuedMessage(text, priority) {
+    var el = document.createElement("div");
+    el.className = "msg user msg-queued";
+    el.setAttribute("role", "status");
+    var important = priority === "important";
+    if (important) {
+      el.classList.add("msg-queued-important");
+      el.setAttribute("aria-label", "Important message queued: " + text);
+    } else {
+      el.setAttribute("aria-label", "Message queued: " + text);
+    }
+
+    var badge = document.createElement("span");
+    badge.className = "queued-badge";
+    badge.setAttribute("aria-hidden", "true");
+    badge.textContent = important ? "queued (!!!) " : "queued ";
+
+    var textNode = document.createTextNode(text);
+
+    var dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "queued-dismiss";
+    dismiss.title = "Remove from queue";
+    dismiss.setAttribute("aria-label", "Remove queued message");
+    dismiss.textContent = "×";
+    dismiss.addEventListener("click", function (e) {
+      e.stopPropagation();
+      dequeue(el);
+    });
+
+    var host;
+    if (wrapInBody) {
+      host = document.createElement("div");
+      host.className = "msg-body";
+      el.appendChild(host);
+    } else {
+      host = el;
+    }
+    host.appendChild(badge);
+    host.appendChild(textNode);
+    host.appendChild(dismiss);
+
+    messagesEl.appendChild(el);
+    _liveQueued.add(el);
+    _scrollIntoView();
+    return el;
+  }
+
+  // Toggle a queued bubble's in-flight "dismissing" state: mark the row
+  // aria-busy and the × aria-disabled so a click gives immediate feedback
+  // without removing the card before the server confirms. We use
+  // aria-disabled rather than the real `disabled` attribute so disabling the
+  // focused × doesn't drop keyboard/AT focus to <body> (WCAG 2.4.3); the
+  // dequeue() guard makes the in-flight × inert. Reversible — a failed or
+  // declined delete clears it (and the dismiss flag) so the user can retry.
+  function _setDismissing(el, on) {
+    var dismiss = el.querySelector(".queued-dismiss");
+    if (on) {
+      el.setAttribute("aria-busy", "true");
+      if (dismiss) dismiss.setAttribute("aria-disabled", "true");
+    } else {
+      el.removeAttribute("aria-busy");
+      if (dismiss) dismiss.removeAttribute("aria-disabled");
+      // Clear the dismiss-intent flag on the re-enable off-ramp so a later
+      // idle-sweep _promote can't fire a contradictory "already sent" after
+      // we've told the user the removal didn't take.
+      delete el.dataset.dismissAttempted;
+    }
+  }
+
+  // Issue the DELETE and reconcile the card with the server's verdict:
+  //   removed   → drop the card (the message never reached the assistant)
+  //   not_found → already drained; _promote() to a sent bubble (+ notice)
+  //   404 gone  → workstream reaped/closed; drop the card with a terminal
+  //               "no longer available" notice (a retry would just 404 again)
+  //   else / non-2xx / transport / timeout → keep the card, re-enable the
+  //     × and tell the user it didn't take so they can retry.
+  function _confirmDequeue(el, msgId) {
+    var p = _deleteRequest(msgId);
+    if (!p) {
+      _setDismissing(el, false);
+      return;
+    }
+    p.then(function (r) {
+      // 404 = reaped/closed workstream (distinct from a 200 not_found): the
+      // message is gone and a retry would just 404 again. Terminal — drop the
+      // card rather than stranding it un-dismissable in the retry loop.
+      if (r.status === 404) {
+        el.remove();
+        if (onNotice)
+          onNotice(
+            "This conversation is no longer available — the message wasn't delivered.",
+          );
+        return null;
+      }
+      // Other non-2xx (400 "No session" / 5xx) carry no {status}; route them
+      // through the catch so the user is told, not a silent re-enable that
+      // reads as "delete is broken".
+      if (!r.ok) throw new Error("dequeue_http_" + r.status);
+      return r.json();
+    })
+      .then(function (data) {
+        if (data === null) return; // 404 handled above
+        var status = data && data.status;
+        if (status === "removed") {
+          el.remove();
+          // A deferred send (command-window defer) can carry attachments;
+          // retracting it discards them — the chips were consumed when the
+          // send was accepted and a retract does not re-stage the bytes.
+          // Say so instead of letting the files silently expire. The count
+          // rides bind()'s opts (dataset), never an element expando.
+          var nAtt = parseInt(el.dataset.attachedCount || "0", 10);
+          if (nAtt > 0 && onNotice)
+            onNotice(
+              "Message removed. Its " +
+                nAtt +
+                " attachment(s) were discarded — re-attach them to send again.",
+            );
+          // `removed` is the only verdict that mutated server-side queue
+          // state, so it's the only one worth re-syncing composer state for.
+          if (onAfterDequeue) onAfterDequeue();
+        } else if (status === "not_found") {
+          // Already drained — present it as the sent message it now is;
+          // _promote fires the "already sent" notice (dismissAttempted).
+          _promote(el);
+        } else {
+          // Unexpected 2xx shape — keep the card cancellable.
+          _setDismissing(el, false);
+        }
+      })
+      .catch(function () {
+        _setDismissing(el, false);
+        if (onNotice)
+          onNotice("Couldn't remove the message — please try again.");
+      });
+  }
+
+  // × handler. Marks the card dismissing and either confirms now (msg_id
+  // known) or defers to bind() (pre-bind). We never remove optimistically:
+  // if the deferred delete failed, the message would still be delivered
+  // while the card showed "cancelled". dismissAttempted lets _promote fire
+  // the "already sent" notice if the message turns out to have been
+  // delivered before we could cancel it, and signals bind() to confirm.
+  function dequeue(el) {
+    // Ignore re-clicks while a dismiss is in flight — the × stays
+    // aria-disabled (not real `disabled`, so focus isn't lost), which means
+    // the click still fires; this guard is what makes the in-flight × inert.
+    if (el.getAttribute("aria-busy") === "true") return;
+    el.dataset.dismissAttempted = "1";
+    _setDismissing(el, true);
+    var msgId = el.dataset.msgId;
+    if (!msgId) {
+      // Pre-bind: bind() confirms once the server returns the msg_id (it
+      // reads dismissAttempted).
+      return;
+    }
+    _confirmDequeue(el, msgId);
+  }
+
+  // Server returned status:queued + msg_id.
+  function bind(el, msgId, opts) {
+    if (!el || !msgId) return;
+    // Idle sweep already promoted the bubble (worker drained mid-POST): the
+    // message is on its way, so leave it as a sent bubble. Dead-but-harmless
+    // since the sweep skips unbound chips; kept as the safe action for any
+    // promote path we didn't enumerate. We deliberately do NOT delete here —
+    // a delete could cancel a still-queued message; and a dismissed card
+    // never reaches this branch (onIdleEdge skips aria-busy cards).
+    if (!el.classList.contains("msg-queued")) return;
+    el.dataset.msgId = msgId;
+    if (opts && opts.deferred) el.dataset.deferred = "1";
+    if (opts && opts.attachedCount > 0)
+      el.dataset.attachedCount = String(opts.attachedCount);
+    // A settle raced ahead of this bind (see _preBindSettles): apply it
+    // now. Fresh-spawn settle → the dispatch already happened, promote
+    // (fires "already sent" if the × was clicked — the dispatch won);
+    // fold-in settle → clear the flag, the chip is a normal queued
+    // interjection from here.
+    if (el.dataset.deferred && _preBindSettles.has(msgId)) {
+      var raced = _preBindSettles.get(msgId);
+      _preBindSettles.delete(msgId);
+      if (raced.folded) {
+        delete el.dataset.deferred;
+      } else {
+        _promote(el);
+        return;
+      }
+    }
+    // User clicked × before the id arrived → confirm the delete now
+    // (removes only on a confirmed `removed`; promotes on not_found).
+    if (el.dataset.dismissAttempted) _confirmDequeue(el, msgId);
+  }
+
+  function remove(el) {
+    _liveQueued.delete(el);
+    if (el && el.parentNode) el.remove();
+  }
+
+  // Strip the queued affordances so a bubble renders as a normal
+  // (delivered) user message. Shared by the idle sweep, the not_found
+  // dequeue path, and the consumer's "ok"/unknown send-response path: a
+  // message the worker already drained is on its way and can't be
+  // cancelled, so present it as sent. If the user had clicked × first
+  // (dismissAttempted), tell them it was too late.
+  function _promote(el) {
+    _liveQueued.delete(el);
+    var attempted = el.dataset.dismissAttempted;
+    el.classList.remove("msg-queued", "msg-queued-important");
+    delete el.dataset.msgId;
+    delete el.dataset.deferred;
+    delete el.dataset.attachedCount;
+    delete el.dataset.dismissAttempted;
+    el.removeAttribute("role");
+    el.removeAttribute("aria-label");
+    el.removeAttribute("aria-busy");
+    var badge = el.querySelector(".queued-badge");
+    if (badge) badge.remove();
+    var dismiss = el.querySelector(".queued-dismiss");
+    if (dismiss) dismiss.remove();
+    if (attempted && onNotice)
+      onNotice("Already sent — too late to remove from the queue.");
+  }
+
+  // Caller invokes onIdleEdge() exactly once per busy → idle transition.
+  // Promotes every queued bubble that isn't mid-dequeue (a [aria-busy] card
+  // has a DELETE in flight — let _confirmDequeue settle it so the sweep
+  // can't promote a card the delete is about to remove) and then fires the
+  // onIdle hook so the consumer can run edge-only cleanup (e.g. clearing
+  // cancel/force-stop timers).
+  function onIdleEdge() {
+    // Sweep the controller-local live set, not the DOM: the old
+    // ".msg-queued:not([aria-busy])" query walked every element under the
+    // messages container (O(transcript) per busy→idle edge) to find the
+    // handful of queued bubbles that always sit in the tail.  Bubbles wiped
+    // by a full re-render prune lazily via the isConnected check.
+    _liveQueued.forEach(function (el) {
+      if (!el.isConnected) {
+        _liveQueued.delete(el);
+        return;
+      }
+      if (el.hasAttribute("aria-busy")) return; // mid-dequeue — let it settle
+      // Deferred sends outlive the busy→idle edge: they dispatch when the
+      // server-side drain runs (message_dispatched → settleDeferred), and
+      // promoting here would strip the × while DELETE still genuinely
+      // retracts — presenting a parked message as sent, which on a node
+      // restart before dispatch becomes loss disguised as delivery.
+      if (el.dataset.deferred) return;
+      // Unbound chips (no msg_id — the POST round-trip is still in
+      // flight): a quick command window can close inside the round-trip,
+      // firing this edge before bind() could stamp the deferred flag.
+      // Every response arm settles unbound chips — including the edge
+      // this sweep just consumed without them: settleSendResponse's
+      // post-bind missed-edge promote catches a non-deferred chip whose
+      // busy→idle edge passed mid-round-trip — so the sweep never needs
+      // them.
+      if (!el.dataset.msgId) return;
+      _promote(el);
+    });
+    if (onIdle) onIdle();
+  }
+
+  // Consume a `message_dispatched {msg_id, folded}` pane event — see the
+  // header contract. Promote on a fresh spawn; on a fold-in clear only the
+  // deferred flag so the chip re-enters the normal interjection lifecycle.
+  function settleDeferred(msgId, folded) {
+    if (!msgId) return;
+    var target = null;
+    _liveQueued.forEach(function (el) {
+      if (el.isConnected && el.dataset.msgId === msgId) target = el;
+    });
+    if (!target) {
+      // No bound chip yet: either another tab's message (never consumed —
+      // hence the TTL expiry) or this tab's bind() is still in the POST
+      // round-trip; park the settle for bind() to reconcile.
+      var now = Date.now();
+      _preBindSettles.forEach(function (v, k) {
+        if (now - v.at > PRE_BIND_SETTLE_TTL_MS) _preBindSettles.delete(k);
+      });
+      _preBindSettles.set(msgId, { folded: !!folded, at: now });
+      return;
+    }
+    if (target.hasAttribute("aria-busy")) return; // dismiss in flight — let it settle
+    if (folded) {
+      delete target.dataset.deferred;
+      return;
+    }
+    _promote(target);
+  }
+
+  return {
+    addQueuedMessage: addQueuedMessage,
+    bind: bind,
+    promote: _promote,
+    remove: remove,
+    settleDeferred: settleDeferred,
+    onIdleEdge: onIdleEdge,
+  };
+}
+
+// --- Send-response settle (shared by both panes) -----------------------------
+
+// Strip the "!!!" priority prefix for the optimistic bubble — the server
+// re-parses it authoritatively; this is display-only. Exported here because
+// priority is this module's vocabulary (it feeds addQueuedMessage's badge)
+// and both panes need the identical parse pre-POST.
+export function parsePriority(text) {
+  if (text.startsWith("!!!")) {
+    return { displayText: text.slice(3).trimStart(), priority: "important" };
+  }
+  return { displayText: text, priority: "notice" };
+}
+
+// Settle a parsed /send response against the pane's optimistic state — the
+// ONE implementation of the status dispatch both panes share (the
+// applyCompactionEvent hooks pattern: everything pane-specific arrives via
+// ctx). The fetch-stage concerns (409 pre-parse, network .catch) stay
+// per-pane; this owns everything after a parsed 2xx/handled body.
+//
+// ctx:
+//   queuedEl:     the pre-POST queued chip (busy pane) or null
+//   optimisticEl: the pre-POST sent bubble (idle pane) or null
+//   isBusy:       the pane's busy flag AT SEND TIME
+//   displayText/priority: parsePriority() of the sent text
+//   setBusy(b):   pane busy setter
+//   busyIsOptimistic(): true iff the pane's CURRENT busy came from this
+//                 send flow's optimistic flip and no server state event
+//                 has since asserted it (see the panes' busySource stamp)
+//   paneIsBusy(): the pane's LIVE busy flag (not the send-time snapshot)
+//                 — drives the missed-edge settle below
+//   renderError(msg): pane error row
+//   consumeAttachments(attached_ids, dropped_ids): composer chip sync
+//
+// Status arms:
+//   queued — bind the chip (retro-converting the idle pane's optimistic
+//     bubble into a REAL queued chip when deferred: a parked,
+//     still-retractable, restart-droppable message must not render as
+//     delivered). For deferred sends the optimistic busy flip is then a
+//     lie — no worker exists for this send — so busy clears under the
+//     busyIsOptimistic guard, AFTER bind() so the false-edge idle sweep
+//     sees dataset.deferred and skips the new chip. A non-deferred chip
+//     binding onto an ALREADY-idle pane missed its only sweep — the
+//     post-bind settle promotes it (see the inline contract).
+//   queue_full — the send was NEVER accepted (interjection cap, deferred-
+//     list saturation, or drain-spawn failure): remove the optimistic
+//     bubble too — leaving it renders loss as delivery — and restore busy
+//     under the same guard (no worker and no drain may exist to ever emit
+//     a state event; leaving busy strands the composer in Stop mode).
+//   busy / attachments_busy / cross_user_interjection / unknown-ok —
+//     the panes' historical shapes, verbatim.
+export function settleSendResponse(queue, data, ctx) {
+  // Normalize a null / non-object 2xx body once, here at the shared
+  // chokepoint, so neither pane's call site has to guard it (interactive
+  // passed bare `data`, the coordinator passed `data || {}` — the divergence
+  // this helper exists to erase).  In-tree /send always returns an object, so
+  // this only hardens against a misbehaving proxy answering e.g. `200 null`;
+  // without it the unknown/"ok" fall-through below would deref
+  // data.attached_ids and surface a delivered message as a connection error.
+  data = data || {};
+  var status = data.status;
+  if (status === "queued" && data.msg_id) {
+    var queuedEl = ctx.queuedEl;
+    if (!queuedEl && data.deferred) {
+      if (ctx.optimisticEl && ctx.optimisticEl.isConnected)
+        ctx.optimisticEl.remove();
+      queuedEl = queue.addQueuedMessage(ctx.displayText, ctx.priority);
+    }
+    if (queuedEl) {
+      queue.bind(queuedEl, data.msg_id, {
+        deferred: !!data.deferred,
+        attachedCount: (data.attached_ids || []).length,
+      });
+      if (data.deferred && ctx.busyIsOptimistic()) ctx.setBusy(false);
+      // Missed-edge settle: if the busy→idle edge already passed during
+      // the POST round-trip, this chip's only sweep skipped it (unbound
+      // then) and — for non-deferred sends — no message_dispatched will
+      // ever fire, so without this the pane keeps a retractable "queued"
+      // bubble for a delivered message forever.  Keyed on the POST-BIND
+      // chip state, not the wire flag: bind's pre-bind-settle
+      // reconciliation may have just cleared a raced folded settle's
+      // deferred flag, and that chip needs the same catch-up.  Skips
+      // dismiss-in-flight chips (aria-busy — _confirmDequeue's verdict
+      // settles those, the sweep's own discipline) and still-deferred
+      // chips (message_dispatched owns them).  Carries the same bet the
+      // old edge-promote made: idle can precede the final flush; a
+      // DELETE racing delivery resolves via the not_found → "already
+      // sent" arm as ever.
+      if (
+        queuedEl.isConnected &&
+        queuedEl.classList.contains("msg-queued") &&
+        !queuedEl.dataset.deferred &&
+        !queuedEl.hasAttribute("aria-busy") &&
+        !ctx.paneIsBusy()
+      ) {
+        queue.promote(queuedEl);
+      }
+    } else {
+      // Non-deferred queuedEl-absent: the client thought it was idle but
+      // a live worker interjection-queued the message (SSE state_change
+      // race) — keep the historical busy flip.  KNOWN residual (the
+      // missed-edge sibling of the chip arm above): if that worker
+      // exited during the POST round-trip, no further state event
+      // arrives and this flip strands an idle pane busy until the next
+      // real activity; pre-branch behavior, preserved verbatim —
+      // ctx.paneIsBusy() is the instrument if a future round promotes
+      // this from residual to fix.
+      ctx.setBusy(true);
+    }
+    ctx.consumeAttachments(data.attached_ids, data.dropped_attachment_ids);
+    return;
+  }
+  if (status === "busy") {
+    if (ctx.queuedEl) queue.remove(ctx.queuedEl);
+    ctx.renderError("Server is busy. Please wait.");
+    if (!ctx.isBusy) ctx.setBusy(false);
+    return;
+  }
+  if (status === "queue_full") {
+    if (ctx.queuedEl) {
+      queue.remove(ctx.queuedEl);
+    } else {
+      if (ctx.optimisticEl && ctx.optimisticEl.isConnected)
+        ctx.optimisticEl.remove();
+      if (ctx.busyIsOptimistic()) ctx.setBusy(false);
+    }
+    ctx.renderError("Message queue full. Please wait.");
+    return;
+  }
+  if (status === "attachments_busy") {
+    if (ctx.queuedEl) queue.remove(ctx.queuedEl);
+    ctx.renderError(
+      "Attachments can't be sent while the assistant is working. " +
+        "Send a text-only message now, or wait and resend with attachments.",
+    );
+    return;
+  }
+  if (status === "cross_user_interjection") {
+    if (ctx.queuedEl) queue.remove(ctx.queuedEl);
+    ctx.renderError(
+      data.error ||
+        "Another participant's turn is in progress. Wait for it to " +
+          "finish, then send your message.",
+    );
+    if (!ctx.isBusy) ctx.setBusy(false);
+    return;
+  }
+  // Unknown / "ok" status (e.g. the stale-busy race: the client
+  // optimistically queued but the server ran the send on a fresh worker).
+  // Settle the optimistic chip as a normal sent message so a pre-bind ×
+  // can't strand it; promote() notifies "already sent" if it was dismissed.
+  if (ctx.queuedEl) queue.promote(ctx.queuedEl);
+  ctx.consumeAttachments(data.attached_ids, data.dropped_attachment_ids);
+}

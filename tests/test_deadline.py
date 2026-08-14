@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.deadline.run_with_deadline.
+"""Tests for pebble.core.deadline.run_with_deadline.
 
 The load-bearing property is the daemon worker: on timeout or cancel the call
 is abandoned, and the abandoned thread must be a daemon so it can never block
@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from turnstone.core.deadline import (
+from pebble.core.deadline import (
     DeadlineCancelledError,
     DeadlineExceededError,
     run_with_deadline,
@@ -115,7 +115,7 @@ class TestStreamAbortRef:
     def test_abort_closes_captured_stream(self) -> None:
         from unittest.mock import MagicMock
 
-        from turnstone.core.deadline import StreamAbortRef
+        from pebble.core.deadline import StreamAbortRef
 
         ref = StreamAbortRef()
         stream = MagicMock()
@@ -129,7 +129,7 @@ class TestStreamAbortRef:
         # SDK connect — the handle must close the moment it is captured.
         from unittest.mock import MagicMock
 
-        from turnstone.core.deadline import StreamAbortRef
+        from pebble.core.deadline import StreamAbortRef
 
         ref = StreamAbortRef()
         ref.abort()

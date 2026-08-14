@@ -15,7 +15,7 @@ from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from turnstone.console.server import coordinator_page
+from pebble.console.server import coordinator_page
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def test_coordinator_js_exposes_inline_approval_helpers():
     from pathlib import Path
 
     coord_js = Path(__file__).resolve().parent.parent / (
-        "turnstone/console/static/coordinator/coordinator.js"
+        "pebble/console/static/coordinator/coordinator.js"
     )
     body = coord_js.read_text(encoding="utf-8")
     # Approval-block rendering helpers
@@ -109,7 +109,7 @@ def test_coordinator_js_exposes_inline_approval_helpers():
     # low because the old severity table only mapped 'crit'.  The crit/critical
     # alias moved to the shared conversation.js (step 5e.1b); verify it there so
     # a 'critical' verdict still ranks like 'crit'.
-    shared = Path(__file__).resolve().parent.parent / ("turnstone/shared_static/conversation.js")
+    shared = Path(__file__).resolve().parent.parent / ("pebble/shared_static/conversation.js")
     assert 'crit: "critical"' in shared.read_text(encoding="utf-8")
 
 
@@ -124,7 +124,7 @@ def test_coordinator_js_approval_keyboard_shortcuts():
 
     body = (
         Path(__file__).resolve().parent.parent
-        / "turnstone/console/static/coordinator/coordinator.js"
+        / "pebble/console/static/coordinator/coordinator.js"
     ).read_text(encoding="utf-8")
     assert 'root.addEventListener("keydown"' in body, (
         "the approval shortcuts must be a pane-owned keydown on root"
@@ -248,7 +248,7 @@ def test_coordinator_js_handle_child_state_no_longer_reads_sse_pending_approval_
     from pathlib import Path
 
     coord_js = Path(__file__).resolve().parent.parent / (
-        "turnstone/console/static/coordinator/coordinator.js"
+        "pebble/console/static/coordinator/coordinator.js"
     )
     body = coord_js.read_text(encoding="utf-8")
 
@@ -354,7 +354,7 @@ def test_coord_history_renders_system_turn_via_msg_variants():
     from pathlib import Path
 
     coord_js = Path(__file__).resolve().parent.parent / (
-        "turnstone/console/static/coordinator/coordinator.js"
+        "pebble/console/static/coordinator/coordinator.js"
     )
     body = coord_js.read_text(encoding="utf-8")
 
@@ -387,7 +387,7 @@ def test_coord_dedups_system_turn_against_history_by_event_id():
     from pathlib import Path
 
     coord_js = Path(__file__).resolve().parent.parent / (
-        "turnstone/console/static/coordinator/coordinator.js"
+        "pebble/console/static/coordinator/coordinator.js"
     )
     body = coord_js.read_text(encoding="utf-8")
 
@@ -458,7 +458,7 @@ def test_coord_retry_walk_skips_operator_context_cards():
     from pathlib import Path
 
     coord_js = Path(__file__).resolve().parent.parent / (
-        "turnstone/console/static/coordinator/coordinator.js"
+        "pebble/console/static/coordinator/coordinator.js"
     )
     body = coord_js.read_text(encoding="utf-8")
 
@@ -469,7 +469,7 @@ def test_coord_retry_walk_skips_operator_context_cards():
     # The watch-result card moved to the shared conversation.js (step 5e.1); the
     # guard-finding + idle-children cards stay in the coordinator pane.
     shared = (
-        Path(__file__).resolve().parent.parent / "turnstone/shared_static/conversation.js"
+        Path(__file__).resolve().parent.parent / "pebble/shared_static/conversation.js"
     ).read_text(encoding="utf-8")
     assert '"msg watch-result operator-context"' in shared, (
         "buildWatchResultCard must tag its card with the operator-context marker."
@@ -505,7 +505,7 @@ def test_coordinator_js_seeds_resume_cursor_only_on_initial_connect():
     from pathlib import Path
 
     coord_js = Path(__file__).resolve().parent.parent / (
-        "turnstone/console/static/coordinator/coordinator.js"
+        "pebble/console/static/coordinator/coordinator.js"
     )
     body = coord_js.read_text(encoding="utf-8")
     assert "async function refetchHistory(seedCursor = false)" in body, (
@@ -538,7 +538,7 @@ def test_coordinator_js_early_paints_pending_tool_calls():
     from pathlib import Path
 
     coord_js = Path(__file__).resolve().parent.parent / (
-        "turnstone/console/static/coordinator/coordinator.js"
+        "pebble/console/static/coordinator/coordinator.js"
     )
     body = coord_js.read_text(encoding="utf-8")
     assert 'case "tool_pending":' in body
@@ -556,7 +556,7 @@ def test_coordinator_js_early_paint_screen_reader_announce():
     pin both the JS wiring and the index.html region."""
     from pathlib import Path
 
-    base = Path(__file__).resolve().parent.parent / "turnstone/console/static/coordinator"
+    base = Path(__file__).resolve().parent.parent / "pebble/console/static/coordinator"
     coord_js = (base / "coordinator.js").read_text(encoding="utf-8")
 
     # Dedicated polite announcer + helper, distinct from the assertive one.  The
@@ -581,7 +581,7 @@ def test_coordinator_de_globalized_to_pane_factory():
     standalone page bootstraps one pane filling the body."""
     from pathlib import Path
 
-    base = Path(__file__).resolve().parent.parent / "turnstone/console/static/coordinator"
+    base = Path(__file__).resolve().parent.parent / "pebble/console/static/coordinator"
     coord_js = (base / "coordinator.js").read_text(encoding="utf-8")
     index_html = (base / "index.html").read_text(encoding="utf-8")
 
@@ -621,7 +621,7 @@ def test_coordinator_chrome_builder_and_thin_page():
     {standalone:true}; its static chrome + inline <style> are gone (CSS migrated)."""
     from pathlib import Path
 
-    base = Path(__file__).resolve().parent.parent / "turnstone/console/static/coordinator"
+    base = Path(__file__).resolve().parent.parent / "pebble/console/static/coordinator"
     coord_js = (base / "coordinator.js").read_text(encoding="utf-8")
     index_html = (base / "index.html").read_text(encoding="utf-8")
 
@@ -653,7 +653,7 @@ def test_coord_child_links_open_interactive_pane():
 
     coord_js = (
         Path(__file__).resolve().parent.parent
-        / "turnstone/console/static/coordinator/coordinator.js"
+        / "pebble/console/static/coordinator/coordinator.js"
     ).read_text(encoding="utf-8")
     # Delegated handler, gated on the pane host so standalone keeps the href nav.
     assert '.closest(".ws-link, .coord-ws-link")' in coord_js
@@ -677,7 +677,7 @@ def test_coordinator_js_gates_send_on_cross_user_busy():
 
     coord_js = (
         Path(__file__).resolve().parent.parent
-        / "turnstone/console/static/coordinator/coordinator.js"
+        / "pebble/console/static/coordinator/coordinator.js"
     ).read_text(encoding="utf-8")
     # tracks the acting user from state_change, clears on settle
     assert "actingUserId = ev.acting_user_id;" in coord_js
@@ -695,6 +695,6 @@ def test_coordinator_js_gates_send_on_cross_user_busy():
     assert 'status: "cross_user_interjection"' in coord_js
     assert "settleSendResponse(" in coord_js
     helper = (
-        Path(__file__).resolve().parents[1] / "turnstone/shared_static/composer_queue.js"
+        Path(__file__).resolve().parents[1] / "pebble/shared_static/composer_queue.js"
     ).read_text(encoding="utf-8")
     assert 'status === "cross_user_interjection"' in helper

@@ -1,6 +1,6 @@
-"""Tests for turnstone.core.bm25 — tokenizer and BM25 index."""
+"""Tests for pebble.core.bm25 — tokenizer and BM25 index."""
 
-from turnstone.core.bm25 import _RERANK_POOL, BM25Index, _tokenize
+from pebble.core.bm25 import _RERANK_POOL, BM25Index, _tokenize
 
 
 class TestTokenize:

@@ -8,7 +8,7 @@ also pass a ``consent_url=`` kwarg, otherwise the dashboard renderer
 can't surface a re-consent button.
 
 This test is purely structural — it scans the source of
-:mod:`turnstone.core.mcp_client` and asserts every consent-required /
+:mod:`pebble.core.mcp_client` and asserts every consent-required /
 insufficient-scope ``_structured_error`` call carries
 ``consent_url=``. It catches future regressions where a new exec path
 adds a fourth call site and forgets the kwarg.
@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import turnstone.core.mcp_client as _mcp_client_module
+import pebble.core.mcp_client as _mcp_client_module
 
 _USER_ACTIONABLE_CODES = ("mcp_consent_required", "mcp_insufficient_scope")
 

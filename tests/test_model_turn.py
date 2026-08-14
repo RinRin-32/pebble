@@ -14,9 +14,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import turnstone.core.model_turn as model_turn_mod
+import pebble.core.model_turn as model_turn_mod
 from tests._session_helpers import as_stream
-from turnstone.core.model_turn import (
+from pebble.core.model_turn import (
     ModelLane,
     finalize_provider_blocks,
     maybe_attach_vllm_chat_reasoning,
@@ -24,14 +24,14 @@ from turnstone.core.model_turn import (
     resolve_lane,
     synth_reasoning_block,
 )
-from turnstone.core.providers._protocol import (
+from pebble.core.providers._protocol import (
     CompletionResult,
     IncompleteStreamError,
     ModelCapabilities,
     StreamChunk,
     UsageInfo,
 )
-from turnstone.core.trajectory import Role, ToolCall, Turn
+from pebble.core.trajectory import Role, ToolCall, Turn
 
 
 class _FakeProvider:
@@ -108,7 +108,7 @@ def test_model_turn_retries_transient_mid_stream_death(monkeypatch: pytest.Monke
     # The retired non-streaming transport read the whole body inside the
     # SDK's retried request, so single-shot lanes never saw a mid-body wire
     # blip — the drain-scoped loop is that retry's new home.
-    monkeypatch.setattr("turnstone.core.model_turn._DRAIN_RETRY_BASE_DELAY", 0.0)
+    monkeypatch.setattr("pebble.core.model_turn._DRAIN_RETRY_BASE_DELAY", 0.0)
     provider = _FlakyProvider(
         [
             IncompleteStreamError("stream died mid-response"),
@@ -124,7 +124,7 @@ def test_model_turn_retries_transient_mid_stream_death(monkeypatch: pytest.Monke
 
 
 def test_model_turn_gives_up_after_retry_budget(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("turnstone.core.model_turn._DRAIN_RETRY_BASE_DELAY", 0.0)
+    monkeypatch.setattr("pebble.core.model_turn._DRAIN_RETRY_BASE_DELAY", 0.0)
     provider = _FlakyProvider([IncompleteStreamError(f"death {i}") for i in range(5)])
     lane = ModelLane(provider=provider, client=object(), model="m")
 
@@ -174,7 +174,7 @@ def test_model_turn_abort_during_backoff_suppresses_reissue(
     # The deadline can abandon the worker while it sleeps between
     # attempts — the wake-up must die with the original failure, not
     # issue one more full request from an abandoned thread.
-    from turnstone.core.deadline import StreamAbortRef
+    from pebble.core.deadline import StreamAbortRef
 
     ref = StreamAbortRef()
     monkeypatch.setattr(model_turn_mod, "time", SimpleNamespace(sleep=lambda _delay: ref.abort()))
@@ -193,7 +193,7 @@ def test_model_turn_does_not_retry_after_abort() -> None:
     # A deadline that closed the stream must not have the request
     # resurrected behind its back: the closed stream dies with an error
     # that LOOKS retryable, but the aborted cancel_ref gates the re-issue.
-    from turnstone.core.deadline import StreamAbortRef
+    from pebble.core.deadline import StreamAbortRef
 
     provider = _FlakyProvider(
         [IncompleteStreamError("closed by abort"), CompletionResult(content="never")]
@@ -217,7 +217,7 @@ def _real_semantics_store(**stored: Any) -> SimpleNamespace:
     miss, which masked the default-on-miss collision the round-2 review
     caught: never fake a store rung more forgiving than the real one.
     """
-    from turnstone.core.settings_registry import SETTINGS
+    from pebble.core.settings_registry import SETTINGS
 
     def _get(key: str, default: Any = ...) -> Any:
         if key in stored:
@@ -462,7 +462,7 @@ def test_resolve_lane_merges_registry_capability_overrides() -> None:
 
 
 def test_vllm_attach_gates() -> None:
-    from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+    from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
     msgs = [
         {"role": "user", "content": "q"},
@@ -541,7 +541,7 @@ def test_temperature_unresolved_passes_none_and_wire_omits_it() -> None:
     model_turn(_lane(provider), [Turn.user("x")])
     assert provider.calls[0]["temperature"] is None
 
-    from turnstone.core.providers._openai_common import apply_temperature
+    from pebble.core.providers._openai_common import apply_temperature
 
     kwargs: dict[str, Any] = {}
     apply_temperature(kwargs, ModelCapabilities(), None, "medium")
@@ -678,7 +678,7 @@ def test_resolve_lane_survives_get_config_raise() -> None:
 
 
 def test_resolve_capabilities_survives_get_config_raise() -> None:
-    from turnstone.core.model_turn import resolve_capabilities
+    from pebble.core.model_turn import resolve_capabilities
 
     provider = _FakeProvider([])
     registry = MagicMock()

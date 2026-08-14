@@ -1,7 +1,7 @@
-"""Tests for turnstone.ui.markdown — MarkdownRenderer."""
+"""Tests for pebble.ui.markdown — MarkdownRenderer."""
 
-from turnstone.ui.colors import BOLD, CYAN, DIM, ITALIC, MAGENTA
-from turnstone.ui.markdown import MarkdownRenderer
+from pebble.ui.colors import BOLD, CYAN, DIM, ITALIC, MAGENTA
+from pebble.ui.markdown import MarkdownRenderer
 
 
 class TestMarkdownRenderer:

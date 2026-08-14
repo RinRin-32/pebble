@@ -1,0 +1,2504 @@
+"""In-process helper for coordinator workstream tool execs.
+
+A coordinator's ChatSession runs on a worker thread inside
+``pebble-console`` and drives its child workstreams through two
+channels:
+
+- **Mutating ops** (``spawn``, ``send``, ``approve``, ``cancel``,
+  ``close``, ``delete``) go through the console's own HTTP routing
+  proxy (``/v1/api/route/*``).  Sending over HTTP keeps the normal
+  middleware stack (auth, rate limit, route pinning) in the loop —
+  the coordinator gets no special privileges the proxy can't see.
+- **Read ops** (``list_children``, ``inspect``) hit the shared
+  storage backend directly because the routing proxy doesn't cover
+  list/inspect paths today.  Storage is same-process and same-DB, so
+  this is as safe as any other read inside the console.
+
+The client is **synchronous by design** — coordinator tool execs run
+on the ChatSession's worker thread, not on the event loop — so it uses
+``httpx.Client`` rather than the async client.  A per-session
+:class:`CoordinatorTokenManager` mints short-lived console-audience
+JWTs carrying the real user's identity + scopes.
+"""
+
+from __future__ import annotations
+
+import concurrent.futures
+import json
+import re
+import secrets
+import threading
+import time
+from collections import OrderedDict
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, ClassVar
+
+import httpx
+
+from pebble.core.auth import JWT_AUD_CONSOLE, create_jwt
+from pebble.core.log import get_logger
+from pebble.core.memory import LAST_ERROR_CONFIG_KEY
+from pebble.core.workstream import WorkstreamKind
+
+# ---------------------------------------------------------------------------
+# wait_for_workstream constants — module-level so ``pebble.core.session``
+# can import them without reading a class internal (see #12).  The
+# ``CoordinatorClient`` ClassVar aliases below are kept so external callers
+# that still import via the class surface don't break.
+# ---------------------------------------------------------------------------
+
+# Real terminal states for the wait_for_workstream tool — these drive the
+# any/all completion condition.  A workstream in one of these states has
+# actually finished work the coordinator can observe.
+WAIT_REAL_TERMINAL_STATES: frozenset[str] = frozenset({"idle", "error", "closed", "deleted"})
+
+# Reportable terminal states — superset of the real ones, also includes the
+# ``not_found`` shape returned for foreign / missing / mid-wait-deleted
+# ws_ids.  ``not_found`` is NOT a completion state: the wait loop fails
+# fast the moment any polled id reports it (an unobservable member makes
+# the requested wait unsatisfiable — see the fail-fast block in
+# ``wait_for_workstream``), and the resolved-count summary counts only
+# real terminals.  This set's remaining job is the message-sentinel
+# branch in the result enrichment: states whose ``message`` is a fixed
+# sentinel rather than a storage read.
+WAIT_TERMINAL_STATES: frozenset[str] = WAIT_REAL_TERMINAL_STATES | frozenset({"not_found"})
+
+# Hard cap on ws_ids per call.  Polling happens once per ws_id per tick, so a
+# runaway list would amplify storage load without giving the model anything
+# useful — coordinators rarely fan out past a handful of children at once.
+WAIT_MAX_WS_IDS: int = 32
+
+# Cap on the total wait so a stuck child can't pin a coordinator worker
+# thread indefinitely.  Coordinators that need a longer wait call
+# wait_for_workstream again with the same ws_ids — each call re-arms freshly.
+WAIT_MAX_TIMEOUT: float = 600.0
+
+# Maximum ``event.wait`` interval in the bus-driven wait loop.
+# A long-running stuck child would otherwise look dead in the sidebar UI
+# because the ``wait_progress`` SSE emission piggybacks on the wait loop
+# — capping at 2 s keeps the heartbeat visible without flooding storage.
+# Today's polling effectively snapshots every 500 ms; 2 s preserves a
+# similar liveness feel while cutting per-listener SSE traffic ~4x in the
+# steady-state-quiescent case.  Tunable post-merge if profiling shows
+# storage-read pressure on state-change wakes.
+#
+# **Worst-case completion latency**: 2 s.  ``SessionManager.set_state``
+# buffers non-ERROR storage writes through ``StateWriter`` (async-flushed
+# at ~1 s cadence) while ``emit_state`` fans the event out immediately —
+# a bus-driven wake can therefore beat the flusher and read pre-transition
+# state on a terminal transition, then re-block on ``event.wait`` until
+# the heartbeat cap fires.  Pre-bus the 0.5 s poll bounded this at 0.5 s.
+# Going to 2 s is intentional: the 4x SSE-traffic reduction in the
+# steady-state-quiescent case outweighs the worst-case latency
+# regression on the most common terminal transition, and a model issuing
+# a follow-up ``inspect_workstream`` (the pre-bus pattern this tool
+# replaces) was already paying multi-second model-turn latency per probe.
+WAIT_HEARTBEAT_INTERVAL: float = 2.0
+
+# Per-ws cap on the inline ``message`` field bundled into wait_for_workstream
+# results.  Sized so a fan-out of 32 children at the cap is ~320 KiB of
+# tool output — large but not catastrophic on commercial models, and
+# typical waits run with a handful of children.  Truncation is from the
+# END (the lead is usually more informative than the tail) and sets a
+# ``truncated=True`` flag so the model can opt into a follow-up read if
+# the trailing bytes matter.
+WAIT_MESSAGE_MAX_BYTES: int = 10 * 1024
+
+# How many tail messages ``wait_for_workstream`` reads when extracting a
+# child's last assistant turn.  The conversation tail almost always
+# contains the final assistant message within the last few rows
+# (assistant + a handful of tool results); 20 is generous head-room
+# without scanning the full history of a long-lived workstream.
+_WAIT_MESSAGE_TAIL_LIMIT: int = 20
+
+# Sentinel strings used when a terminal state has no usable assistant
+# content to return.  Pinned as constants so callers (and tests) can
+# rely on the exact text rather than a fuzzed message.  The
+# ``NO_RECENT_ASSISTANT`` sentinel is intentionally hedged ("recent")
+# rather than absolute — the message walk only looks at the
+# ``_WAIT_MESSAGE_TAIL_LIMIT`` row tail, so an assistant turn buried
+# beyond that window (e.g. a single burst of >18 parallel tool calls
+# followed by an error) would otherwise produce a sentinel that
+# falsely claims no output exists at all.
+_WAIT_SENTINEL_CLOSED = "(workstream closed)"
+_WAIT_SENTINEL_NOT_FOUND = "(no workstream with this id among your children)"
+_WAIT_SENTINEL_NO_RECENT_ASSISTANT = "(no recent assistant output)"
+
+# ---------------------------------------------------------------------------
+# Model-supplied workstream-id validation — the coordinator LLM hand-copies
+# ws_ids between tool results and tool calls, and models garble long hex
+# runs (the canonical incident: a 32-char id whose ``aaa`` run collapsed to
+# a single ``a``, leaving a 30-char id no tool could act on, which then
+# read back to the model as a dead child).  ws_id arguments are therefore
+# validated at the tool boundary:
+#
+# - a full 32-hex id passes straight through (ownership still enforced by
+#   the per-verb guards, at unchanged storage cost);
+# - a direct child's exact id of any other shape still resolves (legacy /
+#   synthetic ids predate the 32-hex convention);
+# - anything else — truncated, garbled, non-hex, or a display name —
+#   fails fast with a did-you-mean + a roster of the coordinator's own
+#   children, so a garbled id is recoverable in one round-trip.
+#
+# Near-miss ids are NEVER auto-resolved — a mutating verb must not guess.
+# Display names are NOT addresses (they're mutable and non-unique); a ref
+# matching a child's name errors with a pointer at the right ws_id.
+# Validation and every hint consult ONLY the coordinator's own direct
+# children, preserving the no-existence-oracle guarantee for foreign ids.
+# ---------------------------------------------------------------------------
+
+# A well-formed ws_id: exactly 32 lowercase hex chars (``uuid4().hex``).
+_WS_REF_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+# Max Levenshtein distance for a did-you-mean candidate.  The incident
+# class (character-run collapse / duplication / single-char typo) sits at
+# distance 1-2; unrelated 32-hex ids sit at ~28+, so 3 is generous
+# headroom with no false-positive risk in practice.
+_WS_REF_SUGGEST_DISTANCE: int = 3
+
+# Children listed inline in an unresolvable-ws_id error.  Enough to
+# re-orient the model without flooding the tool result on wide fan-outs;
+# the error text points at list_workstreams for the rest.
+_WS_REF_ROSTER_CAP: int = 8
+
+# Page size for the validation roster query — far above any practical
+# direct-children count, so the exact-match / did-you-mean scans never
+# judge against a silently truncated page.
+_WS_REF_ROSTER_QUERY_LIMIT: int = 1000
+
+# Did-you-mean candidates surfaced per unresolvable ref.
+_WS_REF_SUGGEST_CAP: int = 2
+
+# Echoed-ref clip applied inside error STRINGS — the structured
+# ``ws_id`` field carries the full value and the format note reports
+# the true length, so the clip only bounds operator-facing text.
+# Covers a full 32-hex id with slack.
+_WS_REF_ECHO_CLIP: int = 48
+
+# Cap on the assembled top-level ``error`` string when several refs
+# fail in one wait call.
+_WS_REF_ERROR_TEXT_CAP: int = 2000
+
+_TASK_STATUSES = frozenset({"pending", "in_progress", "done", "blocked"})
+# Hard cap on tasks per coordinator — the full list is read and re-serialized
+# on every mutation, so unbounded growth is both a storage and a tool-output-size
+# hazard.  Hitting the cap is an explicit signal to prune done/blocked rows.
+_TASKS_MAX = 500
+# Max task title length.  Exceeded titles return an error rather than
+# silently truncating — mutating the coordinator's planning state
+# under its nose masks real planning bugs (the model may rely on the
+# title it SENT, not the stored one).
+_TASK_TITLE_MAX = 200
+# Short TTL on the per-ws_id live-inspect cache.  Back-to-back inspect()
+# calls in a model's tool loop hit this hot-path; 2s is short enough
+# that cached data stays meaningful to a human watching output and long
+# enough to bound one stall per child per turn regardless of how many
+# inspect calls the model fires.
+_LIVE_CACHE_TTL_SECONDS = 2.0
+
+
+def _levenshtein_capped(a: str, b: str, cap: int) -> int:
+    """Levenshtein distance with an early-exit band.
+
+    Returns ``cap + 1`` as soon as the distance provably exceeds ``cap``,
+    so did-you-mean scans across a coordinator's children stay cheap per
+    candidate instead of O(len^2).  Plain DP otherwise — inputs are short
+    (ws_ids are 32 chars) so nothing cleverer is warranted.
+    """
+    if a == b:
+        return 0
+    la, lb = len(a), len(b)
+    if abs(la - lb) > cap:
+        return cap + 1
+    if la > lb:
+        a, b, la, lb = b, a, lb, la
+    prev = list(range(la + 1))
+    for j in range(1, lb + 1):
+        cur = [j] + [0] * la
+        bj = b[j - 1]
+        row_best = cur[0]
+        for i in range(1, la + 1):
+            cost = 0 if a[i - 1] == bj else 1
+            cur[i] = min(prev[i] + 1, cur[i - 1] + 1, prev[i - 1] + cost)
+            row_best = min(row_best, cur[i])
+        if row_best > cap:
+            return cap + 1
+        prev = cur
+    return prev[la] if prev[la] <= cap else cap + 1
+
+
+def _trim_ws_ref_hint(payload: dict[str, Any]) -> dict[str, Any]:
+    """Per-ref entry for wait's ``invalid_ws_ids`` / ``not_found``
+    channels — one shared shape: ``{ws_id, error, did_you_mean?}``.
+    The children roster is identical across refs in one call, so it
+    rides ONCE at the response top level instead of per entry.
+    """
+    return {key: payload[key] for key in ("ws_id", "error", "did_you_mean") if key in payload}
+
+
+def _utc_now_iso() -> str:
+    """ISO-8601 UTC timestamp with seconds precision.
+
+    Format matches the storage row format used elsewhere in the codebase
+    (``YYYY-MM-DDTHH:MM:SS``, no trailing offset) — both sides are UTC by
+    convention, kept as bare ISO for visual consistency when an operator
+    grep-correlates a task envelope's ``created`` / ``updated`` against a
+    workstream row.  No code currently joins or sorts the two together.
+    """
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def load_task_envelope(storage: Any, ws_id: str) -> tuple[dict[str, Any], bool]:
+    """Decode the persisted task envelope for ``ws_id``.
+
+    Shared between :class:`CoordinatorClient` (the model-tool write path)
+    and the coordinator UI's read endpoints so both agree on the schema
+    and corruption-tolerant semantics.  Returns ``(envelope, corrupt)``:
+
+    - ``corrupt=False, envelope={"version": 1, "tasks": []}`` — row absent
+      or empty.
+    - ``corrupt=False, envelope=stored_dict`` — parseable and shape-checks.
+    - ``corrupt=True, envelope={"version": 1, "tasks": []}`` — a non-empty
+      stored value failed decode / shape check.  Callers that mutate the
+      list refuse to overwrite a corrupt blob (preserve for operator
+      inspection); the UI read path treats it as an empty envelope.
+    """
+    empty: dict[str, Any] = {"version": 1, "tasks": []}
+    try:
+        raw = storage.load_workstream_config(ws_id) or {}
+    except Exception:
+        log.debug("load_task_envelope.storage_failed ws=%s", ws_id, exc_info=True)
+        return empty, False
+    payload = raw.get("tasks")
+    if not payload:
+        return empty, False
+    try:
+        data = json.loads(payload)
+    except (TypeError, ValueError):
+        log.warning("tasks.corrupt_envelope ws=%s (unparseable JSON)", ws_id)
+        return empty, True
+    if not (isinstance(data, dict) and isinstance(data.get("tasks"), list)):
+        log.warning("tasks.corrupt_envelope ws=%s (wrong shape)", ws_id)
+        return empty, True
+    return data, False
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from pebble.core.child_event_bus import ChildEventBus
+    from pebble.core.storage._protocol import StorageBackend
+
+log = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Per-session coordinator JWT
+# ---------------------------------------------------------------------------
+
+
+class CoordinatorTokenManager:
+    """Auto-rotating console-audience JWT for a single coordinator session.
+
+    Mints a token with:
+
+    - ``sub`` — the coordinator's real creator ``user_id``.
+    - ``scopes`` — the creator's scopes (narrowed in the creator's identity
+      already; the coordinator inherits without escalation).
+    - ``src`` — ``"coordinator"`` so server-side audit can attribute tool
+      calls to a coordinator session.
+    - ``aud`` — :data:`JWT_AUD_CONSOLE` because the issued token is
+      consumed by the console's own routing-proxy auth middleware.
+    - ``coord_ws_id`` — the coordinator session's ``ws_id`` for forensics.
+
+    Thread-safe: :attr:`token` re-mints on demand when the current JWT is
+    within the refresh margin of expiry.
+    """
+
+    def __init__(
+        self,
+        user_id: str,
+        scopes: frozenset[str],
+        permissions: frozenset[str],
+        secret: str,
+        coord_ws_id: str,
+        ttl_seconds: int = 300,
+        refresh_margin: float = 0.2,
+    ) -> None:
+        if ttl_seconds <= 0:
+            raise ValueError("ttl_seconds must be positive")
+        self._user_id = user_id
+        self._scopes = scopes
+        self._permissions = permissions
+        self._secret = secret
+        self._coord_ws_id = coord_ws_id
+        self._ttl = ttl_seconds
+        self._margin = ttl_seconds * refresh_margin
+        self._token: str = ""
+        self._expires_at: float = 0.0
+        self._lock = threading.Lock()
+
+    def _mint(self) -> None:
+        self._token = create_jwt(
+            user_id=self._user_id,
+            scopes=self._scopes,
+            source="coordinator",
+            secret=self._secret,
+            audience=JWT_AUD_CONSOLE,
+            permissions=self._permissions,
+            expiry_seconds=self._ttl,
+            extra_claims={"coord_ws_id": self._coord_ws_id},
+        )
+        self._expires_at = time.time() + self._ttl
+        # Observability — without this, mint races + premature-401
+        # diagnostics require ad-hoc logging.  Mirrors the pattern in
+        # ServiceTokenManager._mint (turnstone/core/auth.py).
+        log.debug(
+            "coordinator.token_mint coord_ws_id=%s user=%s ttl=%ds expires_at=%.1f",
+            self._coord_ws_id,
+            self._user_id,
+            self._ttl,
+            self._expires_at,
+        )
+
+    @property
+    def token(self) -> str:
+        with self._lock:
+            if time.time() >= self._expires_at - self._margin:
+                self._mint()
+            return self._token
+
+
+# ---------------------------------------------------------------------------
+# Coordinator client
+# ---------------------------------------------------------------------------
+
+
+# URL paths on the console's routing proxy — must match the routes
+# registered in turnstone/console/server.py.  Templates with
+# ``{ws_id}`` are formatted at call time in ``_post`` (path-keyed
+# shape post-#422 legacy URL adapter removal). The legacy body-keyed
+# variants (``/v1/api/route/{verb}`` with ws_id in the JSON body)
+# were deleted in the URL unification — keep this table aligned with
+# what's actually mounted, see ``test_coordinator_client_route_table``
+# for the live-route consistency check.
+_ROUTE_PATHS: dict[str, str] = {
+    "spawn": "/v1/api/route/workstreams/new",
+    "send": "/v1/api/route/workstreams/{ws_id}/send",
+    "approve": "/v1/api/route/workstreams/{ws_id}/approve",
+    "cancel": "/v1/api/route/workstreams/{ws_id}/cancel",
+    "rewind": "/v1/api/route/workstreams/{ws_id}/rewind",
+    "retry": "/v1/api/route/workstreams/{ws_id}/retry",
+    "close": "/v1/api/route/workstreams/{ws_id}/close",
+    # ``delete`` is the only surviving body-keyed routing proxy path
+    # — it has its own ``route_workstream_delete`` handler instead of
+    # going through the generic ``route_proxy``.
+    "delete": "/v1/api/route/workstreams/delete",
+    # The cascade endpoints live on the console itself (not a node), so
+    # the path uses the coordinator ws_id in the URL rather than a
+    # routing-proxy prefix.
+    "close_all_children": "/v1/api/workstreams/{ws_id}/close_all_children",
+}
+
+
+class CoordinatorClient:
+    """Sync helper driving a coordinator session's children.
+
+    See module docstring.  Not part of the public SDK — internal to
+    ``pebble-console`` only.
+    """
+
+    def __init__(
+        self,
+        console_base_url: str,
+        storage: StorageBackend,
+        token_factory: Callable[[], str],
+        *,
+        coord_ws_id: str,
+        user_id: str,
+        timeout: float = 30.0,
+        http_client: httpx.Client | None = None,
+        child_event_bus: ChildEventBus,
+    ) -> None:
+        self._base_url = console_base_url.rstrip("/")
+        self._storage = storage
+        self._token_factory = token_factory
+        self._coord_ws_id = coord_ws_id
+        self._user_id = user_id
+        self._timeout = timeout
+        # ``http_client`` override exists for testing — prod always
+        # constructs a fresh sync client so connection pools live and die
+        # with the coordinator session.
+        self._http = http_client or httpx.Client(timeout=timeout)
+        self._owns_http = http_client is None
+        # In-process wakeup bus for ``wait_for_workstream``.  The wait
+        # loop blocks on a ``threading.Event`` keyed by ws_id and only
+        # re-snapshots storage on state-change wakes or the heartbeat
+        # cap.  Owned by ``CoordinatorAdapter`` in production; tests
+        # pass their own instance.
+        self._child_event_bus = child_event_bus
+        # tasks per-ws lock cache — populated lazily by _task_lock().
+        # Single-session so a plain dict behind a coarse lock is fine;
+        # WeakValueDictionary isn't needed (entries live as long as the
+        # CoordinatorClient instance).
+        self._task_lock_cache: dict[str, threading.Lock] = {}
+        self._task_lock_cache_lock = threading.Lock()
+        # Per-ws_id short-TTL cache for the cluster-inspect live block.
+        # Back-to-back inspect() calls against the same child (common
+        # when a model is iterating over its children) would otherwise
+        # each fire an HTTP round-trip at the 1s timeout and stall the
+        # session thread.  2s is short enough that cached data stays
+        # meaningful for a human reading model output.
+        # OrderedDict + size cap turns the cache into an LRU — long-
+        # running coordinators that walk many spawned-and-closed
+        # children no longer accumulate dict entries for every ws_id
+        # ever inspected.  256 entries is comfortably larger than any
+        # realistic fan-out batch while bounding memory at ~O(256 *
+        # tuple-size + dict-overhead) per coordinator.
+        self._live_cache: OrderedDict[str, tuple[float, dict[str, Any] | None]] = OrderedDict()
+        self._live_cache_lock = threading.Lock()
+
+    # -- lifecycle ----------------------------------------------------------
+
+    def close(self) -> None:
+        """Release the underlying HTTP connection pool."""
+        if self._owns_http:
+            try:
+                self._http.close()
+            except httpx.HTTPError:
+                log.debug("coord_client.close.failed", exc_info=True)
+
+    # -- internal helpers ---------------------------------------------------
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._token_factory()}"}
+
+    def _post(
+        self,
+        path_key: str,
+        body: dict[str, Any],
+        *,
+        ws_id: str | None = None,
+    ) -> dict[str, Any]:
+        """POST to a routing-proxy path. ``ws_id`` is interpolated into
+        the path template when it has a ``{ws_id}`` slot (post-#422
+        path-keyed shape); body-keyed paths (delete, close_all_children
+        callsite) ignore the kwarg. ``log_path`` keeps the template
+        un-formatted so telemetry aggregates across sessions instead
+        of fragmenting on per-call ws_ids."""
+        template = _ROUTE_PATHS[path_key]
+        if "{ws_id}" in template:
+            if not ws_id:
+                raise ValueError(f"ws_id required for path key {path_key!r}")
+            path = template.format(ws_id=ws_id)
+        else:
+            path = template
+        return self._post_url(f"{self._base_url}{path}", body, log_path=template)
+
+    def _post_url(
+        self,
+        url: str,
+        body: dict[str, Any],
+        *,
+        log_path: str,
+    ) -> dict[str, Any]:
+        """POST a pre-built URL with the canonical error handling.
+
+        Split out so endpoints whose path slots in runtime data (e.g.
+        the coord's own ``ws_id`` for cascade ops) can reuse the same
+        transport-error / JSON-fallback / setdefault-status shape
+        without duplicating the body of ``_post``.  ``log_path`` is a
+        stable key for telemetry grouping — the URL itself embeds
+        per-session ids that would fragment log aggregation.
+        """
+        try:
+            resp = self._http.post(url, json=body, headers=self._headers())
+        except httpx.HTTPError as exc:
+            log.warning("coord_client.http_error path=%s err=%s", log_path, exc)
+            return {"error": f"upstream unreachable: {exc}", "status": 0}
+        try:
+            data = resp.json() if resp.content else {}
+        except ValueError:
+            data = {"raw": resp.text}
+        if resp.status_code >= 400:
+            data.setdefault("error", f"HTTP {resp.status_code}")
+        data.setdefault("status", resp.status_code)
+        return data
+
+    # -- tenant guard -------------------------------------------------------
+
+    def _is_own_subtree(self, ws_id: str) -> bool:
+        """Return True if ``ws_id`` is the coordinator itself or one of its
+        own children.  Defense-in-depth gate for every model-invoked
+        mutating op (send / close / cancel / delete) so a coordinator
+        can't drive a foreign tenant's workstream even if the upstream
+        node forgets to enforce ownership.  Read ops use the same gate
+        inline (see ``inspect`` / ``wait_for_workstream``).
+
+        The child must match BOTH the coord's ws_id in ``parent_ws_id``
+        AND the coord's owner in ``user_id`` — a corrupted or
+        cross-tenant ``parent_ws_id`` alone is not enough, so the
+        trusted-send auto-approval path can't be fooled into sending
+        to a foreign-tenant workstream.
+
+        404-shape on miss matches the shape inspect() uses to avoid
+        being an existence oracle.
+        """
+        if not ws_id:
+            return False
+        if ws_id == self._coord_ws_id:
+            return True
+        try:
+            row = self._storage.get_workstream(ws_id)
+        except Exception:
+            log.debug("coord_client.is_own_subtree.lookup_failed ws=%s", ws_id, exc_info=True)
+            return False
+        if row is None:
+            return False
+        if row.get("parent_ws_id") != self._coord_ws_id:
+            return False
+        return bool(row.get("user_id")) and row.get("user_id") == self._user_id
+
+    def _row_in_own_subtree(self, ws_id: str, row: dict[str, Any] | None) -> bool:
+        """Row-level subtree predicate sharing one home for read paths.
+
+        Both :meth:`wait_for_workstream`'s pre-loop ownership filter and
+        its inner ``_snapshot_all`` already have the workstream row in
+        hand (from ``get_workstreams_batch``).  Funneling them through
+        the same 4-line check keeps the predicate in lockstep with
+        :meth:`_is_own_subtree` (used by mutating ops) — both require
+        ``parent_ws_id`` AND ``user_id`` parity so a corrupted or
+        forged ``parent_ws_id`` alone can't satisfy the gate on either
+        path.  Returns False on a missing / None row so callers can
+        safely pass ``rows.get(wid)``.
+        """
+        if ws_id == self._coord_ws_id:
+            return True
+        if row is None:
+            return False
+        if row.get("parent_ws_id") != self._coord_ws_id:
+            return False
+        return bool(row.get("user_id")) and row.get("user_id") == self._user_id
+
+    # -- model-supplied ws_id validation ------------------------------------
+
+    def _children_roster(self) -> list[dict[str, Any]]:
+        """Direct children of this coordinator (any kind, own tenant only).
+
+        Powers ws_id validation and the did-you-mean / roster blocks in
+        unresolvable-id errors.  Unlike :meth:`list_children` this does
+        NOT filter ``kind`` — a coordinator-kind child passes the
+        per-verb ownership guards (``_is_own_subtree`` checks parent +
+        user only), so validation must see the same set or a legacy
+        exact id could validate for one verb and 404 on another.  One
+        SQL page capped at ``_WS_REF_ROSTER_QUERY_LIMIT``; failures
+        collapse to an empty roster (hints degrade, validation still
+        errors honestly).
+        """
+        try:
+            raw = self._storage.list_workstreams(
+                limit=_WS_REF_ROSTER_QUERY_LIMIT,
+                parent_ws_id=self._coord_ws_id,
+                user_id=self._user_id or None,
+            )
+        except Exception:
+            log.debug("coord_client.ws_ref.roster_failed", exc_info=True)
+            return []
+        roster: list[dict[str, Any]] = []
+        for row in raw:
+            try:
+                m = row._mapping  # SQLAlchemy Row
+            except AttributeError:
+                # Fallback for non-Row tuples (test doubles, etc.) —
+                # column order mirrors list_children's fallback map.
+                m = {"ws_id": row[0], "name": row[2], "state": row[3]}
+            roster.append(
+                {
+                    "ws_id": str(m["ws_id"] or ""),
+                    "name": str(m["name"] or ""),
+                    "state": str(m["state"] or ""),
+                }
+            )
+        return roster
+
+    def _ws_ref_error(
+        self,
+        ref: str,
+        *,
+        roster: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Uniform unresolvable-ws_id error payload.
+
+        One shape for malformed / foreign / nonexistent ids: the message
+        never distinguishes "exists but isn't yours" from "doesn't
+        exist" (no existence oracle), and every hint it carries
+        (did-you-mean, roster) is computed from the coordinator's OWN
+        children only.  Suggestions are advisory text — nothing here
+        auto-resolves, so a near-miss id can never route a mutating verb
+        to a guessed target.
+        """
+        if roster is None:
+            roster = self._children_roster()
+        ref_l = (ref or "").strip().lower()
+        # Clip the echoed ref in the STRING — a hostile / oversize ws_id
+        # must not flood operator-facing text (see _WS_REF_ECHO_CLIP).
+        shown = ref if len(ref) <= _WS_REF_ECHO_CLIP else ref[: _WS_REF_ECHO_CLIP - 3] + "..."
+        parts = [f"no workstream matching {shown!r} among your children"]
+        did: list[dict[str, str]] = []
+        name_hits = [c for c in roster if c["name"] and c["name"].strip().lower() == ref_l]
+        if name_hits:
+            # The model pasted a display NAME.  Point it straight at the
+            # id — names are mutable, non-unique labels, deliberately not
+            # addresses.
+            did = [
+                {"ws_id": c["ws_id"], "name": c["name"]} for c in name_hits[:_WS_REF_SUGGEST_CAP]
+            ]
+            parts.append(
+                "that is a child NAME, not an id — names are display "
+                f"labels; did you mean ws_id {did[0]['ws_id']}?"
+            )
+        else:
+            scored = sorted(
+                (
+                    (_levenshtein_capped(ref_l, c["ws_id"], _WS_REF_SUGGEST_DISTANCE), c)
+                    for c in roster
+                ),
+                key=lambda pair: pair[0],
+            )
+            did = [
+                {"ws_id": c["ws_id"], "name": c["name"]}
+                for dist, c in scored
+                if dist <= _WS_REF_SUGGEST_DISTANCE
+            ][:_WS_REF_SUGGEST_CAP]
+            if did:
+                parts.append(
+                    "did you mean "
+                    + " or ".join(f"{c['ws_id']} ({c['name'] or 'unnamed'})" for c in did)
+                    + "?"
+                )
+        if not _WS_REF_ID_RE.fullmatch(ref_l):
+            parts.append(
+                f"ws ids are exactly 32 lowercase hex chars (got {len(ref_l)}) — "
+                "copy them verbatim from spawn_batch / list_workstreams results"
+            )
+        parts.append("use list_workstreams to re-check ids")
+        payload: dict[str, Any] = {
+            "error": "; ".join(parts),
+            "status": 404,
+            "ws_id": ref,
+        }
+        if did:
+            payload["did_you_mean"] = did
+        payload["children"] = [
+            {"ws_id": c["ws_id"], "name": c["name"], "state": c["state"]}
+            for c in roster[:_WS_REF_ROSTER_CAP]
+        ]
+        payload["children_truncated"] = len(roster) > _WS_REF_ROSTER_CAP
+        return payload
+
+    def _resolve_ws_ref(
+        self,
+        ref: str,
+        *,
+        roster: list[dict[str, Any]] | None = None,
+    ) -> tuple[str, dict[str, Any] | None]:
+        """Validate a model-supplied ws_id argument.
+
+        Returns ``(ws_id, None)`` on success, ``("", error_payload)``
+        otherwise.  Accepted shapes, in match order:
+
+        1. the coordinator's own ws_id, verbatim;
+        2. a full 32-lowercase-hex id (case-folded) — passes through
+           WITHOUT a roster read, so the hot path costs exactly what it
+           did before validation existed; ownership stays with the
+           per-verb guards;
+        3. a direct child's EXACT id of any other shape — covers
+           legacy / synthetic ids that predate the 32-hex convention.
+
+        Anything else — truncated, garbled, non-hex, a display name —
+        fails with the did-you-mean payload.  The pasted-a-name case is
+        called out explicitly in the error; near-miss ids are NEVER
+        auto-resolved.
+        """
+        r = (ref or "").strip()
+        if not r:
+            return "", self._ws_ref_error(r, roster=roster)
+        if r == self._coord_ws_id:
+            return r, None
+        rl = r.lower()
+        if _WS_REF_ID_RE.fullmatch(rl):
+            return rl, None
+        if roster is None:
+            roster = self._children_roster()
+        for c in roster:
+            if c["ws_id"] in (r, rl):
+                return c["ws_id"], None
+        return "", self._ws_ref_error(r, roster=roster)
+
+    def _resolve_owned(self, ws_id: str) -> tuple[str, dict[str, Any] | None]:
+        """Resolve + ownership-guard a model-supplied ws_id in one step.
+
+        Shared preamble for the mutating verbs (send / close / cancel /
+        delete): format-resolve via :meth:`_resolve_ws_ref`, then the
+        tenant gate via :meth:`_is_own_subtree`.  Returns
+        ``(ws_id, None)`` or ``("", error_payload)`` — one home so a
+        future guard change (audit hook, logging) lands once.
+        """
+        resolved, ref_err = self._resolve_ws_ref(ws_id)
+        if ref_err is not None:
+            return "", ref_err
+        if not self._is_own_subtree(resolved):
+            return "", self._ws_ref_error(resolved)
+        return resolved, None
+
+    # -- model-invoked mutating ops (HTTP) ---------------------------------
+
+    def spawn(
+        self,
+        *,
+        initial_message: str,
+        parent_ws_id: str,
+        user_id: str,
+        skill: str = "",
+        name: str = "",
+        model: str = "",
+        target_node: str = "",
+        project: str = "",
+        persona: str = "",
+    ) -> dict[str, Any]:
+        """Create a child workstream via the routing proxy."""
+        body: dict[str, Any] = {
+            "kind": WorkstreamKind.INTERACTIVE.value,
+            "parent_ws_id": parent_ws_id,
+            "user_id": user_id,
+            "initial_message": initial_message,
+        }
+        if skill:
+            body["skill"] = skill
+        if name:
+            body["name"] = name
+        if model:
+            body["model"] = model
+        if target_node:
+            body["target_node"] = target_node
+        if project:
+            body["project_id"] = project
+        if persona:
+            # Re-resolved and stamped by the receiving node's create
+            # handler at child-creation time.  Omitted = the interactive
+            # kind default — never the parent's persona.
+            body["persona"] = persona
+        return self._post("spawn", body)
+
+    def send(self, ws_id: str, message: str) -> dict[str, Any]:
+        resolved, ref_err = self._resolve_owned(ws_id)
+        if ref_err is not None:
+            return ref_err
+        return self._post("send", {"message": message}, ws_id=resolved)
+
+    def emit_audit(self, action: str, detail: dict[str, Any]) -> None:
+        """Record an audit row attributed to this coordinator session.
+
+        Uses the client's own ``storage``, ``user_id``, and
+        ``coord_ws_id`` so callers don't need to reach into the client's
+        private attributes.  ``resource_type`` is always ``"coordinator"``
+        and ``resource_id`` is the coord's ws_id.
+        """
+        from pebble.core.audit import record_audit
+
+        record_audit(
+            self._storage,
+            user_id=self._user_id,
+            action=action,
+            resource_type="coordinator",
+            resource_id=self._coord_ws_id,
+            detail=detail,
+        )
+
+    def close_workstream(self, ws_id: str, reason: str = "") -> dict[str, Any]:
+        resolved, ref_err = self._resolve_owned(ws_id)
+        if ref_err is not None:
+            return ref_err
+        body: dict[str, Any] = {}
+        if reason:
+            body["reason"] = reason
+        return self._post("close", body, ws_id=resolved)
+
+    def close_all_children(self, reason: str = "") -> dict[str, Any]:
+        """Soft-close every direct child of this coordinator (console-side fan-out).
+
+        Returns ``{closed, failed, skipped}``.
+        The console does the Semaphore-bounded gather so the model-side
+        tool call stays a single HTTP round-trip regardless of fan-out
+        size.  No tenant guard here: ownership is enforced on the
+        endpoint via ``_resolve_coord_session``.
+        """
+        body: dict[str, Any] = {}
+        if reason:
+            body["reason"] = reason
+        return self._post("close_all_children", body, ws_id=self._coord_ws_id)
+
+    def delete(self, ws_id: str) -> dict[str, Any]:
+        resolved, ref_err = self._resolve_owned(ws_id)
+        if ref_err is not None:
+            return ref_err
+        return self._post("delete", {"ws_id": resolved})
+
+    # -- console-endpoint helpers (NOT model-invoked tools) -----------------
+
+    def approve(
+        self,
+        ws_id: str,
+        *,
+        call_id: str,
+        approved: bool,
+        feedback: str = "",
+        always: bool = False,
+    ) -> dict[str, Any]:
+        body = {
+            "call_id": call_id,
+            "approved": approved,
+            "feedback": feedback,
+            "always": always,
+        }
+        return self._post("approve", body, ws_id=ws_id)
+
+    def cancel(self, ws_id: str) -> dict[str, Any]:
+        resolved, ref_err = self._resolve_owned(ws_id)
+        if ref_err is not None:
+            return ref_err
+        return self._post("cancel", {}, ws_id=resolved)
+
+    def rewind(self, ws_id: str, turns: int) -> dict[str, Any]:
+        if not self._is_own_subtree(ws_id):
+            return {"error": f"workstream not in coordinator subtree: {ws_id}", "status": 404}
+        return self._post("rewind", {"turns": turns}, ws_id=ws_id)
+
+    def retry(self, ws_id: str) -> dict[str, Any]:
+        if not self._is_own_subtree(ws_id):
+            return {"error": f"workstream not in coordinator subtree: {ws_id}", "status": 404}
+        return self._post("retry", {}, ws_id=ws_id)
+
+    # -- model-invoked block-wait -----------------------------------------
+
+    # ClassVar aliases for the module-level wait_for_workstream constants.
+    # Kept so existing callers that read ``CoordinatorClient._WAIT_*`` keep
+    # working; prefer the module-level ``WAIT_*`` constants in new code
+    # (see #12 — the class-nesting was an inline-import smell).
+    _WAIT_REAL_TERMINAL_STATES: ClassVar[frozenset[str]] = WAIT_REAL_TERMINAL_STATES
+    _WAIT_TERMINAL_STATES: ClassVar[frozenset[str]] = WAIT_TERMINAL_STATES
+    _WAIT_MAX_WS_IDS: ClassVar[int] = WAIT_MAX_WS_IDS
+    _WAIT_MAX_TIMEOUT: ClassVar[float] = WAIT_MAX_TIMEOUT
+    _WAIT_HEARTBEAT_INTERVAL: ClassVar[float] = WAIT_HEARTBEAT_INTERVAL
+
+    def wait_for_workstream(
+        self,
+        ws_ids: list[str],
+        *,
+        timeout: float = 60.0,
+        mode: str = "any",
+        since: dict[str, dict[str, Any]] | None = None,
+        progress_callback: Callable[[dict[str, dict[str, Any]], float], None] | None = None,
+    ) -> dict[str, Any]:
+        """Block until child workstreams reach a terminal state.
+
+        ``mode='any'`` returns as soon as the first ws_id reaches a
+        real terminal state (``idle`` / ``error`` / ``closed`` /
+        ``deleted``; the last is unreachable in normal operation
+        because hard-delete cascades the row out of storage, but it
+        stays in the set so a legacy / synthetic-test row carrying
+        that state still counts).  ``mode='all'`` returns once every
+        ws_id is real-terminal — an id that can't be observed never
+        rides along to a "complete" result (see the not_found fail-fast
+        below).  Returns
+        ``{"results": {ws_id: {state, tokens, updated, name, message,
+        truncated}}, "elapsed": float, "complete": bool, "mode": mode}``.
+        ``complete`` is True when the wait condition was met before the
+        deadline, False when the timeout fired (results carry whatever
+        last state was observed).
+
+        ``message`` carries the child's last assistant message text for
+        ``idle`` / ``error`` states, or a short status sentinel for
+        ``closed`` / ``not_found``.  Non-terminal entries (e.g. ``running``
+        after a timeout) and ``deleted`` rows carry ``None`` — hard
+        deletes cascade rows out of storage so a real ``deleted`` state
+        is never observed; the legacy/synthetic-row path falls into the
+        same null-message shape as a still-running ws.  Capped at
+        ``WAIT_MESSAGE_MAX_BYTES`` UTF-8 bytes per ws — when the cap
+        triggers, ``truncated`` is ``True`` so the model can opt into a
+        follow-up ``inspect_workstream`` for the rest.  Bundled inline
+        so the coordinator LLM doesn't need an extra round-trip per
+        child to see what came back.
+
+        ``since`` — optional prior snapshot (typically the ``results``
+        dict from an earlier ``wait_for_workstream`` call).  When
+        provided, the wait short-circuits as soon as ANY polled ws_id
+        that ALSO has a ``since`` entry differs from that prior
+        snapshot (``state`` / ``tokens`` / ``updated``), regardless of
+        ``mode``.  Lets a follow-up wait skip re-counting
+        already-completed children — the classic "spawn 3, wait for
+        the first, then wait for the next change" loop turns into two
+        calls instead of spinning the timeout on the still-terminal
+        first child.  ws_ids absent from ``since`` do NOT themselves
+        trigger the diff-based early exit — they fall back to the
+        normal ``mode`` condition.  This prevents a disjoint ``since``
+        dict from silently exiting on tick one (which the naive
+        missing-entry-counts-as-changed rule would cause).
+
+        Unresolvable ids fail fast.  Refs are validated up front — a
+        malformed ws_id (truncated / garbled / non-hex / a display
+        name) errors immediately, before any waiting happens, with
+        top-level ``error`` / ``invalid_ws_ids`` / ``children`` fields.
+        Per-ref entries in ``invalid_ws_ids`` and ``not_found`` share
+        one shape — ``{ws_id, error, did_you_mean}`` — and the children
+        roster rides once at top level on both channels.  A
+        well-formed id that is foreign, nonexistent, or hard-deleted
+        mid-wait surfaces as ``state="not_found"`` and aborts the wait
+        on the tick that observes it: ``complete=False`` plus top-level
+        ``error`` / ``not_found`` / ``children`` fields.  Without this,
+        an unobservable member either burns the whole timeout
+        (``mode='all'`` could never satisfy) or silently rides along to
+        a "complete" result missing a lane — the original incident
+        shape.  Foreign and nonexistent ids collapse into one
+        indistinguishable payload (no existence oracle); every hint
+        references only this coordinator's own children.  Results are
+        keyed by the validated ws_id and share one key set —
+        ``not_found`` entries carry empty ``updated`` / ``name`` — with
+        the display ``name`` filled in for own children as orientation
+        (names are labels, NOT addresses).
+
+        ``progress_callback`` is invoked once per poll cycle with the
+        current snapshot dict + elapsed seconds.  Swallows callback
+        errors so a buggy observer can't break the wait loop.  Used
+        by the coordinator-side wait dashboard (#14) to emit
+        ``wait_progress`` SSE events; tests pass it to assert loop
+        cadence.
+
+        Performance: each tick issues exactly two storage calls
+        (``get_workstreams_batch`` + ``sum_workstream_tokens_batch``),
+        independent of ``len(ws_ids)``.  At the
+        ``_WAIT_MAX_WS_IDS`` / ``_WAIT_MAX_TIMEOUT`` cap that's ~2400
+        round-trips for a 600s wait — far below the ~38k of the naive
+        per-id polling shape.
+        """
+        # Single source of truth for input validation — the session-side
+        # tool prepare just builds a header and dispatches.  Returns an
+        # error-shaped dict (matching the rest of the client surface) on
+        # bad input rather than raising, so the session exec can surface
+        # it through ``_report_tool_result`` like any other tool error.
+        mode = str(mode if mode is not None else "any").strip().lower()
+        if mode not in {"any", "all"}:
+            return {
+                "error": f"invalid mode: {mode!r} (must be 'any' or 'all')",
+                "results": {},
+                "complete": False,
+                "elapsed": 0.0,
+                "mode": mode,
+            }
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in ws_ids or []:
+            if not isinstance(raw, str):
+                continue
+            wid = raw.strip()
+            if not wid or wid in seen:
+                continue
+            seen.add(wid)
+            cleaned.append(wid)
+        if not cleaned:
+            return {
+                "error": "ws_ids must contain at least one valid id",
+                "results": {},
+                "complete": False,
+                "elapsed": 0.0,
+                "mode": mode,
+            }
+        # Reject overflow rather than silently truncating — a mode='all'
+        # wait with N>cap ids that returns complete=True after polling
+        # only the first cap would falsely signal "all done" while the
+        # dropped ids were never tracked.
+        if len(cleaned) > self._WAIT_MAX_WS_IDS:
+            return {
+                "error": (f"too many ws_ids ({len(cleaned)}); cap is {self._WAIT_MAX_WS_IDS}"),
+                "results": {},
+                "complete": False,
+                "elapsed": 0.0,
+                "mode": mode,
+            }
+        # Validate model-supplied refs before anything else touches them.
+        # The roster query is skipped when every ref is already the coord
+        # itself or a full 32-hex id (the overwhelmingly common case), so
+        # validation adds no storage cost to the hot path.
+        needs_roster = any(
+            w != self._coord_ws_id and not _WS_REF_ID_RE.fullmatch(w.lower()) for w in cleaned
+        )
+        roster = self._children_roster() if needs_roster else None
+        resolved_ids: list[str] = []
+        resolved_seen: set[str] = set()
+        invalid: list[dict[str, Any]] = []
+        for ref in cleaned:
+            rid, ref_err = self._resolve_ws_ref(ref, roster=roster)
+            if ref_err is not None:
+                invalid.append(ref_err)
+                continue
+            if rid not in resolved_seen:
+                resolved_seen.add(rid)
+                resolved_ids.append(rid)
+        if invalid:
+            # Tool-boundary fail-fast: error the whole call rather than
+            # waiting on the valid subset — the model asked to observe a
+            # set it can't observe, and a partial wait hides exactly the
+            # lost-lane failure this guards against.  Entries share the
+            # ``not_found`` channel's per-ref shape; the roster rides
+            # once at top level.
+            return {
+                "error": " | ".join(str(e.get("error") or "") for e in invalid)[
+                    :_WS_REF_ERROR_TEXT_CAP
+                ],
+                "invalid_ws_ids": [_trim_ws_ref_hint(e) for e in invalid],
+                "children": invalid[0].get("children", []),
+                "children_truncated": invalid[0].get("children_truncated", False),
+                "results": {},
+                "complete": False,
+                "elapsed": 0.0,
+                "mode": mode,
+            }
+        cleaned = resolved_ids
+        try:
+            timeout_f = float(timeout)
+        except (TypeError, ValueError):
+            timeout_f = 60.0
+        timeout_f = max(0.0, min(timeout_f, self._WAIT_MAX_TIMEOUT))
+        # Normalize since into a per-ws_id dict of the fields we diff
+        # against.  Hostile / malformed entries silently drop — the
+        # wait is advisory, not a gatekeeper, so an invalid hint
+        # degrades to "no diff signal" rather than failing the call.
+        since_map: dict[str, dict[str, Any]] = {}
+        if isinstance(since, dict):
+            for wid, prev in since.items():
+                if isinstance(wid, str) and isinstance(prev, dict):
+                    since_map[wid] = prev
+        start = time.monotonic()
+        deadline = start + timeout_f
+
+        def _snapshot_all() -> dict[str, dict[str, Any]]:
+            """One-tick snapshot for every cleaned ws_id.
+
+            Issues two storage calls per tick (workstreams batch + token
+            aggregate batch) instead of two-per-id, cutting per-tick
+            round-trips from O(N) to O(1) at the documented cap.
+            Cross-tenant + missing-row cases collapse into a single
+            ``not_found`` shape so wait can't be used as an existence
+            oracle.
+            """
+            try:
+                rows = self._storage.get_workstreams_batch(cleaned)
+            except Exception:
+                log.debug("coord_client.wait.get_ws_batch_failed", exc_info=True)
+                rows = {wid: None for wid in cleaned}
+            try:
+                tokens_by_wid = self._storage.sum_workstream_tokens_batch(cleaned)
+            except Exception:
+                log.debug("coord_client.wait.sum_tokens_batch_failed", exc_info=True)
+                tokens_by_wid = {}
+            snaps: dict[str, dict[str, Any]] = {}
+            for wid in cleaned:
+                row = rows.get(wid)
+                if row is None or not self._row_in_own_subtree(wid, row):
+                    # Same key set as real entries (updated/name empty)
+                    # so callers consume results[ws_id] uniformly.
+                    snaps[wid] = {
+                        "state": "not_found",
+                        "tokens": 0,
+                        "updated": "",
+                        "name": "",
+                    }
+                    continue
+                snaps[wid] = {
+                    "state": str(row.get("state") or ""),
+                    "tokens": int(tokens_by_wid.get(wid, 0) or 0),
+                    "updated": row.get("updated") or "",
+                    "name": str(row.get("name") or ""),
+                }
+            return snaps
+
+        def _is_real_terminal(snap: dict[str, Any]) -> bool:
+            # Real-terminal — these states drive ``complete=True``.
+            # ``not_found`` is intentionally excluded: an unobservable
+            # member can't satisfy ``mode="any"`` — it aborts the wait
+            # via the fail-fast below instead.
+            return snap.get("state", "") in self._WAIT_REAL_TERMINAL_STATES
+
+        def _diff_since(snap: dict[str, Any], prev: dict[str, Any]) -> bool:
+            """True when ``snap`` differs from the ``since`` hint on any
+            of the diffed fields.  Called only for ws_ids that appear in
+            ``since_map`` — callers handling missing entries is the
+            wrong default (it would make a disjoint since-dict exit
+            the wait on tick one with complete=True)."""
+            return any(snap.get(key) != prev.get(key) for key in ("state", "tokens", "updated"))
+
+        last_results: dict[str, dict[str, Any]] = {}
+        complete = False
+        not_found_ids: list[str] = []
+        # Subscribe to in-process state-change events for the watched
+        # ws_ids when the bus is wired.  ``register_waiter`` returns a
+        # single ``threading.Event`` registered against every id so a
+        # wait on [A, B, C] wakes on any of A/B/C changing.  Bus is
+        # optional so test fixtures that don't wire it fall back to the
+        # legacy ``time.sleep`` cadence with no behaviour change.
+        #
+        # **Defense-in-depth ownership filter**: ``_dispatch_child_event``
+        # fires ``bus.notify(ws_id)`` for every ws_id in *any* coord's
+        # registry on this console process, so a foreign ws_id passed by
+        # an untrusted coord LLM (prompt injection) would otherwise leak
+        # wake-up timing as a side channel — _snapshot_all returns
+        # ``not_found`` for the content, but the *time* at which the wait
+        # un-blocked would correlate with the foreign ws_id's next
+        # state-class event.  Filter ``cleaned`` to own-subtree ids
+        # before registering; foreign / missing ws_ids stay in the
+        # snapshot list so they still surface as ``not_found`` in
+        # ``_snapshot_all`` and exit via the not_found fail-fast in the
+        # loop.  Predicate shared with ``_snapshot_all`` via
+        # :meth:`_row_in_own_subtree`.
+        try:
+            pre_rows = self._storage.get_workstreams_batch(cleaned)
+        except Exception:
+            log.debug("coord_client.wait.ownership_filter_failed", exc_info=True)
+            pre_rows = {wid: None for wid in cleaned}
+        own_subtree = [wid for wid in cleaned if self._row_in_own_subtree(wid, pre_rows.get(wid))]
+        bus = self._child_event_bus
+        wake_event = bus.register_waiter(own_subtree) if own_subtree else None
+        try:
+            while True:
+                # Clear BEFORE the storage snapshot to close the
+                # subscribe/check race: any ``notify`` between clear
+                # and the next ``wake_event.wait`` leaves the Event
+                # set, so the wait returns immediately and the loop
+                # re-snapshots without losing the wake-up.
+                if wake_event is not None:
+                    wake_event.clear()
+                results = _snapshot_all()
+                last_results = results
+                if progress_callback is not None:
+                    try:
+                        progress_callback(results, time.monotonic() - start)
+                    except Exception:
+                        log.debug("coord_client.wait.progress_cb_failed", exc_info=True)
+                real_terminal = [_is_real_terminal(snap) for snap in results.values()]
+                # Fail fast on unobservable members — foreign, nonexistent,
+                # or hard-deleted mid-wait.  Checked BEFORE the since-diff
+                # and mode conditions: an unobservable member invalidates
+                # the requested wait regardless of what the rest are doing
+                # (``mode='all'`` could never satisfy; ``mode='any'`` /
+                # ``since`` could "succeed" while silently dropping a
+                # lane).  The snapshot already collapsed foreign and
+                # missing into one ``not_found`` shape, so exiting here
+                # leaks nothing a single-tick wait wouldn't.
+                not_found_ids = [
+                    wid for wid, snap in results.items() if snap.get("state") == "not_found"
+                ]
+                if not_found_ids:
+                    break
+                # ``since`` — orthogonal to mode.  If the caller supplied a
+                # prior snapshot, any diff on a ws_id that IS in ``since_map``
+                # exits the wait so a follow-up call doesn't re-count
+                # already-terminal children.  ws_ids absent from ``since_map``
+                # are ignored for the diff-exit check — they fall through to
+                # the normal mode='any' / mode='all' conditions below.  This
+                # prevents a disjoint since-dict from exiting on tick one
+                # with complete=True (previous shape did, silently).
+                if since_map and any(
+                    _diff_since(snap, since_map[wid])
+                    for wid, snap in results.items()
+                    if wid in since_map
+                ):
+                    complete = True
+                    break
+                if mode == "any":
+                    if any(real_terminal):
+                        complete = True
+                        break
+                else:  # mode == "all"
+                    if all(real_terminal):
+                        # Every ws_id actually finished observable work.
+                        # ``not_found`` members can't ride along to a
+                        # "complete" result — the fail-fast above exits
+                        # first — so ``complete=True`` means every lane
+                        # really resolved.
+                        complete = True
+                        break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                if wake_event is not None:
+                    # Block until a child state-change notify fires OR
+                    # the heartbeat cap expires (so a stuck child still
+                    # emits a periodic ``wait_progress`` for the
+                    # sidebar UX).  Heartbeat cap is the only timer —
+                    # the bus is the wake source.  See
+                    # ``WAIT_HEARTBEAT_INTERVAL`` (module top) for the
+                    # worst-case completion-latency rationale: 2 s is
+                    # a deliberate 4x trade vs the pre-bus 0.5 s poll.
+                    wake_event.wait(min(remaining, self._WAIT_HEARTBEAT_INTERVAL))
+                else:
+                    # No wake source for this wait (no registered own-
+                    # subtree ids — e.g. a bus-less test fixture).  Fall
+                    # back to the heartbeat cadence so
+                    # ``progress_callback`` keeps firing.  Foreign /
+                    # missing ids can't park here past one tick: the
+                    # not_found fail-fast above exits on the tick that
+                    # observes them.
+                    time.sleep(min(self._WAIT_HEARTBEAT_INTERVAL, remaining))
+        finally:
+            # Always unregister so a crash mid-wait can't leak the
+            # registration past one wait's lifetime.  Bus discards
+            # empty buckets so long-lived buses don't accumulate dead
+            # keys after many waits.  Unregister against the same
+            # ``own_subtree`` list the register call used — passing
+            # ``cleaned`` here would silently no-op for foreign ids
+            # but pass an unknown bucket to ``unregister_waiter``.
+            if wake_event is not None:
+                bus.unregister_waiter(own_subtree, wake_event)
+        # Bundle each terminal child's last assistant message inline so the
+        # coordinator LLM doesn't have to follow up with one
+        # ``inspect_workstream`` per ws.  Only ``idle`` / ``error`` ws_ids
+        # actually hit storage (``closed`` / ``not_found`` return a sentinel
+        # without I/O), so split them and parallelize the storage-bound
+        # subset across a small thread pool — at the WAIT_MAX_WS_IDS=32
+        # cap, 8 workers cuts a worst-case all-idle fan-out from 32
+        # sequential storage round-trips down to 4 batches, which lands
+        # inside the WAIT_HEARTBEAT_INTERVAL the model already tolerates
+        # between ticks.  Storage backends use SQLAlchemy with
+        # ``check_same_thread=False`` (SQLite) / a connection pool
+        # (Postgres), so concurrent reads from the worker pool are safe.
+        io_wids = [
+            wid
+            for wid, snap in last_results.items()
+            if str(snap.get("state") or "") in ("idle", "error")
+        ]
+        io_pairs: dict[str, tuple[str | None, bool]] = {}
+        if io_wids:
+
+            def _enrich(wid: str) -> tuple[str, str | None, bool]:
+                state = str(last_results[wid].get("state") or "")
+                msg, trunc = _wait_message_for(self._storage, wid, state)
+                return wid, msg, trunc
+
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(8, len(io_wids)),
+                thread_name_prefix="coord-wait-enrich",
+            ) as ex:
+                for wid, msg, trunc in ex.map(_enrich, io_wids):
+                    io_pairs[wid] = (msg, trunc)
+
+        # Build the final dict.  Fresh per-ws dicts (not in-place
+        # mutation) so any in-flight ``wait_progress`` SSE event still
+        # holds a reference to the tick's pre-enrichment snapshot — its
+        # shape is documented as separate from the returned tool result
+        # and must not silently grow new fields just because the wait
+        # completed.
+        enriched_results: dict[str, dict[str, Any]] = {}
+        for wid, snap in last_results.items():
+            state = str(snap.get("state") or "")
+            if wid in io_pairs:
+                msg, trunc = io_pairs[wid]
+            elif state in WAIT_TERMINAL_STATES:
+                msg, trunc = _wait_message_for(self._storage, wid, state)
+            else:
+                msg, trunc = None, False
+            enriched_results[wid] = {**snap, "message": msg, "truncated": trunc}
+        response: dict[str, Any] = {
+            "results": enriched_results,
+            "complete": complete,
+            "elapsed": round(time.monotonic() - start, 3),
+            "mode": mode,
+        }
+        if not_found_ids:
+            # The wait aborted on unobservable members — surface a loud
+            # top-level error with recovery hints (did-you-mean + child
+            # roster) so a garbled id reads as "fix the id and re-issue",
+            # not as a dead child.  Hints reference only this
+            # coordinator's own children; foreign and nonexistent ids
+            # produce identical payloads (no existence oracle).
+            hint_roster = self._children_roster()
+            hints = [self._ws_ref_error(wid, roster=hint_roster) for wid in not_found_ids]
+            response["not_found"] = [_trim_ws_ref_hint(h) for h in hints]
+            response["error"] = " | ".join(str(h.get("error") or "") for h in hints)[
+                :_WS_REF_ERROR_TEXT_CAP
+            ]
+            response["children"] = hints[0].get("children", []) if hints else []
+            response["children_truncated"] = (
+                hints[0].get("children_truncated", False) if hints else False
+            )
+        return response
+
+    # -- model-invoked read ops (direct storage) ---------------------------
+
+    def list_children(
+        self,
+        parent_ws_id: str,
+        *,
+        state: str | None = None,
+        skill: str | None = None,
+        limit: int = 100,
+        include_closed: bool = False,
+    ) -> dict[str, Any]:
+        """Return children of ``parent_ws_id`` excluding other coordinators.
+
+        ``skill`` matches on ``skill_id`` (template id) when provided.
+        ``include_closed`` controls whether soft-closed children appear;
+        default False so the common "what's active?" query doesn't have
+        to filter them out post-hoc.  Explicit ``state="closed"`` filter
+        still works regardless (overrides the default).  Deleted rows
+        are never returned because hard-delete cascades the row out of
+        storage.
+
+        Returns a dict ``{"children": [...], "truncated": bool}``.  The
+        ``truncated`` flag is ``True`` when the SQL fetch returned a full
+        ``limit``-sized page — the model can signal to the user there may
+        be more rows and request pagination.  ``kind`` is pushed into the
+        SQL query so coordinator-siblings never burn the row budget here.
+
+        Cross-tenant guard: the coordinator's LLM input is untrusted
+        (prompt injection is a first-class threat), so ``parent_ws_id``
+        is constrained to the coordinator's own ws_id.  A model that
+        emits some other ws_id gets an empty result rather than a peek
+        into another tenant's subtree.
+        """
+        if parent_ws_id != self._coord_ws_id:
+            return {"children": [], "truncated": False}
+        # Tenant filter: push the coord's owner into SQL.  Children of a
+        # coord share its owner by construction (the create-path
+        # parent_ws_id gate at server.py enforces this), but the filter
+        # is defense-in-depth for migration-era rows where that gate
+        # didn't exist yet.
+        raw = self._storage.list_workstreams(
+            limit=limit,
+            parent_ws_id=parent_ws_id,
+            kind=WorkstreamKind.INTERACTIVE,
+            user_id=self._user_id or None,
+        )
+        # ``deleted`` stays in the filter set so any legacy/synthetic row
+        # that still carries that state (e.g. unmigrated data) is treated
+        # as terminal.  Hard-delete cascades the row out of storage in the
+        # normal path, so this only affects edge cases.
+        _terminal_states = {"closed", "deleted"}
+        children: list[dict[str, Any]] = []
+        for row in raw:
+            # Dict access via ``._mapping`` is resilient to SELECT
+            # column-order changes; a positional row[6] lookup would
+            # silently corrupt the response if a future migration added
+            # a column earlier in the projection.
+            try:
+                m = row._mapping  # SQLAlchemy Row
+            except AttributeError:
+                # Fallback for non-Row tuples (test doubles, etc.).
+                m = {
+                    "ws_id": row[0],
+                    "node_id": row[1],
+                    "name": row[2],
+                    "state": row[3],
+                    "created": row[4],
+                    "updated": row[5],
+                    "kind": WorkstreamKind.from_raw(row[6] if len(row) > 6 else None),
+                    "parent_ws_id": row[7] if len(row) > 7 else None,
+                    "skill_id": row[8] if len(row) > 8 else None,
+                    "skill_version": row[9] if len(row) > 9 else None,
+                }
+            if state is not None and m["state"] != state:
+                continue
+            # Default-exclude terminal states.  An explicit state
+            # filter takes precedence (caller asking for state="closed"
+            # clearly wants them); only drop terminal rows when the
+            # caller didn't specify a state at all.
+            if state is None and not include_closed and m["state"] in _terminal_states:
+                continue
+            child: dict[str, Any] = {
+                "ws_id": m["ws_id"],
+                "node_id": m["node_id"],
+                "name": m["name"],
+                "state": m["state"],
+                "created": m["created"],
+                "updated": m["updated"],
+                "kind": m["kind"],
+                "parent_ws_id": m["parent_ws_id"],
+            }
+            if skill is not None:
+                # skill_id / skill_version are projected by list_workstreams —
+                # no per-row get_workstream round-trip needed.
+                if m["skill_id"] != skill:
+                    continue
+                child["skill_id"] = m["skill_id"]
+                child["skill_version"] = m["skill_version"]
+            children.append(child)
+        # The DB filled a full page → more matching rows may exist behind
+        # the cap; tell the model so it can re-query with a narrower filter
+        # or larger limit.  Python-side post-filtering is unrelated to
+        # whether the DB has more pages.
+        truncated = len(raw) >= limit
+        return {"children": children, "truncated": truncated}
+
+    # Auto-metadata keys that expose internal network topology (RFC 1918
+    # addresses, interface maps) without contributing to any routing
+    # decision a coordinator makes.  Stripped from the default response
+    # so the output guard's private_ip_disclosure check doesn't fire on
+    # every ``list_nodes`` call.  Operators who need this for
+    # debugging can opt back in via ``include_network_detail=True``.
+    _NODES_NETWORK_KEYS: ClassVar[frozenset[str]] = frozenset({"interfaces"})
+
+    # A node counts as "routable" for coordinator spawn targeting when
+    # its service-registry heartbeat is within this window.  Matches
+    # the default max_age_seconds on storage.list_services and the
+    # ClusterCollector's own discovery freshness.
+    _NODES_HEARTBEAT_WINDOW_S: ClassVar[int] = 120
+
+    def list_nodes(
+        self,
+        *,
+        filters: dict[str, Any] | None = None,
+        limit: int = 100,
+        include_network_detail: bool = False,
+        include_inactive: bool = False,
+    ) -> dict[str, Any]:
+        """Return ``{"nodes": [...], "truncated": bool}``.
+
+        Each row carries the node's metadata dict — both auto-populated
+        keys (``arch``, ``cpu_count``, ``fqdn``, ``hostname``, ``os``,
+        ``os_release``, ``python``; always present, ``source="auto"``) and
+        operator-supplied user keys (deployment-specific, ``source="user"``).
+        ``filters`` matches all key=value pairs (AND semantics) and is
+        pushed into SQL via ``filter_nodes_by_metadata`` — no per-row
+        lookups.
+
+        Internal network metadata (``interfaces`` — container IPs and
+        interface names) is stripped by default; pass
+        ``include_network_detail=True`` to include it.  The model never
+        needs this for routing decisions (routing is by capability/region
+        tags) and it trips the private-IP output guard.
+
+        Storage stores metadata values as JSON-encoded strings (the write
+        path in ``server.py`` / ``admin.py`` / ``console/server.py`` all
+        go through ``json.dumps``).  Filter values get re-encoded so the
+        stored-text comparison succeeds, and read values get decoded so
+        the model sees the natural Python form (``"x86_64"`` not
+        ``'"x86_64"'``, ``4`` not ``"4"``).
+        """
+        page_size = max(1, min(int(limit), 500))
+        # Liveness filter: node_metadata rows persist across node
+        # restarts and never get deleted automatically, so
+        # ``get_all_node_metadata`` returns every node that ever
+        # registered — including long-dead container ids.  Intersect
+        # against the service registry (last_heartbeat within
+        # _NODES_HEARTBEAT_WINDOW_S) so target_node suggestions actually
+        # route.  Operators debugging stale registrations can pass
+        # include_inactive=True.
+        active_ids: set[str] | None = None
+        if not include_inactive:
+            try:
+                services = self._storage.list_services(
+                    "server", max_age_seconds=self._NODES_HEARTBEAT_WINDOW_S
+                )
+                active_ids = {s["service_id"] for s in services if s.get("service_id")}
+            except Exception:
+                log.debug("coord_client.list_services_failed", exc_info=True)
+                active_ids = None  # fail-open: return metadata as-is
+
+        if filters:
+            # Filtered case: narrow to the matching ids first, then pull
+            # metadata only for the ``page_size``-bounded slice.  Avoids
+            # the full-cluster ``get_all_node_metadata`` scan when the
+            # model is asking for a handful of nodes.  Per-node lookups
+            # are bounded at 500 by the limit clamp.
+            encoded_filters = {str(k): json.dumps(v) for k, v in filters.items()}
+            matching = self._storage.filter_nodes_by_metadata(encoded_filters)
+            if active_ids is not None:
+                matching = {nid for nid in matching if nid in active_ids}
+            node_ids = sorted(matching)
+            truncated = len(node_ids) > page_size
+            node_ids = node_ids[:page_size]
+            meta_rows_by_node: dict[str, list[dict[str, Any]]] = {
+                nid: self._storage.get_node_metadata(nid) for nid in node_ids
+            }
+        else:
+            # Unfiltered case: one wide query.  The caller is paging
+            # through the whole cluster and needs metadata for every
+            # node anyway — per-node lookups would be a true N+1.
+            all_meta = self._storage.get_all_node_metadata()
+            meta_node_ids = set(all_meta.keys())
+            if active_ids is not None:
+                meta_node_ids &= active_ids
+            node_ids = sorted(meta_node_ids)
+            truncated = len(node_ids) > page_size
+            node_ids = node_ids[:page_size]
+            meta_rows_by_node = {nid: all_meta.get(nid, []) for nid in node_ids}
+        nodes: list[dict[str, Any]] = []
+        for nid in node_ids:
+            meta: dict[str, dict[str, Any]] = {}
+            for r in meta_rows_by_node.get(nid, []):
+                key = r.get("key")
+                if not key:
+                    continue
+                key_str = str(key)
+                if not include_network_detail and key_str in self._NODES_NETWORK_KEYS:
+                    continue
+                raw_value = r.get("value", "")
+                try:
+                    decoded = json.loads(raw_value) if isinstance(raw_value, str) else raw_value
+                except (TypeError, ValueError):
+                    decoded = raw_value
+                meta[key_str] = {
+                    "value": decoded,
+                    "source": str(r.get("source", "")),
+                }
+            # Project ``metadata.models`` (a list of
+            # ``{alias, provider, healthy}`` written by the node's
+            # heartbeat loop — see ``_collect_node_models_metadata``
+            # in ``turnstone/server.py``) down to the healthy-alias
+            # shortlist the coordinator passes back as ``model=`` to
+            # ``spawn_workstream`` / ``spawn_batch``.  The top-level
+            # field is named ``model_aliases`` (not ``models``) so it
+            # doesn't collide with ``metadata.models`` — the two
+            # carry different shapes (list of strings vs list of
+            # dicts) and a coord that conflates them gets a runtime
+            # error.  Empty list when the node hasn't published a
+            # models entry yet — older nodes without the heartbeat-
+            # side projection, or a brand new node mid-startup before
+            # the first metadata write.
+            models_entry = meta.get("models", {}).get("value")
+            healthy_aliases: list[str] = []
+            if isinstance(models_entry, list):
+                for row in models_entry:
+                    if not isinstance(row, dict):
+                        continue
+                    if not row.get("healthy", False):
+                        continue
+                    alias = row.get("alias")
+                    if isinstance(alias, str) and alias:
+                        healthy_aliases.append(alias)
+            nodes.append(
+                {
+                    "node_id": nid,
+                    "metadata": meta,
+                    "model_aliases": healthy_aliases,
+                }
+            )
+        return {"nodes": nodes, "truncated": truncated}
+
+    # ------------------------------------------------------------------
+    # tasks — coordinator-local planning state persisted on workstream_config
+    # ------------------------------------------------------------------
+
+    def tasks_get(self, ws_id: str) -> dict[str, Any]:
+        """Return the task envelope ``{"version": 1, "tasks": [...]}``.
+
+        Corrupt / legacy config rows return an empty envelope rather than
+        raising — a hand-edited DB shouldn't break the read path.  The
+        mutating methods use ``_load_task_envelope_strict`` to detect
+        corruption and refuse to overwrite silently.
+        """
+        env, _ = self._load_task_envelope(ws_id)
+        return env
+
+    def _load_task_envelope(self, ws_id: str) -> tuple[dict[str, Any], bool]:
+        """Return ``(envelope, corrupt)``; ``corrupt=True`` iff the stored
+        payload is non-empty and unparseable as the expected shape.
+
+        Enforces the coordinator's cross-tenant guard (untrusted LLM input
+        cannot be used to peek at another coordinator's task list), then
+        delegates to :func:`load_task_envelope` so the HTTP read endpoint
+        and this method share the same decoder + corruption semantics.
+        """
+        empty: dict[str, Any] = {"version": 1, "tasks": []}
+        if ws_id != self._coord_ws_id:
+            return empty, False
+        return load_task_envelope(self._storage, ws_id)
+
+    def _save_tasks(self, ws_id: str, envelope: dict[str, Any]) -> None:
+        # Save only the ``tasks`` key so concurrent writers to other
+        # workstream_config keys (e.g. reasoning_effort from the admin UI)
+        # aren't clobbered by a read-modify-write on the full row.
+        self._storage.save_workstream_config(
+            ws_id, {"tasks": json.dumps(envelope, separators=(",", ":"))}
+        )
+
+    def _task_lock(self, ws_id: str) -> threading.Lock:
+        """Per-ws lock cached on the client.
+
+        Coordinator tool execs run on a single worker thread so contention
+        is unlikely in practice, but the lock is cheap defence-in-depth
+        for any future caller (maintenance script, HTTP handler) that
+        mutates the list outside the worker thread.
+        """
+        with self._task_lock_cache_lock:
+            lk = self._task_lock_cache.get(ws_id)
+            if lk is None:
+                lk = threading.Lock()
+                self._task_lock_cache[ws_id] = lk
+            return lk
+
+    def tasks_add(
+        self,
+        ws_id: str,
+        *,
+        title: str,
+        status: str = "pending",
+        child_ws_id: str = "",
+    ) -> dict[str, Any]:
+        if ws_id != self._coord_ws_id:
+            return {"error": f"tasks scope violation: {ws_id}"}
+        clean_title = (title or "").strip()
+        if not clean_title:
+            return {"error": "title is required"}
+        # Reject overlong titles rather than silently truncating —
+        # mutating the coordinator's planning state under its nose
+        # masks real planning bugs (the model may rely on the title it
+        # SENT, not the stored one).  Callers that want a long title
+        # must shorten it themselves.
+        if len(clean_title) > _TASK_TITLE_MAX:
+            return {
+                "error": (
+                    f"title too long ({len(clean_title)} chars, max "
+                    f"{_TASK_TITLE_MAX}).  Shorten and retry."
+                )
+            }
+        if status not in _TASK_STATUSES:
+            return {"error": f"invalid status: {status}"}
+        with self._task_lock(ws_id):
+            envelope, corrupt = self._load_task_envelope(ws_id)
+            if corrupt:
+                return {
+                    "error": (
+                        "tasks envelope is corrupt on disk; refusing to "
+                        "overwrite.  Inspect workstream_config.tasks manually "
+                        "or clear it before retrying."
+                    )
+                }
+            if len(envelope["tasks"]) >= _TASKS_MAX:
+                return {
+                    "error": (
+                        f"tasks capacity reached ({_TASKS_MAX}).  "
+                        "Remove completed tasks before adding more."
+                    )
+                }
+            now = _utc_now_iso()
+            task = {
+                "id": "tsk_" + secrets.token_hex(6),
+                "title": clean_title,
+                "status": status,
+                "child_ws_id": child_ws_id,
+                "created": now,
+                "updated": now,
+            }
+            envelope["tasks"].append(task)
+            self._save_tasks(ws_id, envelope)
+            return task
+
+    def tasks_update(
+        self,
+        ws_id: str,
+        *,
+        task_id: str,
+        title: str | None = None,
+        status: str | None = None,
+        child_ws_id: str | None = None,
+    ) -> dict[str, Any]:
+        if ws_id != self._coord_ws_id:
+            return {"error": f"tasks scope violation: {ws_id}"}
+        if status is not None and status not in _TASK_STATUSES:
+            return {"error": f"invalid status: {status}"}
+        with self._task_lock(ws_id):
+            envelope, corrupt = self._load_task_envelope(ws_id)
+            if corrupt:
+                return {"error": ("tasks envelope is corrupt on disk; refusing to overwrite.")}
+            for t in envelope["tasks"]:
+                if t.get("id") == task_id:
+                    if title is not None:
+                        clean = title.strip()
+                        if not clean:
+                            return {"error": "title cannot be empty"}
+                        if len(clean) > _TASK_TITLE_MAX:
+                            return {
+                                "error": (
+                                    f"title too long ({len(clean)} chars, max "
+                                    f"{_TASK_TITLE_MAX}).  Shorten and retry."
+                                )
+                            }
+                        t["title"] = clean
+                    if status is not None:
+                        t["status"] = status
+                    if child_ws_id is not None:
+                        t["child_ws_id"] = child_ws_id
+                    t["updated"] = _utc_now_iso()
+                    self._save_tasks(ws_id, envelope)
+                    # t is a dict pulled out of a json-decoded list; mypy
+                    # sees it as Any from the decode path.  Cast back to
+                    # the annotated return type.
+                    return dict(t)
+            return {"error": f"task not found: {task_id}"}
+
+    def tasks_remove(self, ws_id: str, *, task_id: str) -> dict[str, Any]:
+        """Remove a task by id.  Returns a result dict shaped like the
+        other mutators — the caller can then distinguish scope violation
+        vs corrupt envelope vs genuine not-found rather than collapsing
+        all three into ``False`` (which would mis-report a corrupt DB
+        as "task not found" to the coordinator LLM).
+        """
+        if ws_id != self._coord_ws_id:
+            return {"error": f"tasks scope violation: {ws_id}"}
+        with self._task_lock(ws_id):
+            envelope, corrupt = self._load_task_envelope(ws_id)
+            if corrupt:
+                return {"error": ("tasks envelope is corrupt on disk; refusing to overwrite.")}
+            before = len(envelope["tasks"])
+            envelope["tasks"] = [t for t in envelope["tasks"] if t.get("id") != task_id]
+            if len(envelope["tasks"]) == before:
+                return {"error": f"task not found: {task_id}"}
+            self._save_tasks(ws_id, envelope)
+            return {"ok": True, "task_id": task_id}
+
+    def cleanup_dead_task_child_refs(self, ws_id: str) -> int:
+        """Clear ``child_ws_id`` pointers on tasks whose referenced
+        workstream no longer exists in storage.  Returns the number of
+        links blanked (0 if nothing needed doing, envelope was corrupt,
+        or the lookup failed).
+
+        Called by :meth:`SessionManager.close` after the state
+        transition — the task envelope is a per-coordinator planning
+        structure, so cross-coord scope guards don't apply the same way
+        they do for add/update/remove.  Held under the same per-ws
+        ``_task_lock`` as add/update/remove/reorder so a close racing
+        an in-flight mutation can't lose the mutation (#bug-6).
+        """
+        with self._task_lock(ws_id):
+            envelope, corrupt = load_task_envelope(self._storage, ws_id)
+            if corrupt:
+                return 0
+            tasks = envelope.get("tasks") or []
+            if not tasks:
+                return 0
+            candidate_ids = sorted(
+                {
+                    str(t.get("child_ws_id") or "")
+                    for t in tasks
+                    if isinstance(t, dict) and t.get("child_ws_id")
+                }
+            )
+            if not candidate_ids:
+                return 0
+            try:
+                existing_rows = self._storage.get_workstreams_batch(candidate_ids)
+            except Exception:
+                log.debug(
+                    "coord_client.task_ref_batch_failed ws=%s",
+                    ws_id,
+                    exc_info=True,
+                )
+                return 0
+            dead_ids = {cid for cid in candidate_ids if existing_rows.get(cid) is None}
+            if not dead_ids:
+                return 0
+            blanked = 0
+            for t in tasks:
+                if isinstance(t, dict) and str(t.get("child_ws_id") or "") in dead_ids:
+                    t["child_ws_id"] = ""
+                    blanked += 1
+            if not blanked:
+                return 0
+            try:
+                self._save_tasks(ws_id, envelope)
+            except Exception:
+                # Write-side divergence — the task envelope on disk
+                # now disagrees with what the close path intended.
+                # Bump to warning (not debug) so operators see it;
+                # read-side corruption (already silent on load) stays
+                # at debug.  #q-6.
+                log.warning(
+                    "coord_client.task_ref_save_failed ws=%s blanked=%d",
+                    ws_id,
+                    blanked,
+                    exc_info=True,
+                )
+                return 0
+            return blanked
+
+    def tasks_reorder(self, ws_id: str, *, task_ids: list[str]) -> dict[str, Any]:
+        """Reject unless ``task_ids`` is an exact permutation of the
+        current set — prevents silent task loss from a partial reorder.
+        """
+        if ws_id != self._coord_ws_id:
+            return {"error": f"tasks scope violation: {ws_id}"}
+        with self._task_lock(ws_id):
+            envelope, corrupt = self._load_task_envelope(ws_id)
+            if corrupt:
+                return {"error": ("tasks envelope is corrupt on disk; refusing to overwrite.")}
+            current = [t.get("id") for t in envelope["tasks"]]
+            if set(task_ids) != set(current) or len(task_ids) != len(current):
+                return {
+                    "error": (
+                        "task_ids must be a permutation of the existing set. "
+                        f"current={sorted(filter(None, current))}"
+                    ),
+                }
+            by_id = {t.get("id"): t for t in envelope["tasks"]}
+            envelope["tasks"] = [by_id[tid] for tid in task_ids]
+            self._save_tasks(ws_id, envelope)
+            return {"ok": True, "order": task_ids}
+
+    def inspect(
+        self,
+        ws_id: str,
+        *,
+        message_limit: int = 20,
+        include_provider_content: bool = False,
+    ) -> dict[str, Any]:
+        """Return persisted workstream state + tail-N messages.
+
+        Cross-tenant guard: the coordinator's LLM input is untrusted, so
+        the inspectable scope is restricted to (a) the coordinator
+        itself or (b) one of its own children — ``parent_ws_id`` AND
+        ``user_id`` parity via :meth:`_row_in_own_subtree`, matching
+        the wait / mutating paths.  Any other ws_id returns the same
+        not-found shape used for genuine misses, avoiding an existence
+        oracle.
+
+        ``include_provider_content`` defaults to False.  Provider-native
+        content blocks (``_provider_content`` / ``provider_blocks``)
+        duplicate the plain ``content`` string and roughly double the
+        response size on longer conversations.  The model only needs
+        them for provider-fidelity replay tooling; regular inspect
+        calls get the trimmed shape.
+        """
+        resolved, ref_err = self._resolve_ws_ref(ws_id)
+        if ref_err is not None:
+            return ref_err
+        ws_id = resolved
+        full = self._storage.get_workstream(ws_id)
+        # Misses return the same did-you-mean payload for nonexistent and
+        # cross-tenant rows alike, so the existence-leak guarantee is
+        # preserved while a garbled id stays recoverable in one
+        # round-trip (the structured ``ws_id`` field echoes the value
+        # the caller asked about).
+        if full is None:
+            return self._ws_ref_error(ws_id)
+        # Ownership parity with every other verb: parent AND user_id
+        # (``_row_in_own_subtree``).  The parent-only check this
+        # replaces let a forged / migration-era row (parent_ws_id=coord,
+        # user_id=other-tenant) be read through inspect while the wait
+        # and mutating paths rejected the same shape (#506).
+        if not self._row_in_own_subtree(ws_id, full):
+            return self._ws_ref_error(ws_id)
+        # load_messages returns the full history in chronological order.
+        # We slice the tail in Python because the SQL tail-N is
+        # approximate across conversation boundaries.  Defensive
+        # try/except: storage errors should not break inspect.
+        messages: list[Any] = []
+        try:
+            # repair=False — inspect is a display read (admin viewing a
+            # child's history in the tree UI).  The LLM-context repair
+            # pass would strip trailing partial turns the operator is
+            # watching.
+            all_msgs = self._storage.load_messages(ws_id, repair=False)
+            if message_limit and message_limit > 0:
+                messages = all_msgs[-message_limit:]
+            else:
+                messages = all_msgs
+        except Exception:
+            log.debug("coord_client.load_messages.failed ws=%s", ws_id, exc_info=True)
+        # Intent-judge verdicts are deliberately NOT surfaced here.
+        # Their fields (``recommendation="review"``, ``user_decision="policy"``
+        # for auto-approved-by-policy, etc.) read as workflow status to
+        # coordinator LLMs and produced repeated misreads of healthy
+        # children as "stuck on policy review".  The child's actual
+        # blocking status lives on the ``state`` field (``"attention"``)
+        # and the ``live.pending_approval`` block — both still present
+        # in the result below.  Verdict history remains queryable
+        # through the admin / audit surfaces.
+        result: dict[str, Any] = {
+            **full,
+            "messages": _serialize_messages(
+                messages, include_provider_content=include_provider_content
+            ),
+        }
+        # Surface the operator-supplied close reason (persisted via
+        # workstream_config by the server's close handler) and any
+        # last-error text persisted by the worker-thread error path.
+        # Only the terminal-state shapes can carry these — gating on
+        # state avoids a per-inspect DB read on the hot live-child path.
+        if full.get("state") in {"closed", "error", "deleted"}:
+            try:
+                cfg = self._storage.load_workstream_config(ws_id) or {}
+            except Exception:
+                log.debug("coord_client.load_workstream_config.failed ws=%s", ws_id, exc_info=True)
+                cfg = {}
+            close_reason = cfg.get("close_reason")
+            if close_reason:
+                result["close_reason"] = close_reason
+            last_error = cfg.get(LAST_ERROR_CONFIG_KEY)
+            if last_error and full.get("state") == "error":
+                # Only attach on error rows — closed/deleted may carry a
+                # historic last_error from a prior failed turn that was
+                # later resolved, and surfacing it would mislead the
+                # coordinator into thinking the close was an error close.
+                # The result key is the public API surface read by the
+                # coord LLM via inspect_workstream — match the storage
+                # key for symmetry, but don't import a constant that
+                # would couple internal storage layout to the model
+                # contract.
+                result["last_error"] = last_error
+        live = self._fetch_cluster_live(ws_id)
+        if live is not None:
+            result["live"] = live
+        return result
+
+    def _fetch_cluster_live(self, ws_id: str) -> dict[str, Any] | None:
+        """Optionally merge live state from the cluster-inspect endpoint.
+
+        Best-effort: an error / non-2xx / missing ``live`` key all fall
+        back to ``None`` so a node outage never breaks ``inspect``.  The
+        model-facing tool schema is unchanged — the returned dict just
+        gains an optional ``live`` key when available.
+
+        Permission inheritance: the coordinator's per-session JWT carries
+        the creator's scopes and permissions (see
+        :class:`CoordinatorTokenManager`).  The cluster-inspect endpoint
+        is gated on ``admin.cluster.inspect`` — creators without that
+        permission get a 403 here and ``inspect`` silently degrades to
+        storage-only.  This is correct behavior (the coordinator cannot
+        exceed its creator's privilege), not a bug.  Operators who want
+        live state in coordinator outputs must explicitly grant
+        ``admin.cluster.inspect`` to those users.
+        """
+        # Short-TTL cache: repeated inspect() against the same child
+        # (e.g. a model walking its children in a loop) amortizes to
+        # one HTTP call per 2s instead of one per inspect.
+        now = time.time()
+        with self._live_cache_lock:
+            cached = self._live_cache.get(ws_id)
+            if cached is not None and now - cached[0] < _LIVE_CACHE_TTL_SECONDS:
+                # LRU touch — move the fresh entry to the most-recent
+                # position so it's not the next eviction candidate.
+                self._live_cache.move_to_end(ws_id)
+                return cached[1]
+        try:
+            url = f"{self._base_url}/v1/api/cluster/ws/{ws_id}/detail"
+            # 1s timeout is ample for a same-host console call.  The
+            # previous 2s was conservatively generous and stalled the
+            # session thread visibly when a node was unhealthy.
+            resp = self._http.get(url, headers=self._headers(), timeout=1.0)
+        except httpx.HTTPError:
+            log.debug("coord_client.cluster_inspect.http_error ws=%s", ws_id, exc_info=True)
+            self._store_live_cache(ws_id, now, None)
+            return None
+        if resp.status_code < 200 or resp.status_code >= 300:
+            self._store_live_cache(ws_id, now, None)
+            return None
+        try:
+            payload = resp.json()
+        except ValueError:
+            self._store_live_cache(ws_id, now, None)
+            return None
+        if not isinstance(payload, dict):
+            self._store_live_cache(ws_id, now, None)
+            return None
+        live = payload.get("live")
+        result: dict[str, Any] | None = live if isinstance(live, dict) else None
+        if result is not None and not result.get("tokens"):
+            # Idle children's live block carries tokens=0 because the
+            # node-dashboard counters only surface in-flight values; fall
+            # back to the persisted aggregate so a child that already
+            # burned thousands doesn't read as 0.  Folded into the live
+            # cache (not done at the inspect call site) so back-to-back
+            # inspects of an idle child don't each fire a fresh
+            # ``sum_workstream_tokens`` aggregation.
+            try:
+                persisted = self._storage.sum_workstream_tokens(ws_id)
+            except Exception:
+                log.debug("coord_client.sum_tokens.failed ws=%s", ws_id, exc_info=True)
+                persisted = 0
+            if persisted:
+                result = {**result, "tokens": persisted}
+        self._store_live_cache(ws_id, now, result)
+        return result
+
+    _LIVE_CACHE_MAX = 256
+
+    def _store_live_cache(self, ws_id: str, ts: float, value: dict[str, Any] | None) -> None:
+        """Write an entry and evict the oldest if over the cap.
+
+        Thread-safe: all mutation + eviction happens under
+        ``_live_cache_lock``.  Eviction is LRU — ``OrderedDict`` orders
+        by insertion order, ``move_to_end`` on read turns it into the
+        LRU touch, and ``popitem(last=False)`` drops the least-recent.
+        """
+        with self._live_cache_lock:
+            if ws_id in self._live_cache:
+                self._live_cache.move_to_end(ws_id)
+            self._live_cache[ws_id] = (ts, value)
+            while len(self._live_cache) > self._LIVE_CACHE_MAX:
+                self._live_cache.popitem(last=False)
+
+
+# ---------------------------------------------------------------------------
+# Serialization helpers
+# ---------------------------------------------------------------------------
+
+
+_PROVIDER_FIDELITY_KEYS: frozenset[str] = frozenset({"_provider_content", "provider_blocks"})
+
+
+def _serialize_messages(
+    rows: list[Any], *, include_provider_content: bool = False
+) -> list[dict[str, Any]]:
+    """Normalize load_messages rows to JSON-friendly dicts.
+
+    ``load_messages`` historically returns provider-specific message dicts
+    (``role``/``content``/``tool_name``/...).  Keep the passthrough but
+    ensure the list is serializable.
+
+    When ``include_provider_content=False`` (default), strip
+    provider-native content blocks — they duplicate the plain
+    ``content`` string and roughly double response size on longer
+    conversations.  Callers that need the full provider-fidelity
+    payload (replay tooling, round-trip tests) pass True to restore.
+    """
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if isinstance(r, dict):
+            if include_provider_content:
+                out.append(r)
+            else:
+                out.append({k: v for k, v in r.items() if k not in _PROVIDER_FIDELITY_KEYS})
+        else:
+            # Fall back to a string repr so at least something lands.
+            out.append({"raw": str(r)})
+    return out
+
+
+# ---------------------------------------------------------------------------
+# inspect_workstream — tiered output compression
+# ---------------------------------------------------------------------------
+#
+# A coord doing a fan-out wave of inspect_workstream calls against
+# tool-heavy children can blow the context budget on raw output alone
+# (one child with a 100 KB bash result × N children).  The previous
+# safety net was ``_truncate_output``'s head+tail strategy, which
+# silently drops *middle* messages — exactly the wrong shape for a
+# coordinator trying to understand a child's trajectory (the LAST
+# message tells the model what the child concluded; the FIRST sets
+# the brief; the middle is the connective tissue).
+#
+# The three-tier degradation pattern matches the ``search`` tool's
+# Tier-1/Tier-2/Tier-3 ladder at ``session.py:_format_search_results``.
+# First tier whose serialized size fits the budget wins; the LLM
+# learns which tier it got via the ``_tier`` field in the response
+# (no API change to the coordinator tool).
+#
+# Budget chosen well under ``tool_truncation`` (typically 256 KB+) so
+# the head+tail safety net never fires for inspect_workstream — that
+# strategy silently drops middle messages, which is exactly the
+# pathology this formatter exists to avoid.
+
+_INSPECT_OUTPUT_BUDGET: int = 32_768
+# Per-message head/tail snip when Tier 2 needs to compress content.
+# Head dominates because the first ~600 chars of an assistant message
+# usually contains the conclusion / direction; the tail is the
+# follow-through.  Tool results compress similarly: head shows what
+# the tool was asked / what it found at the top; tail shows the final
+# state / error suffix.
+_INSPECT_MSG_CONTENT_HEAD: int = 600
+_INSPECT_MSG_CONTENT_TAIL: int = 300
+# Skeleton-tier preview length on the last assistant message.  Single
+# value because the skeleton wants ONE meaningful signal ("what did
+# the child last say"), not a head/tail snip.
+_INSPECT_SKELETON_LAST_PREVIEW: int = 400
+
+# Snip lengths for tool-call ``function.arguments`` strings on
+# assistant turns.  Tighter than content snipping because tool calls
+# often appear in clusters (10+ per turn for a fan-out) and the
+# arguments JSON is dense — keep just enough to see what was invoked
+# and the head of the args structure.
+_INSPECT_TOOL_ARG_HEAD: int = 300
+_INSPECT_TOOL_ARG_TAIL: int = 100
+
+# Bytes ``_snip_head_tail`` reserves for the elision marker itself
+# (``\n...[N chars elided]...\n``).  A text shorter than
+# ``head + tail + this margin`` passes through unsnipped — snipping
+# would cost more bytes (the marker) than it saves.
+_INSPECT_ELISION_MARGIN: int = 64
+
+# Message-list trim ladder for the compact tier when per-message
+# content snipping alone doesn't free enough budget.  Each rung is
+# ``(head_count, tail_count)`` — keep the first N + last M messages,
+# elide the middle as ``{"_omitted": K}``.  Tail-weighted because the
+# last assistant turn carries the load-bearing "what did the child
+# conclude" signal (same rationale as ``_inspect_skeleton``'s
+# last-assistant preview).  Tried in order; first rung whose
+# serialized emission fits the budget wins.  Mirrors the per-file
+# sample ladder in ``_format_search_results`` at session.py:254.
+_INSPECT_LIST_TRIM_LADDER: tuple[tuple[int, int], ...] = ((20, 30), (10, 20), (5, 10))
+
+
+def _snip_head_tail(text: str, head: int, tail: int) -> str:
+    """Head/tail snip with elision marker; passthrough when shorter than threshold."""
+    if not isinstance(text, str) or len(text) <= head + tail + _INSPECT_ELISION_MARGIN:
+        return text
+    elided = len(text) - head - tail
+    return text[:head] + f"\n...[{elided} chars elided]...\n" + text[-tail:]
+
+
+def _compact_tool_calls(tool_calls: Any) -> Any:
+    """Snip ``function.arguments`` on each tool-call entry; keep ``id`` and
+    ``function.name`` verbatim.
+
+    OpenAI shape: ``[{"id": ..., "type": "function", "function":
+    {"name": ..., "arguments": "<json-string>"}}, ...]``.  The
+    arguments string is the dominant size term on a fan-out turn that
+    issued many tool calls with multi-KB JSON arguments each;
+    preserving them verbatim re-opens the same size pressure the
+    compact tier is trying to relieve.  Non-list / non-dict entries
+    pass through so a future shape change doesn't crash the formatter.
+    """
+    if not isinstance(tool_calls, list):
+        return tool_calls
+    out: list[Any] = []
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            out.append(call)
+            continue
+        compact_call: dict[str, Any] = {}
+        for k in ("id", "type"):
+            v = call.get(k)
+            if v:
+                compact_call[k] = v
+        func = call.get("function")
+        if isinstance(func, dict):
+            compact_func: dict[str, Any] = {}
+            name = func.get("name")
+            if name:
+                compact_func["name"] = name
+            args = func.get("arguments", "")
+            if args:
+                compact_func["arguments"] = _snip_head_tail(
+                    args, _INSPECT_TOOL_ARG_HEAD, _INSPECT_TOOL_ARG_TAIL
+                )
+            compact_call["function"] = compact_func
+        out.append(compact_call)
+    return out
+
+
+def _compact_message(msg: dict[str, Any]) -> dict[str, Any]:
+    """Tier-2 per-message projection: keep role + identifier keys, snip content + tool_calls.
+
+    Tool-call linkage is the load-bearing "what happened" signal:
+    ``tool_call_id`` on the result side matches an ``id`` in
+    ``tool_calls`` on the issuing assistant turn.  Stripping
+    ``tool_calls`` (the pre-fix shape) left tool results dangling
+    against an invisible call — the audit reader could see "bash
+    returned X" but not "the assistant asked for ``ls /tmp``".  The
+    ``arguments`` string is the size offender, so we snip it head/tail
+    rather than dropping the call entirely.
+    """
+    content = msg.get("content", "")
+    snipped = _snip_head_tail(content, _INSPECT_MSG_CONTENT_HEAD, _INSPECT_MSG_CONTENT_TAIL)
+    compact: dict[str, Any] = {"role": msg.get("role"), "content": snipped}
+    # Tool-result linkage (result-side keys).
+    for k in ("tool_name", "tool_call_id", "name"):
+        v = msg.get(k)
+        if v:
+            compact[k] = v
+    # Tool-call request linkage (issuing-side list), snipped per-call.
+    tool_calls = msg.get("tool_calls")
+    if tool_calls:
+        compact["tool_calls"] = _compact_tool_calls(tool_calls)
+    return compact
+
+
+def _inspect_skeleton(result: dict[str, Any]) -> dict[str, Any]:
+    """Tier-3 fallback: state + counts + last assistant preview + terminal info.
+
+    Drops every message, keeping only aggregate signal: state, message
+    count, role distribution, and a short preview of the most recent
+    assistant turn (the "what did this child last say" signal).
+    Terminal-state fields (``close_reason``, ``last_error``) and the
+    ``live`` block pass through unchanged because they're already small
+    and load-bearing.
+    """
+    messages = result.get("messages") or []
+    role_counts: dict[str, int] = {}
+    for m in messages:
+        role = m.get("role") if isinstance(m, dict) else None
+        if role:
+            role_counts[role] = role_counts.get(role, 0) + 1
+    last_preview = ""
+    for m in reversed(messages):
+        if not isinstance(m, dict) or m.get("role") != "assistant":
+            continue
+        c = m.get("content", "")
+        if isinstance(c, str) and c:
+            last_preview = c[:_INSPECT_SKELETON_LAST_PREVIEW]
+            if len(c) > _INSPECT_SKELETON_LAST_PREVIEW:
+                last_preview += "..."
+            break
+    skeleton: dict[str, Any] = {
+        # Storage row keys verbatim from ``get_workstreams_batch``
+        # (the projection backing ``get_workstream`` → ``inspect()``):
+        # ``ws_id``, ``skill_id``.  No fallback to ``id`` / ``skill``
+        # — fail loud on storage column drift rather than silently
+        # emitting null.
+        "ws_id": result["ws_id"],
+        "state": result.get("state"),
+        "title": result.get("title"),
+        "skill": result["skill_id"],
+        "message_count": len(messages),
+        "roles": role_counts,
+        "last_assistant_preview": last_preview,
+        "_tier": "skeleton",
+        "_tier_note": (
+            "Output exceeded the inspect_workstream budget at both full and compact "
+            "tiers; skeleton-only.  Re-call with a smaller ``message_limit`` to fit "
+            "the compact tier, or read individual messages via the storage admin path."
+        ),
+    }
+    for k in ("close_reason", "last_error", "live"):
+        v = result.get(k)
+        if v:
+            skeleton[k] = v
+    return skeleton
+
+
+def _format_inspect_tiered(result: dict[str, Any], *, budget: int = _INSPECT_OUTPUT_BUDGET) -> str:
+    """Serialize an ``inspect_workstream`` result with tiered degradation.
+
+    Tier 1 (full):    every message verbatim — used when the size fits.
+    Tier 2 (compact): per-message ``{role, head/tail-snipped content,
+                      tool linkage, snipped tool_calls.arguments}`` for
+                      every message, then a head+tail message-list trim
+                      ladder when content snipping alone doesn't free
+                      enough budget.
+    Tier 3 (skeleton): no messages — counts + last assistant preview only.
+
+    First emission whose JSON serialization fits ``budget`` wins.
+    ``_tier`` appears on every non-error emission so the coordinator
+    LLM (and any audit reader) can see which compression rung the
+    output landed on without inferring from length.  Error-shape
+    results (missing or cross-tenant ws_id) bypass tiering entirely —
+    they're already small and the ``error`` key signals the shape.
+
+    The intermediate Tier-2 list-trim rungs exist because content
+    snipping alone fails on workloads where many small messages
+    overflow the budget by sheer count (``message_limit=200`` × a few
+    hundred chars each).  In that regime, dropping content-snipping
+    saves zero bytes per message, so without the list-trim ladder
+    Tier-2 produces output strictly larger than Tier-1 (added
+    ``_tier_note``) and the formatter fell through to skeleton —
+    losing every message when a head+tail message-list trim would
+    have preserved dozens.  Mirrors the per-file sample ladder in
+    ``_format_search_results`` (session.py:_SEARCH_TIER2_SAMPLE_LADDER).
+    """
+    if "error" in result:
+        # Cross-tenant guard / not-found responses — pass through.
+        return json.dumps(result, default=str, separators=(",", ":"))
+    tier1 = {**result, "_tier": "full"}
+    out1 = json.dumps(tier1, default=str, separators=(",", ":"))
+    if len(out1) <= budget:
+        return out1
+    messages = result.get("messages") or []
+    compact_msgs = [_compact_message(m) if isinstance(m, dict) else m for m in messages]
+    tier2_note_full = (
+        "Output exceeded the inspect_workstream budget at the full tier; messages "
+        "are head/tail-snipped at "
+        f"{_INSPECT_MSG_CONTENT_HEAD}/{_INSPECT_MSG_CONTENT_TAIL} chars.  Re-call "
+        "with a smaller ``message_limit`` for a tighter tail, or include_provider_"
+        "content=False if it was on."
+    )
+    tier2 = {
+        **result,
+        "messages": compact_msgs,
+        "_tier": "compact",
+        "_tier_note": tier2_note_full,
+    }
+    out2 = json.dumps(tier2, default=str, separators=(",", ":"))
+    if len(out2) <= budget:
+        return out2
+    # Tier-2 list-trim ladder: keep head N + tail M, elide the middle.
+    # Tail-weighted because the recent turns carry the load-bearing
+    # signal ("what did the child conclude") — same reason
+    # ``_inspect_skeleton`` keeps a last-assistant preview rather than
+    # a first-user preview.
+    total = len(compact_msgs)
+    for head_n, tail_n in _INSPECT_LIST_TRIM_LADDER:
+        if head_n + tail_n >= total:
+            # Rung doesn't actually trim — would re-emit Tier-2 verbatim.
+            continue
+        omitted = total - head_n - tail_n
+        trimmed: list[Any] = (
+            compact_msgs[:head_n] + [{"_omitted": omitted}] + compact_msgs[-tail_n:]
+        )
+        tier2_trim_note = (
+            f"Output exceeded the inspect_workstream budget at the compact tier; "
+            f"keeping first {head_n} + last {tail_n} of {total} messages, eliding "
+            f"{omitted} middle messages.  Re-call with a smaller ``message_limit`` "
+            "to fit the full compact tier."
+        )
+        tier2_trim = {
+            **result,
+            "messages": trimmed,
+            "_tier": "compact",
+            "_tier_note": tier2_trim_note,
+        }
+        out2_trim = json.dumps(tier2_trim, default=str, separators=(",", ":"))
+        if len(out2_trim) <= budget:
+            return out2_trim
+    skeleton = _inspect_skeleton(result)
+    return json.dumps(skeleton, default=str, separators=(",", ":"))
+
+
+# ---------------------------------------------------------------------------
+# wait_for_workstream — last-message extraction
+# ---------------------------------------------------------------------------
+
+
+def _truncate_wait_message(text: str, max_bytes: int) -> tuple[str, bool]:
+    """Cap ``text`` to ``max_bytes`` UTF-8 bytes, truncating from the END.
+
+    Returns ``(text, truncated)``.  Encodes to UTF-8 first so the cap is a
+    real wire-size cap rather than a character-count proxy.  ``errors='ignore'``
+    on the decode silently drops a trailing partial codepoint when the byte
+    cut lands mid-multi-byte-sequence — keeps the truncated string valid
+    UTF-8 (so JSON serialization can't fail) without an explicit boundary
+    walk.
+    """
+    if max_bytes <= 0:
+        return "", bool(text)
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text, False
+    return encoded[:max_bytes].decode("utf-8", errors="ignore"), True
+
+
+def _last_assistant_text(storage: Any, ws_id: str) -> str | None:
+    """Walk the conversation tail backward and return the most recent
+    assistant message's text content.
+
+    Returns:
+    - The content string when the tail contains an assistant message
+      with a non-empty ``content`` field.
+    - Empty string when no qualifying assistant message exists in the
+      fetched tail (e.g. a workstream that errored before emitting any
+      assistant output, or one whose final assistant turn is buried
+      beyond the tail window).
+    - ``None`` when the storage read itself failed — distinct from the
+      empty-string case so callers can leave ``message: null`` instead
+      of substituting a sentinel.
+
+    The tail load is bounded by ``_WAIT_MESSAGE_TAIL_LIMIT`` so a
+    long-running workstream's full message log never has to be paged
+    in just to surface its final turn.
+    """
+    try:
+        # repair=False — this reads the tail for display ("waiting on" bubble).
+        # The repair pass would strip a trailing partial assistant turn,
+        # making us return the penultimate assistant message instead of the
+        # one the operator is watching.
+        rows = storage.load_messages(ws_id, limit=_WAIT_MESSAGE_TAIL_LIMIT, repair=False)
+    except Exception:
+        log.debug("coord_client.wait.load_messages_failed ws=%s", ws_id, exc_info=True)
+        return None
+    for msg in reversed(rows):
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") != "assistant":
+            continue
+        content = msg.get("content")
+        if isinstance(content, str) and content.strip():
+            return content
+    return ""
+
+
+def _load_last_error(storage: Any, ws_id: str) -> str:
+    """Return the persisted ``last_error`` for ``ws_id`` or empty string.
+
+    Worker threads write the (sanitized) exception text into
+    ``workstream_config`` when a child enters the ``error`` terminal
+    state (see :func:`pebble.core.memory.persist_last_error`);
+    reading it back lets ``wait_for_workstream`` and
+    ``inspect_workstream`` surface the actual cause (provider 4xx/5xx
+    after retries, model misconfig, etc.) instead of the assistant-tail
+    sentinel.
+
+    Reads via the per-storage handle the client was constructed with
+    rather than ``pebble.core.memory.load_last_error`` (which uses
+    the process-global ``get_storage()``) so the wait path participates
+    in the test harness's per-call storage isolation.  Storage failures
+    collapse to empty so the caller can fall through to the existing
+    assistant-tail / sentinel path.
+    """
+    try:
+        cfg = storage.load_workstream_config(ws_id) or {}
+    except Exception:
+        log.debug("coord_client.wait.load_last_error_failed ws=%s", ws_id, exc_info=True)
+        return ""
+    raw = cfg.get(LAST_ERROR_CONFIG_KEY)
+    return str(raw) if raw else ""
+
+
+def _wait_message_for(
+    storage: Any,
+    ws_id: str,
+    state: str,
+    *,
+    max_bytes: int = WAIT_MESSAGE_MAX_BYTES,
+) -> tuple[str | None, bool]:
+    """Return ``(message, truncated)`` for a wait_for_workstream result entry.
+
+    The returned tuple is appended to each per-ws snapshot as
+    ``message`` / ``truncated`` so the coordinator LLM doesn't need a
+    follow-up ``inspect_workstream`` round-trip to read what each child
+    actually produced.
+
+    Branching by ``state``:
+
+    - ``idle`` — last assistant message text from the conversation
+      tail, or a hedged sentinel when the tail has no assistant
+      content (covers both 'never emitted a turn' and 'last turn is
+      buried beyond the tail window' — the sentinel doesn't claim
+      either way).
+    - ``error`` — persisted ``last_error`` (provider exception after
+      retries, model misconfig, etc.) when present, falling back to
+      the assistant tail otherwise.  An API error after retry
+      exhaustion is more actionable than the prior assistant turn,
+      and the prior shape's "(no recent assistant output)" sentinel
+      hid that signal entirely.
+    - ``closed`` / ``not_found`` — short status sentinel.  No
+      message-history read because there's nothing meaningful to
+      return — a partial last message could be misleading mid-thought.
+    - any other state (e.g. ``running``, or a ``deleted`` synthetic /
+      legacy row) — ``(None, False)`` so the coordinator sees null
+      inline and knows to keep waiting / inspect explicitly.  Hard
+      deletes cascade rows out of storage, so the wait poll never
+      observes a real ``deleted`` state in normal operation.
+
+    Storage failures during the message read collapse to ``(None, False)``
+    so a transient read error degrades gracefully (the wait itself
+    already completed; the model just gets ``message: null`` for the
+    affected ws and can fall back to inspect).
+    """
+    if state == "not_found":
+        return _WAIT_SENTINEL_NOT_FOUND, False
+    if state == "closed":
+        return _WAIT_SENTINEL_CLOSED, False
+    if state == "error":
+        last_error = _load_last_error(storage, ws_id)
+        if last_error:
+            return _truncate_wait_message(last_error, max_bytes)
+        # No persisted error — fall through to the assistant-tail walk
+        # below so a legacy / pre-fix error row still surfaces SOMETHING
+        # (the last assistant turn before the failure, if any).
+    if state in ("idle", "error"):
+        text = _last_assistant_text(storage, ws_id)
+        if text is None:
+            return None, False
+        if not text:
+            return _WAIT_SENTINEL_NO_RECENT_ASSISTANT, False
+        return _truncate_wait_message(text, max_bytes)
+    return None, False

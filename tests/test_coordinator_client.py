@@ -1,4 +1,4 @@
-"""Tests for ``turnstone.console.coordinator_client.CoordinatorClient``.
+"""Tests for ``pebble.console.coordinator_client.CoordinatorClient``.
 
 Uses an httpx MockTransport to intercept outbound requests so we verify
 the URL map, headers, and body shape without standing up a real console.
@@ -16,14 +16,14 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pytest
 
-from turnstone.console.coordinator_client import (
+from pebble.console.coordinator_client import (
     _ROUTE_PATHS,
     CoordinatorClient,
     CoordinatorTokenManager,
 )
-from turnstone.core.auth import JWT_AUD_CONSOLE, validate_jwt
-from turnstone.core.child_event_bus import ChildEventBus
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import JWT_AUD_CONSOLE, validate_jwt
+from pebble.core.child_event_bus import ChildEventBus
+from pebble.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -201,8 +201,8 @@ def test_route_paths_match_actual_console_mounts():
 
     from starlette.routing import Mount, Route
 
-    from turnstone.console.coordinator_client import _ROUTE_PATHS
-    from turnstone.console.server import create_app
+    from pebble.console.coordinator_client import _ROUTE_PATHS
+    from pebble.console.server import create_app
 
     app = create_app(
         collector=MagicMock(),
@@ -1726,7 +1726,7 @@ def test_wait_with_bus_returns_immediately_when_already_terminal(populated_stora
     BEFORE the first snapshot, then re-snapshots — an already-terminal
     child must return at once without spinning the heartbeat cap.
     """
-    from turnstone.core.child_event_bus import ChildEventBus
+    from pebble.core.child_event_bus import ChildEventBus
 
     bus = ChildEventBus()
     client = _make_read_client_with_bus(populated_storage, bus)
@@ -1747,7 +1747,7 @@ def test_wait_with_bus_wakes_on_notify(populated_storage):
     """
     import threading as _t
 
-    from turnstone.core.child_event_bus import ChildEventBus
+    from pebble.core.child_event_bus import ChildEventBus
 
     bus = ChildEventBus()
     client = _make_read_client_with_bus(populated_storage, bus)
@@ -1778,7 +1778,7 @@ def test_wait_with_bus_unrelated_notify_does_not_wake(populated_storage):
     otherwise every state change anywhere on the system would shake
     every concurrent wait into a redundant storage snapshot.
     """
-    from turnstone.core.child_event_bus import ChildEventBus
+    from pebble.core.child_event_bus import ChildEventBus
 
     bus = ChildEventBus()
     client = _make_read_client_with_bus(populated_storage, bus)
@@ -1812,7 +1812,7 @@ def test_wait_with_bus_heartbeat_still_progresses_without_notify(populated_stora
     the sidebar UI.  Verified by counting callback firings over an
     interval longer than the heartbeat.
     """
-    from turnstone.core.child_event_bus import ChildEventBus
+    from pebble.core.child_event_bus import ChildEventBus
 
     bus = ChildEventBus()
     client = _make_read_client_with_bus(populated_storage, bus)
@@ -1846,7 +1846,7 @@ def test_wait_with_bus_unregisters_waiter_on_exit(populated_storage):
     waiter — otherwise a long-lived bus accumulates dead
     ``threading.Event`` instances forever.
     """
-    from turnstone.core.child_event_bus import ChildEventBus
+    from pebble.core.child_event_bus import ChildEventBus
 
     bus = ChildEventBus()
     client = _make_read_client_with_bus(populated_storage, bus)
@@ -1866,7 +1866,7 @@ def test_wait_with_bus_multi_waiter_independence(populated_storage):
     """
     import threading as _t
 
-    from turnstone.core.child_event_bus import ChildEventBus
+    from pebble.core.child_event_bus import ChildEventBus
 
     bus = ChildEventBus()
     client = _make_read_client_with_bus(populated_storage, bus)
@@ -2076,7 +2076,7 @@ def test_wait_for_workstream_truncates_oversize_message(populated_storage):
     """A message past WAIT_MESSAGE_MAX_BYTES is truncated from the
     END (preserve the lead) and ``truncated=True`` so the coord LLM
     knows to inspect for the rest if it needs the full text."""
-    from turnstone.console.coordinator_client import WAIT_MESSAGE_MAX_BYTES
+    from pebble.console.coordinator_client import WAIT_MESSAGE_MAX_BYTES
 
     big = "A" * (WAIT_MESSAGE_MAX_BYTES * 2)
     populated_storage.save_message("child-a", "user", "hi")
@@ -2141,7 +2141,7 @@ def test_wait_for_workstream_does_not_pollute_progress_callback(populated_storag
 
 
 def test_truncate_wait_message_below_cap_is_passthrough():
-    from turnstone.console.coordinator_client import _truncate_wait_message
+    from pebble.console.coordinator_client import _truncate_wait_message
 
     text, trunc = _truncate_wait_message("hello", 100)
     assert text == "hello"
@@ -2149,7 +2149,7 @@ def test_truncate_wait_message_below_cap_is_passthrough():
 
 
 def test_truncate_wait_message_exact_cap_is_passthrough():
-    from turnstone.console.coordinator_client import _truncate_wait_message
+    from pebble.console.coordinator_client import _truncate_wait_message
 
     text, trunc = _truncate_wait_message("a" * 5, 5)
     assert text == "aaaaa"
@@ -2157,7 +2157,7 @@ def test_truncate_wait_message_exact_cap_is_passthrough():
 
 
 def test_truncate_wait_message_oversize_truncates_to_byte_cap():
-    from turnstone.console.coordinator_client import _truncate_wait_message
+    from pebble.console.coordinator_client import _truncate_wait_message
 
     text, trunc = _truncate_wait_message("a" * 10, 5)
     assert text == "aaaaa"
@@ -2167,7 +2167,7 @@ def test_truncate_wait_message_oversize_truncates_to_byte_cap():
 def test_truncate_wait_message_handles_utf8_boundary():
     """A multi-byte codepoint must never be split — back off to a valid
     UTF-8 boundary even if it lands a couple bytes under the cap."""
-    from turnstone.console.coordinator_client import _truncate_wait_message
+    from pebble.console.coordinator_client import _truncate_wait_message
 
     # "café" is 5 bytes (c=1, a=1, f=1, é=2).  Cap at 4 bytes lands
     # mid-codepoint on the é; truncation must back off to 3 bytes.
@@ -2179,7 +2179,7 @@ def test_truncate_wait_message_handles_utf8_boundary():
 
 
 def test_truncate_wait_message_zero_or_negative_cap_returns_empty():
-    from turnstone.console.coordinator_client import _truncate_wait_message
+    from pebble.console.coordinator_client import _truncate_wait_message
 
     text, trunc = _truncate_wait_message("anything", 0)
     assert text == ""
@@ -2191,7 +2191,7 @@ def test_last_assistant_text_returns_content_when_present(populated_storage):
     returns the actual assistant content string (not ``""``, not
     ``None``).  Integration tests cover this through enrichment, but a
     direct unit test makes the contract harder to break in a refactor."""
-    from turnstone.console.coordinator_client import _last_assistant_text
+    from pebble.console.coordinator_client import _last_assistant_text
 
     populated_storage.save_message("child-a", "user", "hello")
     populated_storage.save_message("child-a", "assistant", "hi back")
@@ -2199,14 +2199,14 @@ def test_last_assistant_text_returns_content_when_present(populated_storage):
 
 
 def test_last_assistant_text_returns_empty_when_no_messages(populated_storage):
-    from turnstone.console.coordinator_client import _last_assistant_text
+    from pebble.console.coordinator_client import _last_assistant_text
 
     # child-a has no messages saved.
     assert _last_assistant_text(populated_storage, "child-a") == ""
 
 
 def test_last_assistant_text_returns_none_on_storage_failure(populated_storage, monkeypatch):
-    from turnstone.console.coordinator_client import _last_assistant_text
+    from pebble.console.coordinator_client import _last_assistant_text
 
     def _broken(*_a, **_kw):
         raise RuntimeError("boom")
@@ -2371,7 +2371,7 @@ def test_tasks_mutations_refuse_corrupt_envelope(tmp_path):
 
 
 def test_tasks_add_enforces_capacity_cap(tmp_path, monkeypatch):
-    from turnstone.console import coordinator_client as cc_module
+    from pebble.console import coordinator_client as cc_module
 
     monkeypatch.setattr(cc_module, "_TASKS_MAX", 3)
     client = _task_client(tmp_path)
@@ -2728,7 +2728,7 @@ def _make_inspect_result(
 
 def test_format_inspect_tiered_full_fits_returns_full_tier():
     """Small payloads pass through with `_tier='full'` — no compression."""
-    from turnstone.console.coordinator_client import _format_inspect_tiered
+    from pebble.console.coordinator_client import _format_inspect_tiered
 
     result = _make_inspect_result(n_messages=3)
     out = _format_inspect_tiered(result)
@@ -2742,7 +2742,7 @@ def test_format_inspect_tiered_full_fits_returns_full_tier():
 def test_format_inspect_tiered_compact_when_full_exceeds_budget():
     """Large messages trigger the compact tier — head/tail-snipped
     content with the rest of the row intact."""
-    from turnstone.console.coordinator_client import (
+    from pebble.console.coordinator_client import (
         _INSPECT_MSG_CONTENT_HEAD,
         _INSPECT_MSG_CONTENT_TAIL,
         _INSPECT_OUTPUT_BUDGET,
@@ -2784,7 +2784,7 @@ def test_format_inspect_tiered_compact_when_content_below_snip_threshold():
     to an un-snipped tier-2 produced output strictly larger than
     tier-1 (both over budget).  The fix preserves messages from both
     ends of the list and inserts an ``_omitted`` sentinel."""
-    from turnstone.console.coordinator_client import (
+    from pebble.console.coordinator_client import (
         _INSPECT_OUTPUT_BUDGET,
         _format_inspect_tiered,
     )
@@ -2822,7 +2822,7 @@ def test_format_inspect_tiered_skeleton_when_compact_also_exceeds_budget():
     Anthropic/OpenAI multi-block content shape), so even after the
     (5, 10) message-list trim the surviving 15 messages don't fit in
     the 32 KB budget."""
-    from turnstone.console.coordinator_client import (
+    from pebble.console.coordinator_client import (
         _INSPECT_OUTPUT_BUDGET,
         _format_inspect_tiered,
     )
@@ -2862,7 +2862,7 @@ def test_format_inspect_tiered_skeleton_keeps_terminal_state_fields():
     """``close_reason`` / ``last_error`` survive the skeleton fall — they're
     small, load-bearing, and the operator needs them to understand WHY
     a terminal child landed in its state."""
-    from turnstone.console.coordinator_client import (
+    from pebble.console.coordinator_client import (
         _INSPECT_OUTPUT_BUDGET,
         _format_inspect_tiered,
     )
@@ -2893,7 +2893,7 @@ def test_format_inspect_tiered_error_shapes_bypass_tiering():
     """Cross-tenant / not-found responses keep their original shape — they
     carry no messages, are already tiny, and changing them would break
     callers that key on the ``error`` field."""
-    from turnstone.console.coordinator_client import _format_inspect_tiered
+    from pebble.console.coordinator_client import _format_inspect_tiered
 
     result = {"error": "workstream not found", "ws_id": "ws-foreign"}
     out = _format_inspect_tiered(result)
@@ -2907,7 +2907,7 @@ def test_format_inspect_tiered_compact_preserves_tool_call_linkage():
     """Compact tier keeps ``tool_name`` / ``tool_call_id`` / ``name`` so a
     model reading the snipped trace can still pair a tool call to its
     response — the linkage is load-bearing for "what happened" signal."""
-    from turnstone.console.coordinator_client import _format_inspect_tiered
+    from pebble.console.coordinator_client import _format_inspect_tiered
 
     fat = "Q" * 5000
     result = {
@@ -2943,7 +2943,7 @@ def test_format_inspect_tiered_compact_preserves_assistant_tool_calls():
     ``function.arguments`` strings are snipped head/tail (analogous to
     content) because they can be multi-KB JSON; ``id`` and
     ``function.name`` are preserved verbatim — they're the linkage."""
-    from turnstone.console.coordinator_client import (
+    from pebble.console.coordinator_client import (
         _INSPECT_TOOL_ARG_HEAD,
         _INSPECT_TOOL_ARG_TAIL,
         _format_inspect_tiered,
@@ -2994,7 +2994,7 @@ def test_format_inspect_tiered_compact_passes_small_messages_through_unsnipped()
     """Messages under the snip threshold pass through verbatim at compact
     tier — snipping a 100-byte message costs more bytes (the elision
     marker) than it saves."""
-    from turnstone.console.coordinator_client import _format_inspect_tiered
+    from pebble.console.coordinator_client import _format_inspect_tiered
 
     # Mix: a few large messages force compact tier; small messages must
     # not be snipped.
@@ -3017,7 +3017,7 @@ def test_format_inspect_tiered_emits_tier_note_when_compressed():
     """The ``_tier_note`` advisory tells the LLM how to ask for a tighter
     or fuller view next time — actionable feedback rather than a bare
     "we compressed your output" signal."""
-    from turnstone.console.coordinator_client import _format_inspect_tiered
+    from pebble.console.coordinator_client import _format_inspect_tiered
 
     fat = "F" * 5000
     result = {
@@ -3034,7 +3034,7 @@ def test_format_inspect_tiered_emits_tier_note_when_compressed():
 def test_format_inspect_tiered_full_tier_omits_tier_note():
     """When the full tier fits, no note is emitted — the absence of a
     note is the signal that nothing was compressed."""
-    from turnstone.console.coordinator_client import _format_inspect_tiered
+    from pebble.console.coordinator_client import _format_inspect_tiered
 
     out = _format_inspect_tiered(_make_inspect_result(n_messages=2))
     parsed = json.loads(out)

@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from turnstone.core import nixenv
+from pebble.core import nixenv
 
 
 @pytest.fixture(autouse=True)
 def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TURNSTONE_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path / "workspace"))
 
 
 class TestDetect:

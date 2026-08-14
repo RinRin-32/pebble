@@ -1,6 +1,6 @@
-"""Tests for turnstone.sdk.events — SSE event deserialization."""
+"""Tests for pebble.sdk.events — SSE event deserialization."""
 
-from turnstone.sdk.events import (
+from pebble.sdk.events import (
     ApprovalResolvedEvent,
     ApproveRequestEvent,
     BusyErrorEvent,
@@ -162,7 +162,7 @@ def test_output_warning_event_covers_every_merge_payload_key():
     `annotations` go stale). Builds the maximal payload and checks the field-set."""
     import dataclasses
 
-    from turnstone.core.output_guard import merge_guard_display_payload
+    from pebble.core.output_guard import merge_guard_display_payload
 
     # Maximal payload — every optional field populated.
     payload = merge_guard_display_payload(
@@ -350,7 +350,7 @@ def test_extra_fields_ignored():
 
 
 def test_in_progress_snapshot_event_round_trip():
-    from turnstone.sdk.events import InProgressSnapshotEvent
+    from pebble.sdk.events import InProgressSnapshotEvent
 
     payload = {
         "type": "in_progress_snapshot",
@@ -368,7 +368,7 @@ def test_in_progress_snapshot_event_round_trip():
 def test_in_progress_snapshot_event_strips_internal_seq():
     """``_seq`` is server-internal plumbing — even if a stray copy
     leaks through, ``from_dict`` must drop it (not a declared field)."""
-    from turnstone.sdk.events import InProgressSnapshotEvent
+    from pebble.sdk.events import InProgressSnapshotEvent
 
     e = ServerEvent.from_dict(
         {
@@ -384,7 +384,7 @@ def test_in_progress_snapshot_event_strips_internal_seq():
 
 
 def test_state_change_event_round_trip():
-    from turnstone.sdk.events import StateChangeEvent
+    from pebble.sdk.events import StateChangeEvent
 
     e = ServerEvent.from_dict({"type": "state_change", "ws_id": "ws1", "state": "thinking"})
     assert isinstance(e, StateChangeEvent)

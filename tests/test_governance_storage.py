@@ -435,7 +435,7 @@ class TestPromptTemplateCRUD:
         assert db.get_prompt_template("missing") is None
 
     def test_create_prompt_template_duplicate_id_raises_conflict(self, db):
-        from turnstone.core.storage._protocol import StorageConflictError
+        from pebble.core.storage._protocol import StorageConflictError
 
         db.create_prompt_template("dup", "first", "general", "A")
         with pytest.raises(StorageConflictError, match="prompt_template conflict"):
@@ -586,7 +586,7 @@ class TestUsageEvents:
 
     def test_query_usage_by_day(self, db):
         # Insert events with known timestamps by directly inserting rows.
-        from turnstone.core.storage._schema import usage_events
+        from pebble.core.storage._schema import usage_events
 
         with db._engine.connect() as conn:
             conn.execute(
@@ -640,7 +640,7 @@ class TestUsageEvents:
         assert result[1]["prompt_tokens"] == 200
 
     def test_query_usage_by_model(self, db):
-        from turnstone.core.storage._schema import usage_events
+        from pebble.core.storage._schema import usage_events
 
         with db._engine.connect() as conn:
             conn.execute(
@@ -681,7 +681,7 @@ class TestUsageEvents:
         assert "claude-4" in keys
 
     def test_query_usage_by_user(self, db):
-        from turnstone.core.storage._schema import usage_events
+        from pebble.core.storage._schema import usage_events
 
         with db._engine.connect() as conn:
             conn.execute(
@@ -722,7 +722,7 @@ class TestUsageEvents:
         assert by_key["u2"]["prompt_tokens"] == 300
 
     def test_query_usage_filter_model(self, db):
-        from turnstone.core.storage._schema import usage_events
+        from pebble.core.storage._schema import usage_events
 
         with db._engine.connect() as conn:
             conn.execute(
@@ -761,7 +761,7 @@ class TestUsageEvents:
         assert result[0]["prompt_tokens"] == 100
 
     def test_prune_usage_events(self, db):
-        from turnstone.core.storage._schema import usage_events
+        from pebble.core.storage._schema import usage_events
 
         old_ts = "2020-01-01T00:00:00"
         now_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
@@ -828,7 +828,7 @@ class TestUsageEvents:
 
     def test_query_cache_tokens_grouped_by_model(self, db):
         """Cache tokens are included in grouped query results."""
-        from turnstone.core.storage._schema import usage_events
+        from pebble.core.storage._schema import usage_events
 
         with db._engine.connect() as conn:
             conn.execute(
@@ -955,7 +955,7 @@ class TestAuditEvents:
         assert db.count_audit_events(user_id="u1") == 1
 
     def test_prune_audit_events(self, db):
-        from turnstone.core.storage._schema import audit_events
+        from pebble.core.storage._schema import audit_events
 
         old_ts = "2020-01-01T00:00:00"
         now_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")

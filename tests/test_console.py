@@ -1,4 +1,4 @@
-"""Tests for turnstone.console — collector and HTTP server."""
+"""Tests for pebble.console — collector and HTTP server."""
 
 import asyncio
 import json
@@ -8,15 +8,15 @@ from unittest.mock import ANY, MagicMock
 
 import pytest
 
-from turnstone.console.collector import ClusterCollector, NodeSnapshot
-from turnstone.console.server import _PROXY_AUTH_LOCAL_HANDLERS
+from pebble.console.collector import ClusterCollector, NodeSnapshot
+from pebble.console.server import _PROXY_AUTH_LOCAL_HANDLERS
 
 # Shared test auth — JWT-based
 _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
 
 def _test_jwt() -> str:
-    from turnstone.core.auth import JWT_AUD_CONSOLE, create_jwt
+    from pebble.core.auth import JWT_AUD_CONSOLE, create_jwt
 
     return create_jwt(
         user_id="test-console",
@@ -193,7 +193,7 @@ class TestCollectorNotifyWireIn:
     def test_on_notify_runs_discovery(self):
         # Construct a synthetic Notify and invoke the handler directly —
         # asserts the wire-in delegates back to ``_discover_nodes``.
-        from turnstone.core.storage._notify import Notify
+        from pebble.core.storage._notify import Notify
 
         storage = MockStorage()
         c = _make_collector(storage)
@@ -213,7 +213,7 @@ class TestCollectorNotifyWireIn:
     def test_on_notify_when_not_running_is_noop(self):
         # If a stray notify arrives after stop, the handler doesn't run
         # discovery on a half-torn-down collector.
-        from turnstone.core.storage._notify import Notify
+        from pebble.core.storage._notify import Notify
 
         storage = MockStorage()
         storage.services = [{"service_id": "node-y", "url": "http://y:8080", "metadata": "{}"}]
@@ -1044,7 +1044,7 @@ class TestConsoleHTTPEndpoints:
     def client(self, mock_collector):
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
 
@@ -1302,7 +1302,7 @@ class TestConsoleWorkstreamCreation:
         import httpx
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
         app = create_app(
@@ -1499,7 +1499,7 @@ class TestConsoleProxy:
     def client(self, mock_collector):
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
         app = create_app(
@@ -1554,12 +1554,12 @@ class TestConsoleProxy:
         ws_id = "a" * 32
         with (
             patch(
-                "turnstone.console.server._proxy_sse",
+                "pebble.console.server._proxy_sse",
                 new_callable=AsyncMock,
                 return_value=Response("ok", status_code=200),
             ) as sse_mock,
             patch(
-                "turnstone.console.server._proxy_get",
+                "pebble.console.server._proxy_get",
                 new_callable=AsyncMock,
                 return_value=Response("ok", status_code=200),
             ) as get_mock,
@@ -1588,7 +1588,7 @@ class TestConsoleProxy:
             "reachable": True,
         }
         with patch(
-            "turnstone.console.server._proxy_sse",
+            "pebble.console.server._proxy_sse",
             new_callable=AsyncMock,
             return_value=Response("ok", status_code=200),
         ) as sse_mock:
@@ -1611,8 +1611,8 @@ class TestConsoleProxy:
         from starlette.responses import Response
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
-        from turnstone.core.auth import JWT_AUD_CONSOLE, create_jwt
+        from pebble.console.server import _load_static, create_app
+        from pebble.core.auth import JWT_AUD_CONSOLE, create_jwt
 
         _load_static()
         app = create_app(collector=mock_collector, jwt_secret=_TEST_JWT_SECRET)
@@ -1630,7 +1630,7 @@ class TestConsoleProxy:
             headers={"Authorization": f"Bearer {user_jwt}"},
         )
         with patch(
-            "turnstone.console.server._proxy_sse",
+            "pebble.console.server._proxy_sse",
             new_callable=AsyncMock,
             return_value=Response("ok", status_code=200),
         ) as sse_mock:
@@ -1647,8 +1647,8 @@ class TestConsoleProxy:
         from starlette.responses import Response
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
-        from turnstone.core.auth import JWT_AUD_CONSOLE, create_jwt
+        from pebble.console.server import _load_static, create_app
+        from pebble.core.auth import JWT_AUD_CONSOLE, create_jwt
 
         _load_static()
         app = create_app(collector=mock_collector, jwt_secret=_TEST_JWT_SECRET)
@@ -1666,7 +1666,7 @@ class TestConsoleProxy:
             headers={"Authorization": f"Bearer {op_jwt}"},
         )
         with patch(
-            "turnstone.console.server._proxy_sse",
+            "pebble.console.server._proxy_sse",
             new_callable=AsyncMock,
             return_value=Response("ok", status_code=200),
         ) as sse_mock:
@@ -1693,7 +1693,7 @@ class TestConsoleProxy:
         }
         ws_id = "b" * 32
         with patch(
-            "turnstone.console.server._proxy_sse",
+            "pebble.console.server._proxy_sse",
             new_callable=AsyncMock,
             return_value=Response("ok", status_code=200),
         ) as sse_mock:
@@ -1730,17 +1730,17 @@ class TestConsoleProxy:
 
         with (
             patch(
-                f"turnstone.console.server.{handler_name}",
+                f"pebble.console.server.{handler_name}",
                 new_callable=AsyncMock,
                 return_value=JSONResponse({"status": "ok"}),
             ) as local_mock,
             patch(
-                "turnstone.console.server._proxy_post",
+                "pebble.console.server._proxy_post",
                 new_callable=AsyncMock,
                 return_value=JSONResponse({"status": "should-not-be-called"}),
             ) as post_mock,
             patch(
-                "turnstone.console.server._proxy_get",
+                "pebble.console.server._proxy_get",
                 new_callable=AsyncMock,
                 return_value=JSONResponse({"status": "should-not-be-called"}),
             ) as get_mock,
@@ -1760,14 +1760,14 @@ class TestConsoleProxy:
         from starlette.responses import JSONResponse
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
         app = create_app(collector=mock_collector, jwt_secret=_TEST_JWT_SECRET)
         unauth_client = TestClient(app, raise_server_exceptions=False)
         try:
             with patch(
-                "turnstone.console.server.auth_login",
+                "pebble.console.server.auth_login",
                 new_callable=AsyncMock,
                 return_value=JSONResponse({"status": "ok"}),
             ) as local_mock:
@@ -1797,12 +1797,12 @@ class TestConsoleProxy:
 
         with (
             patch(
-                "turnstone.console.server._proxy_post",
+                "pebble.console.server._proxy_post",
                 new_callable=AsyncMock,
                 return_value=JSONResponse({"status": "should-not-be-called"}),
             ) as post_mock,
             patch(
-                "turnstone.console.server._proxy_get",
+                "pebble.console.server._proxy_get",
                 new_callable=AsyncMock,
                 return_value=JSONResponse({"status": "should-not-be-called"}),
             ) as get_mock,
@@ -1829,7 +1829,7 @@ class TestConsoleProxy:
             "reachable": True,
         }
         with patch(
-            "turnstone.console.server._proxy_get",
+            "pebble.console.server._proxy_get",
             new_callable=AsyncMock,
             return_value=JSONResponse({"ok": True}),
         ) as proxy_mock:
@@ -1847,7 +1847,7 @@ class TestProxyRewriting:
     """Test the JS shim and HTML rewriting logic."""
 
     def test_js_shim_contains_prefix_placeholder(self):
-        from turnstone.console.server import _JS_PROXY_SHIM
+        from pebble.console.server import _JS_PROXY_SHIM
 
         assert "PREFIX_PLACEHOLDER" in _JS_PROXY_SHIM
         replaced = _JS_PROXY_SHIM.replace("PREFIX_PLACEHOLDER", "/node/my-node")
@@ -1855,7 +1855,7 @@ class TestProxyRewriting:
         assert "PREFIX_PLACEHOLDER" not in replaced
 
     def test_js_shim_overrides_fetch_and_eventsource(self):
-        from turnstone.console.server import _JS_PROXY_SHIM
+        from pebble.console.server import _JS_PROXY_SHIM
 
         assert "window.fetch" in _JS_PROXY_SHIM
         assert "window.EventSource" in _JS_PROXY_SHIM
@@ -1863,7 +1863,7 @@ class TestProxyRewriting:
     def test_js_shim_carries_node_id_placeholder(self):
         """The picker reads the current node_id from the shim's _nodeId
         closure variable; the placeholder must be present and substitutable."""
-        from turnstone.console.server import _JS_PROXY_SHIM
+        from pebble.console.server import _JS_PROXY_SHIM
 
         assert "NODE_ID_PLACEHOLDER" in _JS_PROXY_SHIM
         replaced = _JS_PROXY_SHIM.replace("NODE_ID_PLACEHOLDER", "node-a")
@@ -1879,7 +1879,7 @@ class TestProxyRewriting:
         workstream chevron menu (style + behaviour parity); ArrowDown is
         the keyboard-nav primitive that disambiguates this from a plain
         click-only menu."""
-        from turnstone.console.server import _JS_PROXY_SHIM
+        from pebble.console.server import _JS_PROXY_SHIM
 
         # limit=1000 matches the collector's hard cap; without it the
         # picker would silently drop nodes past the 100-default in
@@ -1895,7 +1895,7 @@ class TestProxyRewriting:
         """The legacy banner CSS classes (.console-banner, .ts-header-back-link
         offsets, .dashboard-overlay top:32px hack) should be gone — the new
         picker lives inside #ui-header and doesn't need overlay offsets."""
-        from turnstone.console.server import _CONSOLE_PROXY_STYLE
+        from pebble.console.server import _CONSOLE_PROXY_STYLE
 
         assert ".console-banner" not in _CONSOLE_PROXY_STYLE
         assert "dashboard-overlay" not in _CONSOLE_PROXY_STYLE
@@ -1907,7 +1907,7 @@ class TestProxyRewriting:
         attention" token used by the cluster-overview node table at
         console/static/style.css:548) and not --yellow.  Yellow is reserved
         for the dash-state attention dot, a stronger signal."""
-        from turnstone.console.server import _CONSOLE_PROXY_STYLE
+        from pebble.console.server import _CONSOLE_PROXY_STYLE
 
         assert "console-node-menu-item-dot--degraded" in _CONSOLE_PROXY_STYLE
         # The degraded rule sits on its own line; assert it uses --accent
@@ -1936,7 +1936,7 @@ class TestProxyRewriting:
         """Simulate the proxy shim injection — the shim ships the node-id
         and prefix as JS literals and renders the picker at runtime, so
         we assert the substituted JS literals land in the page."""
-        from turnstone.console.server import _CONSOLE_PROXY_STYLE, _JS_PROXY_SHIM
+        from pebble.console.server import _CONSOLE_PROXY_STYLE, _JS_PROXY_SHIM
 
         sample_html = "<html><body><div>content</div></body></html>"
         prefix = "/node/node-a"
@@ -1968,7 +1968,7 @@ class TestPickBestNode:
         return collector
 
     def test_picks_node_with_most_headroom(self):
-        from turnstone.console.server import _pick_best_node
+        from pebble.console.server import _pick_best_node
 
         collector = self._mock_collector(
             [
@@ -1980,7 +1980,7 @@ class TestPickBestNode:
         assert _pick_best_node(collector) == "free"
 
     def test_skips_unreachable_nodes(self):
-        from turnstone.console.server import _pick_best_node
+        from pebble.console.server import _pick_best_node
 
         collector = self._mock_collector(
             [
@@ -1991,13 +1991,13 @@ class TestPickBestNode:
         assert _pick_best_node(collector) == "up"
 
     def test_returns_empty_when_no_nodes(self):
-        from turnstone.console.server import _pick_best_node
+        from pebble.console.server import _pick_best_node
 
         collector = self._mock_collector([])
         assert _pick_best_node(collector) == ""
 
     def test_returns_empty_when_all_unreachable(self):
-        from turnstone.console.server import _pick_best_node
+        from pebble.console.server import _pick_best_node
 
         collector = self._mock_collector(
             [
@@ -2032,7 +2032,7 @@ class TestConsoleVersionEndpoints:
     def client(self, mock_collector):
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
         app = create_app(
@@ -2073,7 +2073,7 @@ class TestSharedStatic:
     def client(self):
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
         collector = MagicMock(spec=ClusterCollector)
@@ -2184,7 +2184,7 @@ class TestProxySharedStatic:
     def test_proxy_shim_injected_in_html(self):
         """Verify shim is injected as inline script in proxied HTML."""
 
-        from turnstone.console.server import _JS_PROXY_SHIM
+        from pebble.console.server import _JS_PROXY_SHIM
 
         sample_html = "<html><body><div>content</div></body></html>"
         prefix = "/node/test-node"
@@ -2201,7 +2201,7 @@ class TestProxySharedStatic:
     def test_proxy_shared_static_unknown_node_returns_404(self):
         from starlette.testclient import TestClient
 
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
         collector = MagicMock(spec=ClusterCollector)
@@ -2232,7 +2232,7 @@ class TestSSEProxy:
 
     def test_proxy_sse_preserves_pings_and_events(self):
         """SSE proxy should forward ping comments and events verbatim."""
-        from turnstone.console.server import _proxy_sse
+        from pebble.console.server import _proxy_sse
 
         # Simulate an upstream SSE response with a ping comment and a real event
         sse_payload = b': ping - 2026-03-08T12:00:00Z\n\nevent: message\ndata: {"type": "test"}\n\n'
@@ -2292,7 +2292,7 @@ class TestSSEProxy:
     def test_proxy_sse_upstream_error_status(self):
         """Non-200 upstream status should yield an error event."""
 
-        from turnstone.console.server import _proxy_sse
+        from pebble.console.server import _proxy_sse
 
         class FakeResponse:
             status_code = 502
@@ -2342,7 +2342,7 @@ class TestSSEProxy:
     def test_proxy_sse_disconnect_handling(self):
         """Proxy should stop when browser disconnects."""
 
-        from turnstone.console.server import _proxy_sse
+        from pebble.console.server import _proxy_sse
 
         class FakeResponse:
             status_code = 200
@@ -2435,8 +2435,8 @@ class TestProxyAuthHeaders:
         """Real user auth_result → JWT with correct sub, scopes, src, aud, permissions."""
         import jwt as pyjwt
 
-        from turnstone.console.server import _proxy_auth_headers
-        from turnstone.core.auth import JWT_AUD_SERVER, AuthResult
+        from pebble.console.server import _proxy_auth_headers
+        from pebble.core.auth import JWT_AUD_SERVER, AuthResult
 
         auth = AuthResult(
             user_id="alice",
@@ -2460,8 +2460,8 @@ class TestProxyAuthHeaders:
         """Read-only user → JWT carries only read scope, not full {read,write,approve}."""
         import jwt as pyjwt
 
-        from turnstone.console.server import _proxy_auth_headers
-        from turnstone.core.auth import JWT_AUD_SERVER, AuthResult
+        from pebble.console.server import _proxy_auth_headers
+        from pebble.core.auth import JWT_AUD_SERVER, AuthResult
 
         auth = AuthResult(
             user_id="viewer",
@@ -2479,8 +2479,8 @@ class TestProxyAuthHeaders:
         """Minted JWT expires in 300 seconds, not hours."""
         import jwt as pyjwt
 
-        from turnstone.console.server import _proxy_auth_headers
-        from turnstone.core.auth import AuthResult
+        from pebble.console.server import _proxy_auth_headers
+        from pebble.core.auth import AuthResult
 
         auth = AuthResult(
             user_id="alice",
@@ -2498,8 +2498,8 @@ class TestProxyAuthHeaders:
 
     def test_fallback_no_user(self):
         """No auth_result → falls back to ServiceTokenManager."""
-        from turnstone.console.server import _proxy_auth_headers
-        from turnstone.core.auth import ServiceTokenManager
+        from pebble.console.server import _proxy_auth_headers
+        from pebble.core.auth import ServiceTokenManager
 
         mgr = ServiceTokenManager(
             user_id="console-proxy",
@@ -2515,8 +2515,8 @@ class TestProxyAuthHeaders:
 
     def test_fallback_no_secret(self):
         """auth_result present but empty jwt_secret → falls back to ServiceTokenManager."""
-        from turnstone.console.server import _proxy_auth_headers
-        from turnstone.core.auth import AuthResult, ServiceTokenManager
+        from pebble.console.server import _proxy_auth_headers
+        from pebble.core.auth import AuthResult, ServiceTokenManager
 
         auth = AuthResult(
             user_id="alice",
@@ -2537,7 +2537,7 @@ class TestProxyAuthHeaders:
 
     def test_no_mgr_no_user_returns_empty(self):
         """No auth_result, no ServiceTokenManager → empty headers."""
-        from turnstone.console.server import _proxy_auth_headers
+        from pebble.console.server import _proxy_auth_headers
 
         req = self._make_request()
         headers = _proxy_auth_headers(req)
@@ -2568,7 +2568,7 @@ class TestCreateWorkstreamUserIdTrust:
         return uid
 
     def test_console_can_forward_user_id(self):
-        from turnstone.core.auth import AuthResult
+        from pebble.core.auth import AuthResult
 
         auth = AuthResult(
             user_id="console",
@@ -2579,7 +2579,7 @@ class TestCreateWorkstreamUserIdTrust:
         assert uid == "real-user-abc"
 
     def test_console_service_can_forward_user_id(self):
-        from turnstone.core.auth import AuthResult
+        from pebble.core.auth import AuthResult
 
         auth = AuthResult(
             user_id="console",
@@ -2591,7 +2591,7 @@ class TestCreateWorkstreamUserIdTrust:
 
     def test_console_proxy_user_cannot_override_user_id(self):
         """End-user tokens via console-proxy must NOT override user_id."""
-        from turnstone.core.auth import AuthResult
+        from pebble.core.auth import AuthResult
 
         auth = AuthResult(
             user_id="real-user-abc",
@@ -2604,7 +2604,7 @@ class TestCreateWorkstreamUserIdTrust:
 
     def test_direct_user_cannot_override_user_id(self):
         """Direct JWT login must NOT override user_id."""
-        from turnstone.core.auth import AuthResult
+        from pebble.core.auth import AuthResult
 
         auth = AuthResult(
             user_id="real-user-abc",
@@ -2615,7 +2615,7 @@ class TestCreateWorkstreamUserIdTrust:
         assert uid == "real-user-abc"
 
     def test_no_body_user_id_uses_jwt(self):
-        from turnstone.core.auth import AuthResult
+        from pebble.core.auth import AuthResult
 
         auth = AuthResult(
             user_id="bridge",
@@ -2704,7 +2704,7 @@ class TestProxyGetHeaderPassThrough:
 
         import httpx
 
-        from turnstone.console import server as csrv
+        from pebble.console import server as csrv
 
         upstream = httpx.Response(
             200,

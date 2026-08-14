@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.core.auth import (
+from pebble.core.auth import (
     WorkstreamProjectVisibility,
     ensure_project_attachable,
 )
@@ -180,8 +180,8 @@ class TestResolveWorkstreamOwnerProjectGate:
     gate every interactive ws-scoped verb inherits via tenant_check."""
 
     def _seed(self, *, member: bool) -> None:
-        from turnstone.core.memory import register_workstream
-        from turnstone.core.storage import get_storage
+        from pebble.core.memory import register_workstream
+        from pebble.core.storage import get_storage
 
         storage = get_storage()
         storage.create_project("p1", "Secret", "alice")
@@ -190,14 +190,14 @@ class TestResolveWorkstreamOwnerProjectGate:
         register_workstream("ws-priv", user_id="alice", project_id="p1")
 
     def test_non_member_gets_403(self, tmp_db: str) -> None:
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         self._seed(member=False)
         owner, err = resolve_workstream_owner(_request_for("bob"), "ws-priv")
         assert err is not None and err.status_code == 403
 
     def test_member_resolves_owner(self, tmp_db: str) -> None:
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         self._seed(member=True)
         owner, err = resolve_workstream_owner(_request_for("bob"), "ws-priv")
@@ -205,9 +205,9 @@ class TestResolveWorkstreamOwnerProjectGate:
         assert owner == "alice"
 
     def test_ws_creator_bypasses(self, tmp_db: str) -> None:
-        from turnstone.core.memory import register_workstream
-        from turnstone.core.storage import get_storage
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.memory import register_workstream
+        from pebble.core.storage import get_storage
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         storage = get_storage()
         storage.create_project("p1", "Secret", "alice")
@@ -222,7 +222,7 @@ class TestResolveWorkstreamOwnerProjectGate:
         # A permitted admin (admin.cluster.inspect) who isn't the owner /
         # creator / member of a private project is still 403'd at the row
         # gate — the permission gates the inspect surface, not the tenancy.
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         self._seed(member=False)
         owner, err = resolve_workstream_owner(
@@ -231,15 +231,15 @@ class TestResolveWorkstreamOwnerProjectGate:
         assert err is not None and err.status_code == 403
 
     def test_missing_ws_still_404s(self, tmp_db: str) -> None:
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         owner, err = resolve_workstream_owner(_request_for("bob"), "nope")
         assert err is not None and err.status_code == 404
 
     def test_public_project_ws_resolves(self, tmp_db: str) -> None:
-        from turnstone.core.memory import register_workstream
-        from turnstone.core.storage import get_storage
-        from turnstone.core.web_helpers import resolve_workstream_owner
+        from pebble.core.memory import register_workstream
+        from pebble.core.storage import get_storage
+        from pebble.core.web_helpers import resolve_workstream_owner
 
         storage = get_storage()
         storage.create_project("p1", "Open", "alice")
@@ -255,13 +255,13 @@ class TestSavedListFilter:
     and carries project_id on surviving rows (real ephemeral DB)."""
 
     async def test_saved_rows_filtered_and_carry_project_id(self, tmp_db: str) -> None:
-        from turnstone.core.memory import register_workstream, save_message
-        from turnstone.core.session_routes import (
+        from pebble.core.memory import register_workstream, save_message
+        from pebble.core.session_routes import (
             SessionEndpointConfig,
             _collect_saved_rows,
         )
-        from turnstone.core.storage import get_storage
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.storage import get_storage
+        from pebble.core.workstream import WorkstreamKind
 
         storage = get_storage()
         storage.create_project("p1", "Secret", "alice")
@@ -357,7 +357,7 @@ class TestClusterTenancyFilter:
         }
 
     def test_snapshot_filters_rows_and_rederives_overview(self) -> None:
-        from turnstone.console.server import _ClusterTenancyFilter
+        from pebble.console.server import _ClusterTenancyFilter
 
         filt = _ClusterTenancyFilter(_ScriptedVis({"ph": False}))
         snap = filt.filter_snapshot(self._snap())
@@ -370,7 +370,7 @@ class TestClusterTenancyFilter:
         assert filt.event_visible({"type": "cluster_state", "ws_id": "w-vis"}) is True
 
     def test_bypass_leaves_snapshot_untouched(self) -> None:
-        from turnstone.console.server import _ClusterTenancyFilter
+        from pebble.console.server import _ClusterTenancyFilter
 
         filt = _ClusterTenancyFilter(_ScriptedVis({"ph": False}, bypass=True))
         snap = filt.filter_snapshot(self._snap())
@@ -380,7 +380,7 @@ class TestClusterTenancyFilter:
         assert filt.event_touches_storage({"type": "ws_created", "ws_id": "x"}) is False
 
     def test_ws_created_judged_and_closed_cleans_up(self) -> None:
-        from turnstone.console.server import _ClusterTenancyFilter
+        from pebble.console.server import _ClusterTenancyFilter
 
         filt = _ClusterTenancyFilter(_ScriptedVis({"ph": False}))
         created = {"type": "ws_created", "ws_id": "w1", "project_id": "ph", "user_id": "b"}
@@ -392,7 +392,7 @@ class TestClusterTenancyFilter:
         assert filt.event_visible({"type": "cluster_state", "ws_id": "w1"}) is True
 
     def test_undetermined_suppresses_then_retries(self) -> None:
-        from turnstone.console.server import _ClusterTenancyFilter
+        from pebble.console.server import _ClusterTenancyFilter
 
         vis = _ScriptedVis({"pu": [None, True]})
         filt = _ClusterTenancyFilter(vis)
@@ -413,7 +413,7 @@ class TestClusterTenancyFilter:
         assert "w1" not in filt._unresolved
 
     def test_denied_verdict_pins_hidden(self) -> None:
-        from turnstone.console.server import _ClusterTenancyFilter
+        from pebble.console.server import _ClusterTenancyFilter
 
         vis = _ScriptedVis({"pu": [None, False]})
         filt = _ClusterTenancyFilter(vis)
@@ -434,8 +434,8 @@ class TestCreateValidatorProjectGate:
     strict, inherited ids tolerate a deleted project (real ephemeral DB)."""
 
     async def test_inherited_dangling_project_is_stripped(self, tmp_db: str) -> None:
-        from turnstone.core.memory import register_workstream
-        from turnstone.server import _interactive_create_validate_request
+        from pebble.core.memory import register_workstream
+        from pebble.server import _interactive_create_validate_request
 
         register_workstream("coord-1", user_id="alice", kind="coordinator", project_id="p-gone")
         body: dict = {"kind": "interactive", "parent_ws_id": "coord-1"}
@@ -444,16 +444,16 @@ class TestCreateValidatorProjectGate:
         assert (body.get("project_id") or "") == ""
 
     async def test_explicit_unknown_project_still_400s(self, tmp_db: str) -> None:
-        from turnstone.server import _interactive_create_validate_request
+        from pebble.server import _interactive_create_validate_request
 
         body: dict = {"kind": "interactive", "project_id": "nope"}
         err = await _interactive_create_validate_request(MagicMock(), body, "alice", [])
         assert err is not None and err.status_code == 400
 
     async def test_inherited_private_revoked_membership_403s(self, tmp_db: str) -> None:
-        from turnstone.core.memory import register_workstream
-        from turnstone.core.storage import get_storage
-        from turnstone.server import _interactive_create_validate_request
+        from pebble.core.memory import register_workstream
+        from pebble.core.storage import get_storage
+        from pebble.server import _interactive_create_validate_request
 
         get_storage().create_project("p-priv", "P", "zed")
         register_workstream("coord-2", user_id="alice", kind="coordinator", project_id="p-priv")
@@ -462,9 +462,9 @@ class TestCreateValidatorProjectGate:
         assert err is not None and err.status_code == 403
 
     async def test_inherited_accessible_project_passes(self, tmp_db: str) -> None:
-        from turnstone.core.memory import register_workstream
-        from turnstone.core.storage import get_storage
-        from turnstone.server import _interactive_create_validate_request
+        from pebble.core.memory import register_workstream
+        from pebble.core.storage import get_storage
+        from pebble.server import _interactive_create_validate_request
 
         storage = get_storage()
         storage.create_project("p-ok", "P", "zed")
@@ -503,8 +503,8 @@ class TestSavedListPagination:
         )
 
     def _cfg(self):
-        from turnstone.core.session_routes import SessionEndpointConfig
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.session_routes import SessionEndpointConfig
+        from pebble.core.workstream import WorkstreamKind
 
         return SessionEndpointConfig(
             permission_gate=None,
@@ -521,7 +521,7 @@ class TestSavedListPagination:
         def _fake(limit=20, *, kind=None, user_id=None, state=None, offset=0):
             return rows[offset : offset + limit]
 
-        monkeypatch.setattr("turnstone.core.memory.list_workstreams_with_history", _fake)
+        monkeypatch.setattr("pebble.core.memory.list_workstreams_with_history", _fake)
         vis = WorkstreamProjectVisibility("bob", storage=_fake_storage())  # denies any pid
         monkeypatch.setattr(
             WorkstreamProjectVisibility,
@@ -530,7 +530,7 @@ class TestSavedListPagination:
         )
 
     async def test_pages_past_invisible_rows(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from turnstone.core.session_routes import _collect_saved_rows
+        from pebble.core.session_routes import _collect_saved_rows
 
         rows = [self._row(i, "ph") for i in range(60)] + [
             self._row(i, None) for i in range(60, 130)
@@ -542,7 +542,7 @@ class TestSavedListPagination:
         assert result[-1]["ws_id"] == "ws-109"
 
     async def test_scan_cap_terminates(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from turnstone.core.session_routes import _collect_saved_rows
+        from pebble.core.session_routes import _collect_saved_rows
 
         rows = [self._row(i, "ph") for i in range(5000)]
         self._patch(monkeypatch, rows)

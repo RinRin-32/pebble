@@ -1,10 +1,10 @@
-"""Tests for turnstone.core.tool_advisory."""
+"""Tests for pebble.core.tool_advisory."""
 
 from __future__ import annotations
 
 import pytest
 
-from turnstone.core.tool_advisory import (
+from pebble.core.tool_advisory import (
     SYSTEM_TURN_SOURCES,
     make_system_turn,
     parse_priority,
@@ -64,7 +64,7 @@ class TestMakeSystemTurn:
         # type must be added here, and a removed/renamed one must not leave a
         # stale source behind.  output_guard / user_interjection / skill_hint
         # come from the advisory producers, not the nudge map.
-        from turnstone.core.metacognition import _NUDGE_MAP
+        from pebble.core.metacognition import _NUDGE_MAP
 
         nudge_sources = SYSTEM_TURN_SOURCES - {"output_guard", "user_interjection", "skill_hint"}
         assert nudge_sources == set(_NUDGE_MAP)
@@ -104,7 +104,7 @@ class TestMetaIsWireStripped:
     """The structured operator meta must never reach the LLM wire."""
 
     def test_source_meta_stripped_by_sanitize(self) -> None:
-        from turnstone.core.providers._openai_common import sanitize_messages
+        from pebble.core.providers._openai_common import sanitize_messages
 
         out = sanitize_messages(
             [

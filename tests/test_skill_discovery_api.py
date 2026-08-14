@@ -16,16 +16,16 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-from turnstone.console.server import admin_skill_discover, admin_skill_install
-from turnstone.core.auth import AuthResult
-from turnstone.core.skill_parser import ParsedSkill
-from turnstone.core.skill_sources import (
+from pebble.console.server import admin_skill_discover, admin_skill_install
+from pebble.core.auth import AuthResult
+from pebble.core.skill_parser import ParsedSkill
+from pebble.core.skill_sources import (
     SkillListing,
     SkillNotFoundError,
     SkillPackage,
     SkillSourceError,
 )
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.storage._sqlite import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # Auth middleware
@@ -170,7 +170,7 @@ class TestSkillDiscover:
     def test_search_basic(self, client: TestClient) -> None:
         listings = [_sample_listing()]
 
-        with patch("turnstone.core.skill_sources.SkillsShClient") as mock_cls:
+        with patch("pebble.core.skill_sources.SkillsShClient") as mock_cls:
             instance = mock_cls.return_value
             instance.search = AsyncMock(return_value=listings)
 
@@ -183,7 +183,7 @@ class TestSkillDiscover:
         assert data["skills"][0]["installed"] is False
 
     def test_search_empty_results(self, client: TestClient) -> None:
-        with patch("turnstone.core.skill_sources.SkillsShClient") as mock_cls:
+        with patch("pebble.core.skill_sources.SkillsShClient") as mock_cls:
             instance = mock_cls.return_value
             instance.search = AsyncMock(return_value=[])
 
@@ -216,7 +216,7 @@ class TestSkillDiscover:
 
         listings = [_sample_listing()]
 
-        with patch("turnstone.core.skill_sources.SkillsShClient") as mock_cls:
+        with patch("pebble.core.skill_sources.SkillsShClient") as mock_cls:
             instance = mock_cls.return_value
             instance.search = AsyncMock(return_value=listings)
 
@@ -226,7 +226,7 @@ class TestSkillDiscover:
         assert resp.json()["skills"][0]["installed"] is True
 
     def test_search_source_error(self, client: TestClient) -> None:
-        with patch("turnstone.core.skill_sources.SkillsShClient") as mock_cls:
+        with patch("pebble.core.skill_sources.SkillsShClient") as mock_cls:
             instance = mock_cls.return_value
             instance.search = AsyncMock(side_effect=SkillSourceError("timeout"))
 
@@ -246,7 +246,7 @@ class TestSkillInstall:
         package = _sample_package()
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
 
@@ -268,7 +268,7 @@ class TestSkillInstall:
     def test_install_from_skills_sh(self, client: TestClient) -> None:
         package = _sample_package()
 
-        with patch("turnstone.core.skill_sources.SkillsShClient") as mock_cls:
+        with patch("pebble.core.skill_sources.SkillsShClient") as mock_cls:
             instance = mock_cls.return_value
             instance.download_skill = AsyncMock(return_value=package)
 
@@ -290,7 +290,7 @@ class TestSkillInstall:
         package = _sample_package(model="claude-opus-4-7", effort="high")
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
 
@@ -311,7 +311,7 @@ class TestSkillInstall:
         package = _sample_package(user_invocable=False)
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
             resp = client.post(
@@ -328,7 +328,7 @@ class TestSkillInstall:
         package = _sample_package()  # user_invocable=True (default)
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
             resp = client.post(
@@ -348,7 +348,7 @@ class TestSkillInstall:
         package = _sample_package(arguments=["issue", "branch"], argument_hint="[issue-number]")
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
             resp = client.post(
@@ -370,7 +370,7 @@ class TestSkillInstall:
         package = _sample_package()  # model="", effort=""
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
 
@@ -396,7 +396,7 @@ class TestSkillInstall:
         # First install seeds model="upstream-model" from frontmatter.
         first_package = _sample_package(model="upstream-model", effort="high")
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = first_package
             resp = client.post(
@@ -416,7 +416,7 @@ class TestSkillInstall:
         # because the second create never fires.
         second_package = _sample_package(model="upstream-different-model", effort="low")
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = second_package
             resp = client.post(
@@ -466,7 +466,7 @@ class TestSkillInstall:
         package = _sample_package()
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
 
@@ -494,7 +494,7 @@ class TestSkillInstall:
         package = _sample_package(source_url="https://github.com/owner/different-repo")
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
 
@@ -508,10 +508,10 @@ class TestSkillInstall:
     def test_install_not_found(self, client: TestClient) -> None:
         with (
             patch(
-                "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+                "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
             ) as mock_fetch,
             patch(
-                "turnstone.core.skill_sources.fetch_skills_from_github_repo",
+                "pebble.core.skill_sources.fetch_skills_from_github_repo",
                 new_callable=AsyncMock,
             ) as mock_batch,
         ):
@@ -527,7 +527,7 @@ class TestSkillInstall:
 
     def test_install_source_error_returns_502(self, client: TestClient) -> None:
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.side_effect = SkillSourceError("connection timeout")
 
@@ -549,7 +549,7 @@ class TestSkillInstall:
         package = _sample_package()
 
         with patch(
-            "turnstone.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
+            "pebble.core.skill_sources.fetch_skill_from_github", new_callable=AsyncMock
         ) as mock_fetch:
             mock_fetch.return_value = package
 

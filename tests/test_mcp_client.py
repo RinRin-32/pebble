@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.mcp_client — MCP client manager and config loading."""
+"""Tests for pebble.core.mcp_client — MCP client manager and config loading."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import mcp.types as mcp_types
 import pytest
 
 from tests.conftest import _drain_background, _run_on_loop, _seed_static_state
-from turnstone.core.mcp_client import (
+from pebble.core.mcp_client import (
     _MAX_RESOURCES_PER_SERVER,
     MCPClientManager,
     _db_servers_to_config,
@@ -26,7 +26,7 @@ from turnstone.core.mcp_client import (
     _mcp_to_openai,
     load_mcp_config,
 )
-from turnstone.core.tools import INTERACTIVE_TOOLS, TOOLS, merge_mcp_tools
+from pebble.core.tools import INTERACTIVE_TOOLS, TOOLS, merge_mcp_tools
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -274,18 +274,18 @@ class TestLoadMcpConfig:
                 }
             }
         }
-        with patch("turnstone.core.mcp_client.load_config", return_value=mock_config):
+        with patch("pebble.core.mcp_client.load_config", return_value=mock_config):
             result = load_mcp_config(None)
         assert "postgres" in result
         assert result["postgres"]["url"] == "https://mcp.example.com/mcp"
 
     def test_empty_when_no_config(self):
-        with patch("turnstone.core.mcp_client.load_config", return_value={}):
+        with patch("pebble.core.mcp_client.load_config", return_value={}):
             result = load_mcp_config(None)
         assert result == {}
 
     def test_json_file_not_found(self, tmp_path):
-        with patch("turnstone.core.mcp_client.load_config", return_value={}):
+        with patch("pebble.core.mcp_client.load_config", return_value={}):
             result = load_mcp_config(str(tmp_path / "nonexistent.json"))
         assert result == {}
 
@@ -293,14 +293,14 @@ class TestLoadMcpConfig:
         """TOML [mcp] config_path redirects to JSON file."""
         # load_config returns a section with config_path pointing to a nonexistent file
         mock_config = {"config_path": "/tmp/nonexistent_mcp.json"}
-        with patch("turnstone.core.mcp_client.load_config", return_value=mock_config):
+        with patch("pebble.core.mcp_client.load_config", return_value=mock_config):
             result = load_mcp_config(None)
         assert result == {}
 
     def test_invalid_json(self, tmp_path):
         config_file = tmp_path / "bad.json"
         config_file.write_text("not json")
-        with patch("turnstone.core.mcp_client.load_config", return_value={}):
+        with patch("pebble.core.mcp_client.load_config", return_value={}):
             result = load_mcp_config(str(config_file))
         assert result == {}
 
@@ -493,7 +493,7 @@ class TestMCPClientManager:
         mgr = MCPClientManager({})
         mgr._tools = [_fake_openai_tool("mcp__static__list")]
         # Seed a pool entry that should NOT appear in the default view.
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         entry = PoolEntryState(key=("user-1", "pool-srv"), open_lock=MagicMock())
         entry.tools = [_fake_openai_tool("mcp__pool-srv__do")]
@@ -509,7 +509,7 @@ class TestMCPClientManager:
         Other users' pool entries MUST NOT leak into the result —
         privacy / RBAC invariant.
         """
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         mgr = MCPClientManager({})
         mgr._tools = [_fake_openai_tool("mcp__static__list")]
@@ -543,7 +543,7 @@ class TestMCPClientManager:
     def test_get_tools_user_id_returns_copies(self):
         """Mirror existing ``test_get_tools_returns_copy``: caller mutation
         of the returned list MUST NOT affect the manager's catalog."""
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         mgr = MCPClientManager({})
         mgr._tools = [_fake_openai_tool("mcp__static__a")]
@@ -562,7 +562,7 @@ class TestMCPClientManager:
     def test_get_tools_user_with_none_tools_skipped(self):
         """A pool entry that hasn't completed discovery (``entry.tools is None``)
         contributes no tools — the merged view skips it cleanly."""
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         mgr = MCPClientManager({})
         mgr._tools = [_fake_openai_tool("mcp__static__a")]
@@ -579,7 +579,7 @@ class TestMCPClientManager:
     def test_rebuild_user_tool_map_populates(self):
         """``_rebuild_user_tool_map`` materializes the per-user index from
         pool entries owned by that user."""
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         mgr = MCPClientManager({})
         entry = PoolEntryState(key=("user-1", "pool-srv"), open_lock=MagicMock())
@@ -596,7 +596,7 @@ class TestMCPClientManager:
     def test_rebuild_user_tool_map_drops_empty_user(self):
         """Rebuilding for a user with no pool entries removes the key
         rather than retaining an empty-dict sentinel."""
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         mgr = MCPClientManager({})
         entry = PoolEntryState(key=("user-1", "pool-srv"), open_lock=MagicMock())
@@ -616,7 +616,7 @@ class TestMCPClientManager:
 
     def test_rebuild_user_tool_map_isolates_users(self):
         """Rebuilding for ``user-1`` MUST NOT touch ``user-2``'s entry."""
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         mgr = MCPClientManager({})
         e1 = PoolEntryState(key=("user-1", "pool-srv"), open_lock=MagicMock())
@@ -639,7 +639,7 @@ class TestMCPClientManager:
 
     def test_rebuild_user_tool_map_does_not_touch_static(self):
         """Invariant 1: per-user rebuild must NOT mutate ``_tool_map``."""
-        from turnstone.core.mcp_client import PoolEntryState
+        from pebble.core.mcp_client import PoolEntryState
 
         mgr = MCPClientManager({})
         mgr._tool_map["mcp__static__list"] = ("static", "list")
@@ -660,7 +660,7 @@ class TestMCPClientManager:
 class TestSessionIntegration:
     @pytest.fixture()
     def tmp_db(self, tmp_path):
-        from turnstone.core.storage import init_storage, reset_storage
+        from pebble.core.storage import init_storage, reset_storage
 
         reset_storage()
         init_storage("sqlite", path=str(tmp_path / "test.db"), run_migrations=False)
@@ -668,7 +668,7 @@ class TestSessionIntegration:
         reset_storage()
 
     def _make_session(self, mcp_client=None, **kwargs):
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         defaults: dict[str, Any] = dict(
             client=MagicMock(),
@@ -697,7 +697,7 @@ class TestSessionIntegration:
         assert session._tools[-1]["function"]["name"] == "mcp__test__search"
 
     def test_task_tools_include_mcp(self, tmp_db):
-        from turnstone.core.tools import TASK_AGENT_TOOLS
+        from pebble.core.tools import TASK_AGENT_TOOLS
 
         mock_mcp = MagicMock()
         mock_mcp.get_tools.return_value = [_fake_openai_tool()]
@@ -768,7 +768,7 @@ class TestSessionIntegration:
 
     def test_ensure_tool_call_ids_dict(self, tmp_db):
         """_ensure_tool_call_ids fills empty IDs on streaming-style dict."""
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         tool_calls_acc = {
             0: {"id": "", "function": {"name": "bash", "arguments": "{}"}},
@@ -781,7 +781,7 @@ class TestSessionIntegration:
 
     def test_ensure_tool_call_ids_list(self, tmp_db):
         """_ensure_tool_call_ids fills empty IDs on list (agent path)."""
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         tool_calls = [
             {"id": None, "function": {"name": "bash", "arguments": "{}"}},
@@ -955,8 +955,8 @@ class TestServerNameValidation:
 
 class TestCreateMcpClient:
     def test_returns_none_when_no_config(self):
-        with patch("turnstone.core.mcp_client.load_mcp_config", return_value={}):
-            from turnstone.core.mcp_client import create_mcp_client
+        with patch("pebble.core.mcp_client.load_mcp_config", return_value={}):
+            from pebble.core.mcp_client import create_mcp_client
 
             result = create_mcp_client()
             assert result is None
@@ -1363,7 +1363,7 @@ class TestServerNames:
 class TestSessionRefresh:
     @pytest.fixture()
     def tmp_db(self, tmp_path):
-        from turnstone.core.storage import init_storage, reset_storage
+        from pebble.core.storage import init_storage, reset_storage
 
         reset_storage()
         init_storage("sqlite", path=str(tmp_path / "test.db"), run_migrations=False)
@@ -1371,7 +1371,7 @@ class TestSessionRefresh:
         reset_storage()
 
     def _make_session(self, mcp_client=None, **kwargs):
-        from turnstone.core.session import ChatSession
+        from pebble.core.session import ChatSession
 
         defaults: dict[str, Any] = dict(
             client=MagicMock(),
@@ -3456,7 +3456,7 @@ class TestStaticNotificationRefresh:
             )
             # monotonic() < _NOTIFICATION_DEBOUNCE: a 0.0-default compare
             # would debounce this first push; the None sentinel admits it.
-            with patch("turnstone.core.mcp_client.time.monotonic", return_value=2.0):
+            with patch("pebble.core.mcp_client.time.monotonic", return_value=2.0):
                 await handler(note)
 
         _run_on_loop(loop, _fire())
@@ -4328,7 +4328,7 @@ class TestCBAutoReconnectRefresh:
         with (
             patch.object(mgr, "_connect_one_locked", side_effect=_connect_one),
             patch.object(mgr, "_refresh_server", side_effect=_refresh_failing),
-            patch("turnstone.core.mcp_client.log") as mock_log,
+            patch("pebble.core.mcp_client.log") as mock_log,
         ):
             # Must not raise — refresh failures are non-fatal to the caller.
             session = mgr._cb_auto_reconnect("srv")

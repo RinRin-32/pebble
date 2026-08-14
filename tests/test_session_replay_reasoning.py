@@ -28,7 +28,7 @@ from unittest.mock import MagicMock, patch
 
 from tests._session_helpers import as_stream, mock_completion_result
 from tests._session_helpers import make_session as _make_session
-from turnstone.core.trajectory import Turn
+from pebble.core.trajectory import Turn
 
 
 def _registry_with_flag(persist: bool = True, replay: bool = False) -> Any:
@@ -108,7 +108,7 @@ class TestResolveReplayReasoningToModel:
         assert session._resolve_replay_reasoning_to_model(caps=None) is True
 
     def test_caps_supports_replay_true_passes_through(self) -> None:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = _make_session()
         session._registry = _registry_with_flag(replay=True)
@@ -117,7 +117,7 @@ class TestResolveReplayReasoningToModel:
         assert session._resolve_replay_reasoning_to_model(caps=caps) is True
 
     def test_caps_supports_replay_false_blocks_replay(self) -> None:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         # Operator flipped replay=True but the model's capability
         # advertises supports_reasoning_replay=False — AND-gate blocks
@@ -129,7 +129,7 @@ class TestResolveReplayReasoningToModel:
         assert session._resolve_replay_reasoning_to_model(caps=caps) is False
 
     def test_caps_supports_replay_true_does_not_force_replay(self) -> None:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         # Capability True but operator flag False — result must be
         # False (the AND has to be False on either side).
@@ -300,7 +300,7 @@ class TestSessionToWireBoundaryIntegration:
         the resolver pre-set to *replay_flag*.  Returns the kwargs
         dict that reached the (mocked) Anthropic SDK boundary.
         """
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         session = _make_session()
         session._registry = _registry_with_flag(replay=replay_flag)
@@ -385,8 +385,8 @@ class TestSessionToWireBoundaryIntegration:
         # supports_reasoning_replay=False.  AND-gate at the resolver
         # blocks replay, so the strip predicate fires at the wire and
         # the thinking block does NOT reach the SDK boundary.
-        from turnstone.core.providers._anthropic import AnthropicProvider
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._protocol import ModelCapabilities
 
         msgs: list[dict[str, object]] = [
             {"role": "user", "content": "hello"},
@@ -466,7 +466,7 @@ class TestSessionToOpenAIResponsesBoundaryIntegration:
     def _registry_with_reasoning_capability(
         self, replay: bool = True, supports_replay: bool = True
     ) -> Any:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         return SimpleNamespace(
             get_config=lambda alias: SimpleNamespace(
@@ -483,7 +483,7 @@ class TestSessionToOpenAIResponsesBoundaryIntegration:
         )
 
     def test_replay_true_adds_include_to_responses_request(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         registry = self._registry_with_reasoning_capability(replay=True, supports_replay=True)
         session = _make_session()
@@ -509,7 +509,7 @@ class TestSessionToOpenAIResponsesBoundaryIntegration:
         assert captured.get("include") == ["reasoning.encrypted_content"]
 
     def test_replay_false_omits_include(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         registry = self._registry_with_reasoning_capability(replay=False, supports_replay=True)
         session = _make_session()
@@ -535,7 +535,7 @@ class TestSessionToOpenAIResponsesBoundaryIntegration:
         assert "include" not in captured
 
     def test_capability_false_omits_include_even_when_flag_true(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         # Operator flips replay=True but the model has
         # supports_reasoning_replay=False (e.g. gpt-4o via Responses).
@@ -564,7 +564,7 @@ class TestSessionToOpenAIResponsesBoundaryIntegration:
         assert "include" not in captured
 
     def test_replay_true_emits_reasoning_input_item(self) -> None:
-        from turnstone.core.providers._openai_responses import OpenAIResponsesProvider
+        from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 
         registry = self._registry_with_reasoning_capability(replay=True, supports_replay=True)
         session = _make_session()
@@ -619,7 +619,7 @@ class TestUtilityCompletionPassesFlag:
     same plumbing requirement as streaming."""
 
     def test_utility_completion_passes_resolved_flag(self) -> None:
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = _make_session()
         session._registry = _registry_with_flag(replay=True)

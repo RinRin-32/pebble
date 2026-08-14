@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from turnstone.admin import _cmd_create_admin, _cmd_create_user
-from turnstone.core.auth import _load_user_permissions, _permissions_to_scopes
-from turnstone.core.storage import init_storage, reset_storage
+from pebble.admin import _cmd_create_admin, _cmd_create_user
+from pebble.core.auth import _load_user_permissions, _permissions_to_scopes
+from pebble.core.storage import init_storage, reset_storage
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -41,7 +41,7 @@ def _db_args(db_path: str, **overrides: Any) -> argparse.Namespace:
     """Build the Namespace ``_cmd_create_admin`` (and ``_cmd_create_user``) expect.
 
     Pins every DB field so ``_get_storage`` resolves to the tmp sqlite file and
-    never leaks a ``TURNSTONE_DB_*`` env var (it only falls back when the attr
+    never leaks a ``PEBBLE_DB_*`` env var (it only falls back when the attr
     ``is None``).  ``token``/``scopes`` are only read by ``_cmd_create_user``.
     """
     base: dict[str, Any] = {

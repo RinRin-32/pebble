@@ -1,13 +1,13 @@
-"""Tests for turnstone.core.server_compat — profile suggestion and merging."""
+"""Tests for pebble.core.server_compat — profile suggestion and merging."""
 
 from __future__ import annotations
 
 from typing import Any
 from unittest.mock import MagicMock
 
-from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-from turnstone.core.providers._protocol import ModelCapabilities
-from turnstone.core.server_compat import merge_server_compat, suggest_profile
+from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from pebble.core.providers._protocol import ModelCapabilities
+from pebble.core.server_compat import merge_server_compat, suggest_profile
 
 # ---------------------------------------------------------------------------
 # suggest_profile
@@ -106,7 +106,7 @@ class TestSuggestProfile:
     def test_vllm_mistral_medium_profile_still_available(self) -> None:
         """The vllm-mistral-medium profile remains in _PROFILES so an operator
         who explicitly opts in via the admin UI gets the Responses surface."""
-        from turnstone.core.server_compat import _PROFILES
+        from pebble.core.server_compat import _PROFILES
 
         assert "vllm-mistral-medium" in _PROFILES
         assert _PROFILES["vllm-mistral-medium"]["server_compat"]["api_surface"] == "responses"
@@ -303,7 +303,7 @@ class TestEndToEndRequestShaping:
 class TestProbeIntegration:
     def test_detect_vllm_gemma_suggests_profile(self) -> None:
         """_detect_openai_compat returns suggested_capabilities and suggested_server_compat."""
-        from turnstone.core.model_registry import _detect_openai_compat
+        from pebble.core.model_registry import _detect_openai_compat
 
         result: dict[str, Any] = {
             "reachable": True,
@@ -327,7 +327,7 @@ class TestProbeIntegration:
 
     def test_detect_non_thinking_no_suggested_capabilities(self) -> None:
         """Non-thinking vLLM model gets server_compat but no capabilities suggestion."""
-        from turnstone.core.model_registry import _detect_openai_compat
+        from pebble.core.model_registry import _detect_openai_compat
 
         result: dict[str, Any] = {
             "reachable": True,

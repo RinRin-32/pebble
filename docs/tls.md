@@ -8,7 +8,7 @@ inter-service communication, powered by [lacme](https://pypi.org/project/lacme/)
 ## Quick Start (Docker Compose)
 
 ```bash
-docker compose -f turnstone/deploy/compose.yaml -f deploy/docker-compose.tls.yml up
+docker compose -f pebble/deploy/compose.yaml -f deploy/docker-compose.tls.yml up
 ```
 
 This:
@@ -37,15 +37,15 @@ docker compose up
 # dashboard: https://localhost:${CONSOLE_HTTPS_PORT:-8443}
 ```
 
-The production stack (`turnstone/deploy/compose.yaml`) bundles the same `caddy`
+The production stack (`pebble/deploy/compose.yaml`) bundles the same `caddy`
 service, so the dashboard is HTTPS there too. For a real domain and a publicly
-trusted cert, point Caddy at Let's Encrypt by editing `turnstone/deploy/Caddyfile`.
+trusted cert, point Caddy at Let's Encrypt by editing `pebble/deploy/Caddyfile`.
 
 ```
 browser  --h2 / HTTPS-->  caddy:443  --h1.1 / HTTP-->  console:8090
 ```
 
-Caddy uses its **own local CA** (`tls internal`, see `turnstone/deploy/Caddyfile`), so the
+Caddy uses its **own local CA** (`tls internal`, see `pebble/deploy/Caddyfile`), so the
 setup is self-contained with no dependency on the console's ACME path. Trust the
 local root once to silence the browser warning:
 
@@ -105,13 +105,13 @@ An mTLS listener rejects plain-HTTP probes at the socket, so
 `docker/healthcheck.py` falls back to HTTPS when the plain probe fails:
 it presents the node's own cert as the client cert and pins the cluster
 CA, using the PEM files the server writes at boot under
-`$TURNSTONE_TLS_PEM_DIR` (default `<tmpdir>/turnstone-tls`). The probe
+`$PEBBLE_TLS_PEM_DIR` (default `<tmpdir>/turnstone-tls`). The probe
 dials `localhost` for the TLS attempt — the internal CA issues DNS SANs
 only, so a literal-IP URL would fail verification. Cert renewal rewrites
 the PEM dir alongside the live listener swap, so the probe's client cert
 never outlives the served cert. With TLS disabled the plain probe succeeds
 and the PEM directory is never consulted. On bare metal with multiple
-nodes per host, set `TURNSTONE_TLS_PEM_DIR` per node (each boot clears
+nodes per host, set `PEBBLE_TLS_PEM_DIR` per node (each boot clears
 stale `lacme-pem-*` dirs under its root).
 
 ---
@@ -157,7 +157,7 @@ Create a CA and infrastructure certs without a running console:
 
 ```bash
 # Bootstrap CA + PostgreSQL certs
-turnstone-admin tls-bootstrap --out /certs --issue postgres
+pebble-admin tls-bootstrap --out /certs --issue postgres
 
 # Output:
 #   /certs/ca.pem              (CA root certificate)
@@ -172,13 +172,13 @@ Request certs from a running console's ACME endpoint:
 
 ```bash
 # Download CA root cert (TOFU — verify fingerprint)
-turnstone-admin tls-ca-cert --out ca.pem --console-url http://console:8080
+pebble-admin tls-ca-cert --out ca.pem --console-url http://console:8080
 
 # Request a cert for a domain
-turnstone-admin tls-issue worker-1.internal --out /certs --console-url http://console:8080
+pebble-admin tls-issue worker-1.internal --out /certs --console-url http://console:8080
 
 # List issued certs
-turnstone-admin tls-list --console-url http://console:8080
+pebble-admin tls-list --console-url http://console:8080
 ```
 
 ### Console URL Discovery
@@ -216,7 +216,7 @@ client = TurnstoneServer(
 ### TypeScript
 
 ```typescript
-import { TurnstoneServer } from "@turnstone/sdk";
+import { TurnstoneServer } from "@pebble/sdk";
 import { Agent } from "undici";
 import * as fs from "fs";
 
@@ -245,13 +245,13 @@ const client = new TurnstoneServer({
 
 1. Node starts, connects to shared database (plain connection)
 2. Discovers the console URL from the `services` table — or honors an explicit
-   `TURNSTONE_CONSOLE_URL` (a bare-metal node outside the compose network can't
+   `PEBBLE_CONSOLE_URL` (a bare-metal node outside the compose network can't
    resolve the in-cluster `console` name, so it points this at the console's
    published ACME endpoint)
 3. Fetches CA root cert from `http://console/acme/ca.pem` (plain HTTP, TOFU)
 4. Requests a service cert via ACME (plain HTTP, JWS-signed). The cert's
    primary domain / SAN is the node's **advertised host** (the host of
-   `TURNSTONE_ADVERTISE_URL`, e.g. `node-1`) — the name peers actually dial,
+   `PEBBLE_ADVERTISE_URL`, e.g. `node-1`) — the name peers actually dial,
    not the container hostname. This makes mTLS hostname verification succeed
    and keys the cert by a stable name that survives container recreation.
 5. Starts auto-renewal (24h interval, re-issues before expiry) **scoped to its
@@ -283,9 +283,9 @@ restart the service to re-request a cert.
 ### Collector/proxy can't reach a node (TLS hostname mismatch)
 
 mTLS verifies a node's advertised host against the cert's SANs. Each node's
-cert is issued for the host in its `TURNSTONE_ADVERTISE_URL`, so that name is
-always a SAN automatically — you do **not** need to set `TURNSTONE_TLS_SANS`
-per node. Only set `TURNSTONE_TLS_SANS` to add *extra* names (e.g. a node
+cert is issued for the host in its `PEBBLE_ADVERTISE_URL`, so that name is
+always a SAN automatically — you do **not** need to set `PEBBLE_TLS_SANS`
+per node. Only set `PEBBLE_TLS_SANS` to add *extra* names (e.g. a node
 fronted under a second hostname). Symptom if this is wrong: the console
 dashboard shows nodes as unreachable and `openssl s_client` reports the served
 cert's SANs don't include the dialed name.
@@ -294,7 +294,7 @@ cert's SANs don't include the dialed name.
 
 The console registers itself in the `services` table on startup. If the console
 hasn't started or the registration expired (1 hour TTL), nodes can't discover
-it. Set `TURNSTONE_CONSOLE_URL` to a reachable console address (this is also how
+it. Set `PEBBLE_CONSOLE_URL` to a reachable console address (this is also how
 a bare-metal node that can't resolve the in-cluster `console` name enrolls).
 
 ### Browser HTTPS to the console

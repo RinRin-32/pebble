@@ -13,7 +13,7 @@ Covers:
 
 from __future__ import annotations
 
-from turnstone.core.workstream import Workstream
+from pebble.core.workstream import Workstream
 
 # ``storage`` comes from tests/conftest.py — backend-parametrized fixture that
 # respects the ``--storage-backend`` flag so the same assertions run against
@@ -272,7 +272,7 @@ def test_interactive_and_coordinator_tool_sets_overlap_only_on_dual_kind():
     canonical list of dual-kind tools — any drift here is a real
     review-worthy change, not just a count tweak.
     """
-    from turnstone.core.tools import COORDINATOR_TOOLS, INTERACTIVE_TOOLS, TOOLS
+    from pebble.core.tools import COORDINATOR_TOOLS, INTERACTIVE_TOOLS, TOOLS
 
     interactive_names = {t["function"]["name"] for t in INTERACTIVE_TOOLS}
     coord_names = {t["function"]["name"] for t in COORDINATOR_TOOLS}
@@ -302,7 +302,7 @@ def test_chatsession_interactive_kind_excludes_coordinator_tools(tmp_db):
     """An interactive ``ChatSession`` does not surface coordinator tools."""
     from unittest.mock import MagicMock
 
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     class _NullUI:
         def __getattr__(self, _name):
@@ -347,7 +347,7 @@ def test_chatsession_coordinator_kind_excludes_interactive_tools(tmp_db):
     """
     from unittest.mock import MagicMock
 
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     class _NullUI:
         def __getattr__(self, _name):
@@ -384,7 +384,7 @@ def test_chatsession_coordinator_kind_does_not_merge_mcp_tools(tmp_db):
     """
     from unittest.mock import MagicMock
 
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     class _NullUI:
         def __getattr__(self, _name):

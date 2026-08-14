@@ -10,7 +10,7 @@ and stored the literal value ``["None"]``.
 
 from __future__ import annotations
 
-from turnstone.console.server import _canonicalize_skill_string_list
+from pebble.console.server import _canonicalize_skill_string_list
 
 
 class TestList:

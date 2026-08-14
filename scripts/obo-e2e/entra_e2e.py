@@ -54,14 +54,14 @@ import httpx
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from entra_spike import interactive_login, jwt_claims_unverified, redact  # noqa: E402
 
-from turnstone.core.mcp_crypto import (  # noqa: E402
+from pebble.core.mcp_crypto import (  # noqa: E402
     MCPTokenCipher,
     MCPTokenCipherConfig,
     MCPTokenStore,
 )
-from turnstone.core.mcp_oauth import get_obo_access_token_classified  # noqa: E402
-from turnstone.core.oidc import OIDCConfig  # noqa: E402
-from turnstone.core.storage._sqlite import SQLiteBackend  # noqa: E402
+from pebble.core.mcp_oauth import get_obo_access_token_classified  # noqa: E402
+from pebble.core.oidc import OIDCConfig  # noqa: E402
+from pebble.core.storage._sqlite import SQLiteBackend  # noqa: E402
 
 USER = "e2e-user"
 RESULTS: list[tuple[str, str]] = []

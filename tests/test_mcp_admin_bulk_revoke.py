@@ -26,9 +26,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from turnstone.console.server import admin_mcp_bulk_revoke
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.console.server import admin_mcp_bulk_revoke
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 
 if TYPE_CHECKING:
     from starlette.requests import Request

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Update a vendored JavaScript library in turnstone/shared_static/.
+# Update a vendored JavaScript library in pebble/shared_static/.
 #
 # Usage:
 #   scripts/update-vendored-js.sh katex 0.16.39
@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-STATIC_DIR="turnstone/shared_static"
+STATIC_DIR="pebble/shared_static"
 CDN="https://cdn.jsdelivr.net/npm"
 
 usage() {
@@ -34,7 +34,7 @@ VERSION="$2"
 # no directory is found.
 detect_old_version() {
     local pattern="$1"
-    # Look for existing directory: e.g. turnstone/shared_static/katex-0.16.38
+    # Look for existing directory: e.g. pebble/shared_static/katex-0.16.38
     local dir
     dir=$(find "${STATIC_DIR}" -maxdepth 1 -type d -name "${pattern}-*" | head -1)
     if [[ -n "$dir" ]]; then
@@ -185,9 +185,9 @@ esac
 
 echo ""
 echo "NOTE: If you added a NEW library (not just updating a version), also update"
-echo "  the _ASSET_RE regex in turnstone/core/web_helpers.py — its negative lookahead"
+echo "  the _ASSET_RE regex in pebble/core/web_helpers.py — its negative lookahead"
 echo "  skips vendored directories to avoid double-versioning static asset URLs."
 echo ""
 echo "Verify the update:"
 echo "  git diff --stat"
-echo "  python -m turnstone.server  # test locally"
+echo "  python -m pebble.server  # test locally"

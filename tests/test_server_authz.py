@@ -19,7 +19,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from tests._helpers import wait_until
-from turnstone.core.workstream import INTERJECTION_CAP_CHARS
+from pebble.core.workstream import INTERJECTION_CAP_CHARS
 
 _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
@@ -39,7 +39,7 @@ def _make_jwt(
     scopes: frozenset[str] | None = None,
     permissions: frozenset[str] | None = None,
 ) -> str:
-    from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
+    from pebble.core.auth import JWT_AUD_SERVER, create_jwt
 
     return create_jwt(
         user_id=user_id,
@@ -68,26 +68,26 @@ class TestAssignableScopes:
     :func:`reject_unassignable_scopes`."""
 
     def test_service_scope_rejected(self) -> None:
-        from turnstone.core.auth import reject_unassignable_scopes
+        from pebble.core.auth import reject_unassignable_scopes
 
         assert reject_unassignable_scopes("service") is not None
         assert reject_unassignable_scopes("read,service") is not None
         assert reject_unassignable_scopes("read,write,approve,service") is not None
 
     def test_service_not_in_assignable_set(self) -> None:
-        from turnstone.core.auth import ASSIGNABLE_SCOPES, VALID_SCOPES
+        from pebble.core.auth import ASSIGNABLE_SCOPES, VALID_SCOPES
 
         assert "service" in VALID_SCOPES  # still a valid runtime scope
         assert "service" not in ASSIGNABLE_SCOPES  # but not user-assignable
 
     def test_ordinary_scopes_accepted(self) -> None:
-        from turnstone.core.auth import reject_unassignable_scopes
+        from pebble.core.auth import reject_unassignable_scopes
 
         assert reject_unassignable_scopes("read") is None
         assert reject_unassignable_scopes("read,write,approve") is None
 
     def test_empty_and_unknown_rejected(self) -> None:
-        from turnstone.core.auth import reject_unassignable_scopes
+        from pebble.core.auth import reject_unassignable_scopes
 
         assert reject_unassignable_scopes("") is not None
         assert reject_unassignable_scopes("bogus") is not None
@@ -322,19 +322,19 @@ class _FakeSession:
 @pytest.fixture
 def app_client(tmp_path, monkeypatch):
     """Full turnstone-server app with in-memory workstreams + fake sessions."""
-    from turnstone.core.adapters.interactive_adapter import InteractiveAdapter
-    from turnstone.core.metrics import MetricsCollector
-    from turnstone.core.session_manager import SessionManager
-    from turnstone.core.storage import get_storage, init_storage, reset_storage
-    from turnstone.server import WebUI, create_app
+    from pebble.core.adapters.interactive_adapter import InteractiveAdapter
+    from pebble.core.metrics import MetricsCollector
+    from pebble.core.session_manager import SessionManager
+    from pebble.core.storage import get_storage, init_storage, reset_storage
+    from pebble.server import WebUI, create_app
 
     reset_storage()
     init_storage("sqlite", path=str(tmp_path / "t.db"), run_migrations=False)
 
     metrics = MetricsCollector()
     metrics.model = "test-model"
-    monkeypatch.setattr("turnstone.server._metrics", metrics)
-    monkeypatch.setattr("turnstone.server.WebUI", _FakeUI)
+    monkeypatch.setattr("pebble.server._metrics", metrics)
+    monkeypatch.setattr("pebble.server.WebUI", _FakeUI)
 
     def _factory(ui: Any, _model: Any, ws_id: str, **_kw: Any) -> _FakeSession:
         uid = getattr(ui, "_user_id", "")
@@ -409,7 +409,7 @@ class TestKindValidationOnCreate:
 
     def test_rejects_cross_tenant_parent_ws_id(self, app_client, tmp_path):
         """parent_ws_id pointing at another user's coordinator → 403."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -447,7 +447,7 @@ class TestOpenKindGate:
     """
 
     def test_refuses_to_open_coordinator(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -481,7 +481,7 @@ class TestCrossTenantDelete:
         # Trusted-team model: scope auth gates the endpoint, not
         # row-level ownership.  ``user_id`` stays on audit + storage
         # metadata.
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -494,7 +494,7 @@ class TestCrossTenantDelete:
         assert resp.status_code == 200
 
     def test_owner_delete_records_audit(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -511,7 +511,7 @@ class TestCrossTenantDelete:
 
 class TestCrossTenantApprove:
     def test_non_owner_cannot_approve(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -527,7 +527,7 @@ class TestCrossTenantApprove:
 
 class TestCrossTenantClose:
     def test_non_owner_cannot_close(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -559,7 +559,7 @@ class TestPermissionGatesOnLifecycle:
         assert "workstreams.create" in resp.json()["error"]
 
     def test_close_without_perm_returns_403(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -574,7 +574,7 @@ class TestPermissionGatesOnLifecycle:
         assert "workstreams.close" in resp.json()["error"]
 
     def test_approve_without_perm_returns_403(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -617,7 +617,7 @@ class TestPermissionGatesOnLifecycle:
         assert resp.status_code != 403, resp.json()
 
     def test_close_with_admin_coordinator_passes_gate(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -631,7 +631,7 @@ class TestPermissionGatesOnLifecycle:
         assert resp.status_code != 403, resp.json()
 
     def test_approve_with_admin_coordinator_passes_gate(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -651,7 +651,7 @@ class TestCrossTenantTitle:
         # can hit the endpoint.  A not-currently-active workstream
         # still 404s because the refresh needs the live session, not
         # because of tenant mismatch.
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -669,7 +669,7 @@ class TestCrossTenantTitle:
     def test_any_caller_can_set_title(self, app_client):
         # Trusted-team model: title is editable by any authenticated
         # caller; ``user_id`` remains metadata.
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -687,7 +687,7 @@ class TestCrossTenantOpen:
     def test_any_caller_can_open_persisted(self, app_client):
         # Trusted-team model: open is gated on scope auth, not on row
         # ownership.  The persisted ``user_id`` stays as metadata.
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -859,7 +859,7 @@ class TestSavedWorkstreamsTrustedTeamVisibility:
         """Create two workstreams per user, each with a message so they
         land in list_workstreams_with_history (the SQL gates on an
         EXISTS conversation)."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         storage = get_storage()
         assert storage is not None
@@ -893,7 +893,7 @@ class TestSavedWorkstreamsTrustedTeamVisibility:
         """Saved-list rows carry the enrichment fields, incl. the
         Python-computed context_ratio (latest usage prompt_tokens / model
         context window)."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -919,7 +919,7 @@ class TestSavedWorkstreamsTrustedTeamVisibility:
         """A model_alias absent from model_definitions (e.g. config.toml-only)
         leaves context_window NULL → context_ratio degrades to 0.0 instead of
         erroring on the division."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -958,8 +958,8 @@ class TestSavedWorkstreamsTrustedTeamVisibility:
         """kind filter is orthogonal to the user_id filter — even a
         service caller (cluster-wide) must not see coordinator rows on
         the interactive 'saved workstreams' endpoint."""
-        from turnstone.core.storage import get_storage
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.storage import get_storage
+        from pebble.core.workstream import WorkstreamKind
 
         client, _mgr = app_client
         storage = get_storage()
@@ -1029,7 +1029,7 @@ class TestGlobalEventsServiceGate:
 
 class TestPerWsSseGate:
     def test_non_owner_rejected(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -1049,7 +1049,7 @@ class TestPerWsSseGate:
 
 class TestAuditEventsOnMutations:
     def test_workstream_created_emits_audit(self, app_client):
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         client, _mgr = app_client
         storage = get_storage()
@@ -1176,7 +1176,7 @@ class TestInteractiveEventsLifted:
         first (model + skip_permissions). The lifted callback
         preserves the order so client SSE handlers that key on
         the connected event for state setup keep working."""
-        from turnstone.server import _interactive_events_replay
+        from pebble.server import _interactive_events_replay
 
         ws, ui, request = _make_interactive_replay_mocks()
         out = list(_interactive_events_replay(ws, ui, request))
@@ -1189,7 +1189,7 @@ class TestInteractiveEventsLifted:
         """The ``status`` event populates the per-tab token-usage
         bar on resume. Skipped when ``session._last_usage`` is None
         (a freshly-created workstream that hasn't completed a turn)."""
-        from turnstone.server import _interactive_events_replay
+        from pebble.server import _interactive_events_replay
 
         ws, ui, request = _make_interactive_replay_mocks()
         out = list(_interactive_events_replay(ws, ui, request))
@@ -1200,7 +1200,7 @@ class TestInteractiveEventsLifted:
         cached verdicts (so the client renders the prompt and then
         the LLM-judge intent verdicts that fired during it). Pre-lift
         ordering preserved."""
-        from turnstone.server import _interactive_events_replay
+        from pebble.server import _interactive_events_replay
 
         ws, ui, request = _make_interactive_replay_mocks(
             _pending_approval={"type": "approve_request", "items": []},
@@ -1220,7 +1220,7 @@ class TestInteractiveEventsLifted:
         rather than NPE'ing on ``session.model``. The lifted body
         already 409s for missing UI; this guards the rare case
         where UI exists but session was detached."""
-        from turnstone.server import _interactive_events_replay
+        from pebble.server import _interactive_events_replay
 
         ws = MagicMock()
         ws.session = None
@@ -1235,7 +1235,7 @@ class TestInteractiveEventsLifted:
         load and re-fetches on ``clear_ui``; the replay must not yield a
         ``history`` event (which previously shipped a multi-MB message
         list on every (re)connect)."""
-        from turnstone.server import _interactive_events_replay
+        from pebble.server import _interactive_events_replay
 
         ws, ui, request = _make_interactive_replay_mocks(
             _pending_approval={"type": "approve_request", "items": []},
@@ -1269,8 +1269,8 @@ def test_command_backstop_sits_under_console_proxy_timeout() -> None:
     inequality used to live in a comment.  This is the enforcement: edit
     either constant past the other and this fails before a proxied
     deployment silently loses the degraded answer again."""
-    from turnstone.console.server import _PROXY_CLIENT_TIMEOUT_S
-    from turnstone.server import _COMMAND_RESPONSE_BACKSTOP_S
+    from pebble.console.server import _PROXY_CLIENT_TIMEOUT_S
+    from pebble.server import _COMMAND_RESPONSE_BACKSTOP_S
 
     assert _COMMAND_RESPONSE_BACKSTOP_S < _PROXY_CLIENT_TIMEOUT_S
 
@@ -1392,7 +1392,7 @@ class TestCompactCommandDispatch:
         """A user-stopped compaction must not auto-run a turn they may no
         longer want — queued text lands in the transcript via the flush
         drain instead (the cancel-seam precedent)."""
-        from turnstone.core.session import GenerationCancelled
+        from pebble.core.session import GenerationCancelled
 
         client, mgr = app_client
         ws_id = self._create_ws(client)
@@ -1480,7 +1480,7 @@ class TestCompactCommandDispatch:
             assert list(requested_ids) == ["a1"]
             return (["fake-attachment-bytes"], ["a1"], [])
 
-        monkeypatch.setattr("turnstone.core.attachments.resolve_staged_attachments", fake_resolve)
+        monkeypatch.setattr("pebble.core.attachments.resolve_staged_attachments", fake_resolve)
         gate = threading.Event()
         ws.session.compact_gate = gate
         client.post(
@@ -1637,7 +1637,7 @@ class TestCompactCommandDispatch:
         client, mgr = app_client
         fired: list = []
         monkeypatch.setattr(
-            "turnstone.server._fire_notify_targets",
+            "pebble.server._fire_notify_targets",
             lambda ws, content: fired.append(ws.id),
         )
         gate = threading.Event()
@@ -1675,7 +1675,7 @@ class TestCompactCommandDispatch:
         compaction neither retried nor resolved the failed turn (mirrors
         the orphan reaper's ERROR carve-out).  The existing happy-path
         test pins ['thinking', 'idle'] for an IDLE workstream."""
-        from turnstone.core.workstream import WorkstreamState
+        from pebble.core.workstream import WorkstreamState
 
         client, mgr = app_client
         ws_id = self._create_ws(client)
@@ -1872,7 +1872,7 @@ class TestCompactCommandDispatch:
         path) is NOT dropped — it waits for the slot to free and then
         dispatches as its own fresh turn.  The queued ack must never
         become a silent drop while the workstream lives."""
-        from turnstone.core.session import CrossUserInterjectionError
+        from pebble.core.session import CrossUserInterjectionError
 
         client, mgr = app_client
         ws_id = self._create_ws(client)
@@ -2057,7 +2057,7 @@ class TestCompactCommandDispatch:
         yielded to the barrier — the drain's clean exit must re-arm it
         itself (trigger="drain-exit"), or a nudge parked during the window
         strands until some unrelated future dispatch."""
-        from turnstone.core import idle_nudge_watcher
+        from pebble.core import idle_nudge_watcher
 
         wake_calls: list[str] = []
         monkeypatch.setattr(
@@ -2213,7 +2213,7 @@ class TestCompactCommandDispatch:
         class): entry and slot roll back under the same lock, the client
         gets the retryable queue_full, and a retry once resources return
         dispatches exactly once — no duplicate turns."""
-        from turnstone.core import session_routes
+        from pebble.core import session_routes
 
         client, mgr = app_client
         ws_id = self._create_ws(client)
@@ -2265,7 +2265,7 @@ class TestCompactCommandDispatch:
         endpoint's generic catch-all used to swallow the dispatcher's
         Thread.start re-raise, telling SDK callers their /clear ran while
         the context stayed un-cleared."""
-        from turnstone.core import session_worker
+        from pebble.core import session_worker
 
         client, mgr = app_client
         ws_id = self._create_ws(client)
@@ -2293,7 +2293,7 @@ class TestCompactCommandDispatch:
         owns (a successor drain's live registration)."""
         import logging
 
-        from turnstone.core import idle_nudge_watcher
+        from pebble.core import idle_nudge_watcher
 
         def _raising_gate(ws, *, trigger="unspecified"):
             if trigger == "drain-exit":
@@ -2317,7 +2317,7 @@ class TestCompactCommandDispatch:
             json={"message": "dispatch me"},
             headers=_auth("user-1"),
         )
-        with caplog.at_level(logging.WARNING, logger="turnstone.core.session_routes"):
+        with caplog.at_level(logging.WARNING, logger="pebble.core.session_routes"):
             gate.set()
             wait_until(lambda: ws.session.sends, timeout=8.0)
             wait_until(lambda: self._drain_idle(ws), timeout=8.0)
@@ -2351,7 +2351,7 @@ class TestCompactCommandDispatch:
         closed workstream is torn down, and firing the gate there would
         be work on a corpse.  (The clean-exit case is pinned by
         test_drain_exit_re_arms_wake_gate_after_pure_retraction.)"""
-        from turnstone.core import idle_nudge_watcher
+        from pebble.core import idle_nudge_watcher
 
         triggers: list[str] = []
         monkeypatch.setattr(
@@ -2390,7 +2390,7 @@ class TestCompactCommandDispatch:
         guard compares thread identity, the sibling exit-seam pattern)."""
         import logging
 
-        from turnstone.core import session_routes
+        from pebble.core import session_routes
 
         client, mgr = app_client
         ws_id = self._create_ws(client)
@@ -2415,7 +2415,7 @@ class TestCompactCommandDispatch:
         monkeypatch.setattr(session_routes.log, "warning", _broken_warning)
         with ws._lock:
             ws._closed = True  # closed arm with a pending entry → log.warning
-        with caplog.at_level(logging.ERROR, logger="turnstone.core.session_routes"):
+        with caplog.at_level(logging.ERROR, logger="pebble.core.session_routes"):
             gate.set()
             wait_until(
                 lambda: any("pending_drain_failed" in r.message for r in caplog.records),

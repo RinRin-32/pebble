@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock
 import pytest
 from starlette.testclient import TestClient
 
-from turnstone.channels._http import create_channel_app
-from turnstone.core.auth import JWT_AUD_CHANNEL, create_jwt
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.channels._http import create_channel_app
+from pebble.core.auth import JWT_AUD_CHANNEL, create_jwt
+from pebble.core.storage._sqlite import SQLiteBackend
 
 _JWT_SECRET = "a" * 32
 
@@ -221,7 +221,7 @@ class TestNotifyEndpoint:
         mock_adapter.send = _hang
 
         # Use a very short timeout to keep the test fast
-        from turnstone.channels import _http as _http_mod
+        from pebble.channels import _http as _http_mod
 
         monkeypatch.setattr(_http_mod, "_NOTIFY_ADAPTER_TIMEOUT", 0.1)
         app = create_channel_app({"discord": mock_adapter}, storage, jwt_secret=_JWT_SECRET)

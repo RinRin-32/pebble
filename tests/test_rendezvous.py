@@ -1,10 +1,10 @@
-"""Tests for turnstone.core.rendezvous (HRW routing primitive)."""
+"""Tests for pebble.core.rendezvous (HRW routing primitive)."""
 
 from __future__ import annotations
 
 import pytest
 
-from turnstone.core.rendezvous import NoAvailableNodeError, NodeRef, fnv1a_32, select, select_all
+from pebble.core.rendezvous import NoAvailableNodeError, NodeRef, fnv1a_32, select, select_all
 
 
 class TestFnv1aVectors:

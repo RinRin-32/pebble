@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.log — structured logging configuration."""
+"""Tests for pebble.core.log — structured logging configuration."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 
 import structlog
 
-from turnstone.core.log import (
+from pebble.core.log import (
     configure_logging,
     ctx_node_id,
     ctx_request_id,
@@ -83,13 +83,13 @@ class TestConfigureLogging:
         assert len(root.handlers) == 1
 
     def test_env_var_level_override(self, monkeypatch):
-        monkeypatch.setenv("TURNSTONE_LOG_LEVEL", "ERROR")
+        monkeypatch.setenv("PEBBLE_LOG_LEVEL", "ERROR")
         configure_logging(level="DEBUG", json_output=False)
         root = logging.getLogger()
         assert root.level == logging.ERROR
 
     def test_env_var_format_json(self, monkeypatch, capsys):
-        monkeypatch.setenv("TURNSTONE_LOG_FORMAT", "json")
+        monkeypatch.setenv("PEBBLE_LOG_FORMAT", "json")
         configure_logging(level="INFO", service="test")
         log = logging.getLogger("test.env_json")
         log.info("env json test")
@@ -98,7 +98,7 @@ class TestConfigureLogging:
         assert data["event"] == "env json test"
 
     def test_env_var_format_text(self, monkeypatch, capsys):
-        monkeypatch.setenv("TURNSTONE_LOG_FORMAT", "text")
+        monkeypatch.setenv("PEBBLE_LOG_FORMAT", "text")
         configure_logging(level="INFO", json_output=True)  # json_output overridden by env
         log = logging.getLogger("test.env_text")
         log.info("env text test")

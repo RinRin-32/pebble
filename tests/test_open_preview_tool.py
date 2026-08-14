@@ -13,8 +13,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from turnstone.core.session import ChatSession
-from turnstone.core.trajectory import Role, turn_from_dict, turn_to_dict
+from pebble.core.session import ChatSession
+from pebble.core.trajectory import Role, turn_from_dict, turn_to_dict
 
 PNG_1x1 = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -124,7 +124,7 @@ class TestExecOpenPreview:
         s = _make_session()
         body = b"<html><head><title>Acme Pricing</title></head><body>x</body></html>"
         monkeypatch.setattr(
-            "turnstone.core.session.fetch_with_ssrf_guard",
+            "pebble.core.session.fetch_with_ssrf_guard",
             lambda url, **kw: _fake_response(url, body, "text/html; charset=utf-8"),
         )
         item = s._prepare_open_preview("c1", {"target": "https://acme.com/pricing"})
@@ -147,7 +147,7 @@ class TestExecOpenPreview:
         s = _make_session()
         body = b"<html><head></head><body>x</body></html>"
         monkeypatch.setattr(
-            "turnstone.core.session.fetch_with_ssrf_guard",
+            "pebble.core.session.fetch_with_ssrf_guard",
             lambda url, **kw: _fake_response(url, body, "text/html"),
         )
         item = s._prepare_open_preview("c1", {"target": "https://user:sekret@acme.com/page"})
@@ -165,7 +165,7 @@ class TestExecOpenPreview:
         def _blocked(url, **kw):
             raise ValueError("Blocked: URL resolves to private/internal address (169.254.169.254)")
 
-        monkeypatch.setattr("turnstone.core.session.fetch_with_ssrf_guard", _blocked)
+        monkeypatch.setattr("pebble.core.session.fetch_with_ssrf_guard", _blocked)
         item = s._prepare_open_preview("c1", {"target": "https://innocent.example/"})
         _, msg = s._exec_open_preview(item)
         assert msg.startswith("Error: fetch failed: Blocked")
@@ -175,7 +175,7 @@ class TestExecOpenPreview:
         s = _make_session()
         big = b"<html>" + b"x" * (4 * 1024 * 1024 + 16) + b"</html>"
         monkeypatch.setattr(
-            "turnstone.core.session.fetch_with_ssrf_guard",
+            "pebble.core.session.fetch_with_ssrf_guard",
             lambda url, **kw: _fake_response(url, big, "text/html"),
         )
         item = s._prepare_open_preview("c1", {"target": "https://example.com/big"})
@@ -187,7 +187,7 @@ class TestExecOpenPreview:
         # Review finding (PR #800): a flat 10 MB URL pre-check rejected PDFs
         # the 32 MiB pdf kind cap allows — the fetch ceiling must track the
         # widest kind cap and leave the per-kind caps as the authority.
-        from turnstone.core.preview import PREVIEW_SIZE_CAPS
+        from pebble.core.preview import PREVIEW_SIZE_CAPS
 
         s = _make_session()
         body = b"%PDF-1.7\n" + b"a" * (12 * 1024 * 1024)
@@ -197,7 +197,7 @@ class TestExecOpenPreview:
             seen.update(kw)
             return _fake_response(url, body, "application/pdf")
 
-        monkeypatch.setattr("turnstone.core.session.fetch_with_ssrf_guard", _capture)
+        monkeypatch.setattr("pebble.core.session.fetch_with_ssrf_guard", _capture)
         item = s._prepare_open_preview("c1", {"target": "https://acme.com/report.pdf"})
         _, msg = s._exec_open_preview(item)
         assert not msg.startswith("Error:")
@@ -261,11 +261,11 @@ class TestExecOpenPreview:
     def test_attachment_target_requires_ws_reference(self, monkeypatch):
         s = _make_session(ws_id="ws-1")
         monkeypatch.setattr(
-            "turnstone.core.memory.get_attachment",
+            "pebble.core.memory.get_attachment",
             lambda aid: {"content": b"# doc", "mime_type": "text/markdown", "filename": "d.md"},
         )
         monkeypatch.setattr(
-            "turnstone.core.memory.attachment_referenced_in_ws",
+            "pebble.core.memory.attachment_referenced_in_ws",
             lambda aid, ws: False,
         )
         item = s._prepare_open_preview("c1", {"target": "attachment:deadbeef"})
@@ -275,11 +275,11 @@ class TestExecOpenPreview:
     def test_attachment_target_happy_path(self, monkeypatch):
         s = _make_session(ws_id="ws-1")
         monkeypatch.setattr(
-            "turnstone.core.memory.get_attachment",
+            "pebble.core.memory.get_attachment",
             lambda aid: {"content": b"# doc", "mime_type": "text/markdown", "filename": "d.md"},
         )
         monkeypatch.setattr(
-            "turnstone.core.memory.attachment_referenced_in_ws",
+            "pebble.core.memory.attachment_referenced_in_ws",
             lambda aid, ws: True,
         )
         item = s._prepare_open_preview("c1", {"target": "attachment:deadbeef"})
@@ -296,7 +296,7 @@ class TestExecOpenPreview:
         s = _make_session(ws_id="ws-1")
         latin1_csv = "name,city\nRené,Montréal\n".encode("iso-8859-1")
         monkeypatch.setattr(
-            "turnstone.core.memory.get_attachment",
+            "pebble.core.memory.get_attachment",
             lambda aid: {
                 "content": latin1_csv,
                 "mime_type": "text/csv; charset=iso-8859-1",
@@ -304,7 +304,7 @@ class TestExecOpenPreview:
             },
         )
         monkeypatch.setattr(
-            "turnstone.core.memory.attachment_referenced_in_ws",
+            "pebble.core.memory.attachment_referenced_in_ws",
             lambda aid, ws: True,
         )
         item = s._prepare_open_preview("c1", {"target": "attachment:deadbeef"})
@@ -355,7 +355,7 @@ class TestDescriptorSeams:
         assert out["_preview"] == self.DESCRIPTOR
 
     def test_history_projection_carries_preview(self):
-        from turnstone.core.history_decoration import project_history_messages
+        from pebble.core.history_decoration import project_history_messages
 
         msgs = [
             {
@@ -379,7 +379,7 @@ class TestDescriptorSeams:
     def test_reconstruct_routes_tool_preview_meta(self):
         import json
 
-        from turnstone.core.storage._utils import reconstruct_turns
+        from pebble.core.storage._utils import reconstruct_turns
 
         # Row layout per reconstruct_turns' unpack: (row_id, role, content,
         # tool_name, tool_call_id, provider_data, tool_calls_json, source,
@@ -406,7 +406,7 @@ class TestDescriptorSeams:
         """A preview blob on a tool row's ref-list must NOT become a content
         block — it is meta-addressed frontend content, and a content block
         would be materialized onto the wire on reload."""
-        from turnstone.core.storage._utils import reconstruct_turns
+        from pebble.core.storage._utils import reconstruct_turns
 
         row = (
             1,
@@ -445,7 +445,7 @@ class TestDescriptorSeams:
         assert kinds == ["image"]
 
     def test_preview_route_scope_is_read(self):
-        from turnstone.core.auth import required_scope
+        from pebble.core.auth import required_scope
 
         assert required_scope("GET", "/v1/api/workstreams/ws1/attachments/abc/preview") == "read"
         assert (
@@ -501,10 +501,10 @@ class TestFetchWithSsrfGuard:
     def _wire(self, monkeypatch, table):
         _FakeClient.calls = []
         _FakeClient.table = table
-        monkeypatch.setattr("turnstone.core.web.httpx.Client", _FakeClient)
+        monkeypatch.setattr("pebble.core.web.httpx.Client", _FakeClient)
 
     def test_follows_public_redirect_chain(self, monkeypatch):
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         self._wire(
             monkeypatch,
@@ -513,7 +513,7 @@ class TestFetchWithSsrfGuard:
                 "https://b.example/x": _FakeHop(200, {}, body=b"landed"),
             },
         )
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", lambda url: None)
+        monkeypatch.setattr("pebble.core.web.check_ssrf", lambda url: None)
         resp = fetch_with_ssrf_guard("https://a.example/", timeout=5)
         assert resp.status_code == 200
         assert _FakeClient.calls == ["https://a.example/", "https://b.example/x"]
@@ -521,7 +521,7 @@ class TestFetchWithSsrfGuard:
     def test_private_hop_blocked_before_request(self, monkeypatch):
         import pytest
 
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         self._wire(
             monkeypatch,
@@ -530,14 +530,14 @@ class TestFetchWithSsrfGuard:
             },
         )
         blocked = {"http://169.254.169.254/latest": "Blocked: private"}
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", lambda url: blocked.get(url))
+        monkeypatch.setattr("pebble.core.web.check_ssrf", lambda url: blocked.get(url))
         with pytest.raises(ValueError, match="Blocked: private"):
             fetch_with_ssrf_guard("https://a.example/", timeout=5)
         # The load-bearing assertion: the private hop was NEVER requested.
         assert _FakeClient.calls == ["https://a.example/"]
 
     def test_relative_location_resolves_against_current(self, monkeypatch):
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         self._wire(
             monkeypatch,
@@ -546,7 +546,7 @@ class TestFetchWithSsrfGuard:
                 "https://a.example/moved": _FakeHop(200, {}),
             },
         )
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", lambda url: None)
+        monkeypatch.setattr("pebble.core.web.check_ssrf", lambda url: None)
         resp = fetch_with_ssrf_guard("https://a.example/start", timeout=5)
         assert resp.status_code == 200
         # The realized response carries the FINAL hop's URL — open_preview's
@@ -556,31 +556,31 @@ class TestFetchWithSsrfGuard:
     def test_redirect_loop_capped(self, monkeypatch):
         import pytest
 
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         self._wire(
             monkeypatch,
             {"https://a.example/": _FakeHop(302, {"location": "https://a.example/"})},
         )
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", lambda url: None)
+        monkeypatch.setattr("pebble.core.web.check_ssrf", lambda url: None)
         with pytest.raises(ValueError, match="redirects"):
             fetch_with_ssrf_guard("https://a.example/", timeout=5)
 
     def test_body_over_budget_aborts(self, monkeypatch):
         import pytest
 
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         self._wire(
             monkeypatch,
             {"https://a.example/": _FakeHop(200, {}, body=[b"aaaa", b"bbbb", b"cccc"])},
         )
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", lambda url: None)
+        monkeypatch.setattr("pebble.core.web.check_ssrf", lambda url: None)
         with pytest.raises(ValueError, match="fetch limit"):
             fetch_with_ssrf_guard("https://a.example/", timeout=5, max_bytes=10)
 
     def test_redirect_hop_body_never_read(self, monkeypatch):
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         class _BodyBomb(_FakeHop):
             def iter_bytes(self):
@@ -593,13 +593,13 @@ class TestFetchWithSsrfGuard:
                 "https://b.example/x": _FakeHop(200, {}, body=b"ok"),
             },
         )
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", lambda url: None)
+        monkeypatch.setattr("pebble.core.web.check_ssrf", lambda url: None)
         resp = fetch_with_ssrf_guard("https://a.example/", timeout=5)
         assert resp.status_code == 200
         assert resp.content == b"ok"
 
     def test_stale_framing_headers_dropped(self, monkeypatch):
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         self._wire(
             monkeypatch,
@@ -615,7 +615,7 @@ class TestFetchWithSsrfGuard:
                 )
             },
         )
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", lambda url: None)
+        monkeypatch.setattr("pebble.core.web.check_ssrf", lambda url: None)
         resp = fetch_with_ssrf_guard("https://a.example/", timeout=5)
         # iter_bytes() hands the guard content-DECODED bytes — a surviving
         # content-encoding would make .text try to gunzip plain text, and the
@@ -636,8 +636,8 @@ class TestCancelledBatchPreservesPreview:
     def test_synthesize_commits_staged_preview(self, monkeypatch):
         import json as _json
 
-        from turnstone.core.attachments import Attachment
-        from turnstone.core.trajectory import Turn
+        from pebble.core.attachments import Attachment
+        from pebble.core.trajectory import Turn
 
         s = _make_session(ws_id="ws-1")
         descriptor = {
@@ -676,7 +676,7 @@ class TestCancelledBatchPreservesPreview:
 
         saved = {}
         monkeypatch.setattr(
-            "turnstone.core.session.save_message",
+            "pebble.core.session.save_message",
             lambda ws, role, content, name, **kw: (
                 saved.update({"meta": kw.get("meta"), "row": 42}) or 42
             ),
@@ -710,13 +710,13 @@ class TestCancelledBatchPreservesPreview:
 
 class TestAllowPrivateNetwork:
     def test_screen_public_url_passes(self):
-        from turnstone.core.session import _screen_tool_url
+        from pebble.core.session import _screen_tool_url
 
         err, private = _screen_tool_url("https://example.com/x", False)
         assert err is None and private is False
 
     def test_screen_private_blocked_with_discoverable_hint(self):
-        from turnstone.core.session import _screen_tool_url
+        from pebble.core.session import _screen_tool_url
 
         err, private = _screen_tool_url("http://10.0.0.7/grafana", False)
         assert err is not None and private is False
@@ -725,13 +725,13 @@ class TestAllowPrivateNetwork:
         assert "Settings" in err
 
     def test_screen_private_allowed_when_opted_in(self):
-        from turnstone.core.session import _screen_tool_url
+        from pebble.core.session import _screen_tool_url
 
         err, private = _screen_tool_url("http://10.0.0.7/grafana", True)
         assert err is None and private is True
 
     def test_screen_invalid_url_never_hints(self):
-        from turnstone.core.session import _screen_tool_url
+        from pebble.core.session import _screen_tool_url
 
         err, private = _screen_tool_url("http://", True)
         assert err is not None and private is False
@@ -782,31 +782,31 @@ class TestAllowPrivateNetwork:
             seen.update(kw, url=url)
             return _fake_response(url, b"<html><head></head><body>x</body></html>", "text/html")
 
-        monkeypatch.setattr("turnstone.core.session.fetch_with_ssrf_guard", _capture)
+        monkeypatch.setattr("pebble.core.session.fetch_with_ssrf_guard", _capture)
         item = s._prepare_open_preview("c1", {"target": "http://10.0.0.7/status"})
         s._exec_open_preview(item)
         assert seen["allow_private_origin"] is True
 
     def test_guard_skips_hop_screen_for_private_origin(self, monkeypatch):
-        from turnstone.core.web import fetch_with_ssrf_guard
+        from pebble.core.web import fetch_with_ssrf_guard
 
         _FakeClient.calls = []
         _FakeClient.table = {
             "http://10.0.0.7/a": _FakeHop(302, {"location": "http://10.0.0.8/b"}),
             "http://10.0.0.8/b": _FakeHop(200, {}),
         }
-        monkeypatch.setattr("turnstone.core.web.httpx.Client", _FakeClient)
+        monkeypatch.setattr("pebble.core.web.httpx.Client", _FakeClient)
 
         def _explode(url):
             raise AssertionError("hop screening must be skipped for a private origin")
 
-        monkeypatch.setattr("turnstone.core.web.check_ssrf", _explode)
+        monkeypatch.setattr("pebble.core.web.check_ssrf", _explode)
         resp = fetch_with_ssrf_guard("http://10.0.0.7/a", timeout=5, allow_private_origin=True)
         assert resp.status_code == 200
         assert _FakeClient.calls == ["http://10.0.0.7/a", "http://10.0.0.8/b"]
 
     def test_registry_entry_shape(self):
-        from turnstone.core.settings_registry import SETTINGS
+        from pebble.core.settings_registry import SETTINGS
 
         d = SETTINGS["tools.allow_private_network"]
         assert d.type == "bool"

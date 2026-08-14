@@ -27,12 +27,12 @@ from tests._coord_test_helpers import (
     _FakeConfigStore,
     _seed_children,
 )
-from turnstone.console.server import (
+from pebble.console.server import (
     coordinator_restrict,
     coordinator_trust,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.storage._sqlite import SQLiteBackend
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture
@@ -352,7 +352,7 @@ def test_trust_toggle_404_when_session_not_loaded(storage):
 
 
 def test_prepare_send_to_workstream_trust_skips_approval_for_own_child():
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     session = ChatSession.__new__(ChatSession)
     session._coord_client = MagicMock()
@@ -365,7 +365,7 @@ def test_prepare_send_to_workstream_trust_skips_approval_for_own_child():
 
 
 def test_prepare_send_to_workstream_trust_holds_for_foreign_ws():
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     session = ChatSession.__new__(ChatSession)
     session._coord_client = MagicMock()
@@ -380,7 +380,7 @@ def test_prepare_send_to_workstream_trust_holds_for_foreign_ws():
 
 
 def test_prepare_send_to_workstream_without_trust_always_requires_approval():
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     session = ChatSession.__new__(ChatSession)
     session._coord_client = MagicMock()
@@ -395,8 +395,8 @@ def test_prepare_send_to_workstream_without_trust_always_requires_approval():
 def test_exec_send_to_workstream_records_trust_audit(storage):
     """The audit row fires before the HTTP send so a downstream failure
     can't suppress the trail."""
-    from turnstone.console.coordinator_client import CoordinatorClient
-    from turnstone.core.session import ChatSession
+    from pebble.console.coordinator_client import CoordinatorClient
+    from pebble.core.session import ChatSession
 
     client = CoordinatorClient.__new__(CoordinatorClient)
     client._storage = storage
@@ -560,7 +560,7 @@ def test_prepare_tool_blocks_revoked_tool():
     """Revocation short-circuits BEFORE the preparer dispatch so the
     model sees a clear 'revoked' error rather than a preparer-level
     validation message."""
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     session = ChatSession.__new__(ChatSession)
     session._revoked_tools = frozenset({"spawn_workstream"})
@@ -585,7 +585,7 @@ def test_prepare_tool_allows_non_revoked_tool():
     the revoked set.  We pick a name that's also not in the preparers
     dict so we can assert the 'unknown tool' result shape without
     exercising a real preparer."""
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     session = ChatSession.__new__(ChatSession)
     session._revoked_tools = frozenset({"spawn_workstream"})
@@ -623,7 +623,7 @@ def test_children_snapshot_returns_copy_not_live_set(storage):
 
 
 def test_set_and_get_trust_send_round_trip():
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     session = ChatSession.__new__(ChatSession)
     import threading as _t
@@ -639,7 +639,7 @@ def test_set_and_get_trust_send_round_trip():
 
 
 def test_revoke_tools_is_additive_and_returns_post_state():
-    from turnstone.core.session import ChatSession
+    from pebble.core.session import ChatSession
 
     session = ChatSession.__new__(ChatSession)
     import threading as _t

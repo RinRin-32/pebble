@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from turnstone.core import codegraph as cg
+from pebble.core import codegraph as cg
 
 
 def _mk_index(root: Path, nodes: list[dict], edges: list[dict]) -> Path:

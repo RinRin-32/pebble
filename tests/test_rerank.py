@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.rerank — endpoint-backed reranking client."""
+"""Tests for pebble.core.rerank — endpoint-backed reranking client."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from turnstone.core.rerank import (
+from pebble.core.rerank import (
     CohereJinaRerankClient,
     RerankHit,
     _parse_hits,
     normalize_scores,
     resolve_rerank_client,
 )
-from turnstone.core.session import ChatSession
+from pebble.core.session import ChatSession
 
 
 def _mock_httpx_post(handler):
@@ -111,7 +111,7 @@ class TestCohereJinaRerankClient:
             captured["auth"] = request.headers.get("authorization")
             return httpx.Response(200, json=RESULTS_WRAPPED)
 
-        monkeypatch.setattr("turnstone.core.rerank.httpx.post", _mock_httpx_post(handler))
+        monkeypatch.setattr("pebble.core.rerank.httpx.post", _mock_httpx_post(handler))
         client = CohereJinaRerankClient(
             "http://vllm:8000/rerank", model="bge", api_key="secret", timeout=10
         )
@@ -136,7 +136,7 @@ class TestCohereJinaRerankClient:
             captured["auth"] = request.headers.get("authorization")
             return httpx.Response(200, json={"results": []})
 
-        monkeypatch.setattr("turnstone.core.rerank.httpx.post", _mock_httpx_post(handler))
+        monkeypatch.setattr("pebble.core.rerank.httpx.post", _mock_httpx_post(handler))
         CohereJinaRerankClient("http://h/rerank").rerank("q", ["a"])
 
         assert captured["body"] == {"query": "q", "documents": ["a"]}
@@ -149,7 +149,7 @@ class TestCohereJinaRerankClient:
             called["n"] += 1
             return httpx.Response(200, json={"results": []})
 
-        monkeypatch.setattr("turnstone.core.rerank.httpx.post", _mock_httpx_post(handler))
+        monkeypatch.setattr("pebble.core.rerank.httpx.post", _mock_httpx_post(handler))
         assert CohereJinaRerankClient("http://h/rerank").rerank("q", []) == []
         assert called["n"] == 0  # short-circuits before any HTTP call
 
@@ -157,7 +157,7 @@ class TestCohereJinaRerankClient:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json=BARE_LIST)
 
-        monkeypatch.setattr("turnstone.core.rerank.httpx.post", _mock_httpx_post(handler))
+        monkeypatch.setattr("pebble.core.rerank.httpx.post", _mock_httpx_post(handler))
         hits = CohereJinaRerankClient("http://tei/rerank").rerank("q", ["a", "b"])
         assert [h.index for h in hits] == [1, 0]
 
@@ -165,7 +165,7 @@ class TestCohereJinaRerankClient:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(401, text="unauthorized")
 
-        monkeypatch.setattr("turnstone.core.rerank.httpx.post", _mock_httpx_post(handler))
+        monkeypatch.setattr("pebble.core.rerank.httpx.post", _mock_httpx_post(handler))
         with pytest.raises(httpx.HTTPStatusError):
             CohereJinaRerankClient("http://h/rerank").rerank("q", ["a"])
 
@@ -243,7 +243,7 @@ class TestSessionRerankWiring:
     def test_resolves_reranker_model_definition(self):
         # The reranker is a model definition (supports_rerank) selected via the
         # Reranker role; its base_url is the full /rerank endpoint.
-        from turnstone.core.model_registry import ModelConfig
+        from pebble.core.model_registry import ModelConfig
 
         cfg = ModelConfig(
             alias="rr",
@@ -267,7 +267,7 @@ class TestSessionRerankWiring:
     def test_ignores_alias_without_rerank_capability(self):
         # A non-reranker model (no supports_rerank) must NOT be used as a reranker,
         # even if the alias is set -> reranking off (no fallback).
-        from turnstone.core.model_registry import ModelConfig
+        from pebble.core.model_registry import ModelConfig
 
         cfg = ModelConfig(
             alias="chat", base_url="http://chat/v1", api_key="k", model="gpt", capabilities={}
@@ -317,13 +317,13 @@ class TestRerankInstruction:
 
     def test_no_instruction_sends_bare_query(self, monkeypatch):
         sent, handler = self._capture()
-        monkeypatch.setattr("turnstone.core.rerank.httpx.post", _mock_httpx_post(handler))
+        monkeypatch.setattr("pebble.core.rerank.httpx.post", _mock_httpx_post(handler))
         CohereJinaRerankClient("http://x/rerank").rerank("capital of France", ["d0"])
         assert sent["body"]["query"] == "capital of France"
 
     def test_instruction_wraps_query(self, monkeypatch):
         sent, handler = self._capture()
-        monkeypatch.setattr("turnstone.core.rerank.httpx.post", _mock_httpx_post(handler))
+        monkeypatch.setattr("pebble.core.rerank.httpx.post", _mock_httpx_post(handler))
         CohereJinaRerankClient("http://x/rerank", instruction="Find relevant passages").rerank(
             "capital of France", ["d0"]
         )
@@ -428,7 +428,7 @@ class TestSessionBM25Reranker:
         # endpoint/parse failure, NOT a floor result -> raise (a discrete branch
         # from the threshold) so BM25Index falls back to BM25 order in BOTH
         # modes. Holds regardless of threshold.
-        from turnstone.core.rerank import RerankError
+        from pebble.core.rerank import RerankError
 
         for thr in (0.0, 0.5):
             rank = ChatSession._bm25_reranker(self._enabled_stub([]), thr)
@@ -563,7 +563,7 @@ class TestModelCapabilitiesRerankFields:
     def test_replace_accepts_calibration_fields(self):
         import dataclasses
 
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         caps = dataclasses.replace(
             ModelCapabilities(),
@@ -576,7 +576,7 @@ class TestModelCapabilitiesRerankFields:
         assert caps.rerank_separated is True
 
     def test_defaults_mark_uncalibrated(self):
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         caps = ModelCapabilities()
         # Empty rerank_scale is the "not calibrated" marker the floor logic keys
@@ -591,8 +591,8 @@ class TestModelCapabilitiesRerankFields:
         per-model caps dict carrying them survives onto the runtime caps."""
         import dataclasses
 
-        from turnstone.core.providers._protocol import ModelCapabilities
-        from turnstone.core.session import ChatSession
+        from pebble.core.providers._protocol import ModelCapabilities
+        from pebble.core.session import ChatSession
 
         base = ModelCapabilities()
         provider = SimpleNamespace(get_capabilities=lambda model: base)

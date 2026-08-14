@@ -1,6 +1,6 @@
-# Cluster Dashboard (turnstone-console)
+# Cluster Dashboard (pebble-console)
 
-`turnstone-console` is a cluster management service that provides cluster-wide visibility and control across all turnstone nodes. It discovers nodes via the `services` database table and subscribes to each node's SSE event stream for real-time workstream, health, and metric updates.
+`pebble-console` is a cluster management service that provides cluster-wide visibility and control across all turnstone nodes. It discovers nodes via the `services` database table and subscribes to each node's SSE event stream for real-time workstream, health, and metric updates.
 
 The console also supports **workstream creation** (dispatched via HTTP proxy to target nodes) and a **reverse proxy** that serves each node's server UI through the console port — so users only need network access to the console, not to individual server nodes.
 
@@ -9,11 +9,11 @@ The console also supports **workstream creation** (dispatched via HTTP proxy to 
 > See also: [Console Data Flow diagram](diagrams/png/11-console-data-flow.png)
 
 ```
-                        ┌── services table ──  turnstone-server
+                        ┌── services table ──  pebble-server
                         │   (node registry)      (per node)
-turnstone-console ──────┤
+pebble-console ──────┤
    (one instance)       │
-                        └── turnstone-server (direct HTTP proxy)
+                        └── pebble-server (direct HTTP proxy)
         │
         ▼
      Browser
@@ -38,7 +38,7 @@ Data flows in two directions:
 
 ## ClusterCollector
 
-The collector (`turnstone/console/collector.py`) maintains an in-memory snapshot of all nodes and workstreams. Two daemon threads handle data acquisition:
+The collector (`pebble/console/collector.py`) maintains an in-memory snapshot of all nodes and workstreams. Two daemon threads handle data acquisition:
 
 1. **Node discovery** — queries the `services` database table every 60 seconds. Adds newly discovered nodes, removes expired ones (stale heartbeats), emits `node_joined` / `node_lost` events to SSE listeners, and spawns/cancels SSE tasks for new/lost nodes.
 
@@ -217,7 +217,7 @@ Keepalive comments (`: keepalive\n\n`) are sent every 5 seconds. Clients should 
 ```json
 {
   "status": "ok",
-  "service": "turnstone-console",
+  "service": "pebble-console",
   "nodes": 847,
   "workstreams": 4219,
   "version_drift": false,
@@ -348,7 +348,7 @@ SSE streams (`/v1/api/workstreams/{ws_id}/events`, `/v1/api/events/global`) are 
 
 ### Authentication
 
-The proxy mints a short-lived (5-minute) JWT per request carrying the real user's `user_id`, `scopes`, and `permissions` with `aud: turnstone-server`.  The user's console JWT (`aud: turnstone-console`) cannot be forwarded directly — it would be rejected by the server's audience validation — so the console re-signs a new server-audience JWT from the validated `AuthResult`.  This preserves audit attribution (the upstream server sees the real user, not a service identity) and enforces scope narrowing as defense in depth (a read-only console user's proxied request carries only `read` scope).  The JWT `src` claim is set to `"console-proxy"` for audit traceability.  When no user context is available (auth disabled), the proxy falls back to a `ServiceTokenManager` with service identity `console-proxy`.  The static `--auth-token` / `proxy_auth_token` is used as a final fallback.
+The proxy mints a short-lived (5-minute) JWT per request carrying the real user's `user_id`, `scopes`, and `permissions` with `aud: pebble-server`.  The user's console JWT (`aud: pebble-console`) cannot be forwarded directly — it would be rejected by the server's audience validation — so the console re-signs a new server-audience JWT from the validated `AuthResult`.  This preserves audit attribution (the upstream server sees the real user, not a service identity) and enforces scope narrowing as defense in depth (a read-only console user's proxied request carries only `read` scope).  The JWT `src` claim is set to `"console-proxy"` for audit traceability.  When no user context is available (auth disabled), the proxy falls back to a `ServiceTokenManager` with service identity `console-proxy`.  The static `--auth-token` / `proxy_auth_token` is used as a final fallback.
 
 ---
 
@@ -635,7 +635,7 @@ The `/cluster` command in the turnstone CLI queries the console's HTTP API. Requ
 
 ## Configuration
 
-CLI flags for `turnstone-console`:
+CLI flags for `pebble-console`:
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -643,7 +643,7 @@ CLI flags for `turnstone-console`:
 | `--port` | `8090` | HTTP port |
 | `--log-level` | `INFO` | Log level |
 
-Config file (`~/.config/turnstone/config.toml`):
+Config file (`~/.config/pebble/config.toml`):
 
 ```toml
 [console]
@@ -658,10 +658,10 @@ url = "http://localhost:8090"   # used by CLI /cluster commands
 
 ```bash
 # Start turnstone servers (one per node)
-turnstone-server --port 8080
+pebble-server --port 8080
 
 # Start cluster console (one instance)
-turnstone-console --port 8090
+pebble-console --port 8090
 ```
 
 Open `http://localhost:8090` for the cluster dashboard. Create workstreams via the "+ new" button. Click any workstream to open the proxied server UI — no direct access to server ports required.

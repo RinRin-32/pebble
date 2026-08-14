@@ -13,10 +13,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from tests._session_helpers import make_session
-from turnstone.core import fence
-from turnstone.core.lowering import drop_empty_user_turns, fold_system_turns
-from turnstone.core.providers._protocol import ModelCapabilities
-from turnstone.prompts import build_operator_instruction_declaration
+from pebble.core import fence
+from pebble.core.lowering import drop_empty_user_turns, fold_system_turns
+from pebble.core.providers._protocol import ModelCapabilities
+from pebble.prompts import build_operator_instruction_declaration
 
 if TYPE_CHECKING:
     import pytest

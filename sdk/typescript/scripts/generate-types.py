@@ -16,8 +16,8 @@ from pathlib import Path
 # Ensure the turnstone package is importable (repo root is 3 levels up)
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from turnstone.api.console_spec import build_console_spec
-from turnstone.api.server_spec import build_server_spec
+from pebble.api.console_spec import build_console_spec
+from pebble.api.server_spec import build_server_spec
 
 output_dir = Path(__file__).resolve().parent.parent
 

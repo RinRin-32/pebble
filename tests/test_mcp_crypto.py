@@ -1,4 +1,4 @@
-"""Tests for ``turnstone.core.mcp_crypto`` cipher + config loading.
+"""Tests for ``pebble.core.mcp_crypto`` cipher + config loading.
 
 Covers token-at-rest encryption for OAuth-MCP.
 """
@@ -10,7 +10,7 @@ import base64
 import pytest
 from cryptography.fernet import Fernet
 
-from turnstone.core.mcp_crypto import (
+from pebble.core.mcp_crypto import (
     MCPTokenCipher,
     MCPTokenCipherConfig,
     MCPTokenDecryptError,
@@ -95,7 +95,7 @@ class TestRotation:
 
 
 def _patch_load_config(monkeypatch: pytest.MonkeyPatch, payload: dict) -> None:
-    """Override ``turnstone.core.config.load_config`` to return ``payload``
+    """Override ``pebble.core.config.load_config`` to return ``payload``
     when the ``"security"`` section is requested."""
 
     def fake(section: str | None = None) -> dict:
@@ -103,7 +103,7 @@ def _patch_load_config(monkeypatch: pytest.MonkeyPatch, payload: dict) -> None:
             return payload
         return {}
 
-    import turnstone.core.config as cfg_mod
+    import pebble.core.config as cfg_mod
 
     monkeypatch.setattr(cfg_mod, "load_config", fake)
 

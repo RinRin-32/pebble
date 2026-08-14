@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 
-from turnstone.core.storage._schema import mcp_oauth_pending, mcp_user_tokens
+from pebble.core.storage._schema import mcp_oauth_pending, mcp_user_tokens
 
 
 class TestMcpUserTokensTable:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from turnstone.prompts import (
+from pebble.prompts import (
     ClientType,
     SessionContext,
     compose_system_message,
@@ -135,7 +135,7 @@ def test_missing_policy_file() -> None:
 def test_base_module_isolation() -> None:
     # EVERY built-in persona file is a BASE module (compose_system_message loads
     # it as the base), so all must be environment-agnostic — not just engineer.
-    from turnstone.prompts import _PROMPTS_DIR, _load
+    from pebble.prompts import _PROMPTS_DIR, _load
 
     persona_files = sorted(p.name for p in (_PROMPTS_DIR / "personas").glob("*.md"))
     assert persona_files, "expected built-in persona base files under prompts/personas/"

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from turnstone.core.mcp_client import MCPClientManager
+from pebble.core.mcp_client import MCPClientManager
 
 
 @pytest.fixture()
@@ -227,7 +227,7 @@ class TestReadonlyAPIGuards:
     @pytest.fixture()
     def db(self, tmp_path):
         """Create a fresh SQLite backend for each test."""
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         return SQLiteBackend(str(tmp_path / "test.db"))
 

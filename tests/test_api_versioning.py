@@ -11,7 +11,7 @@ _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 
 
 def _server_jwt() -> str:
-    from turnstone.core.auth import JWT_AUD_SERVER, create_jwt
+    from pebble.core.auth import JWT_AUD_SERVER, create_jwt
 
     return create_jwt(
         user_id="test-versioning",
@@ -23,7 +23,7 @@ def _server_jwt() -> str:
 
 
 def _console_jwt() -> str:
-    from turnstone.core.auth import JWT_AUD_CONSOLE, create_jwt
+    from pebble.core.auth import JWT_AUD_CONSOLE, create_jwt
 
     return create_jwt(
         user_id="test-versioning",
@@ -45,7 +45,7 @@ class TestServerVersioning:
     def client(self):
         from starlette.testclient import TestClient
 
-        from turnstone.server import create_app
+        from pebble.server import create_app
 
         mock_mgr = MagicMock()
         mock_mgr.list_all.return_value = []
@@ -100,8 +100,8 @@ class TestConsoleVersioning:
     def client(self):
         from starlette.testclient import TestClient
 
-        from turnstone.console.collector import ClusterCollector
-        from turnstone.console.server import _load_static, create_app
+        from pebble.console.collector import ClusterCollector
+        from pebble.console.server import _load_static, create_app
 
         _load_static()
         collector = MagicMock(spec=ClusterCollector)

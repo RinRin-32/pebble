@@ -1,11 +1,11 @@
-"""Tests for turnstone.core.web_helpers — version_html() cache-busting."""
+"""Tests for pebble.core.web_helpers — version_html() cache-busting."""
 
 from __future__ import annotations
 
 
 class TestVersionHtml:
     def test_app_css_gets_version(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<link rel="stylesheet" href="/shared/base.css">'
         result = version_html(html)
@@ -13,49 +13,49 @@ class TestVersionHtml:
         assert "/shared/base.css?v=" in result
 
     def test_app_js_gets_version(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/static/app.js"></script>'
         result = version_html(html)
         assert "/static/app.js?v=" in result
 
     def test_shared_js_gets_version(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/shared/utils.js"></script>'
         result = version_html(html)
         assert "/shared/utils.js?v=" in result
 
     def test_vendored_katex_skipped(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<link rel="stylesheet" href="/shared/katex-0.17.0/katex.min.css">'
         result = version_html(html)
         assert result == html  # unchanged
 
     def test_vendored_hljs_skipped(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/shared/hljs-11.11.1/highlight.min.js"></script>'
         result = version_html(html)
         assert result == html  # unchanged
 
     def test_vendored_mermaid_skipped(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/shared/mermaid-11.16.0/mermaid.min.js"></script>'
         result = version_html(html)
         assert result == html  # unchanged
 
     def test_vendored_hls_skipped(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/shared/hls-1.6.16/hls.min.js"></script>'
         result = version_html(html)
         assert result == html  # unchanged
 
     def test_external_urls_not_modified(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = (
             '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono" rel="stylesheet">'
@@ -64,15 +64,15 @@ class TestVersionHtml:
         assert result == html  # unchanged
 
     def test_docs_link_not_modified(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<a href="/docs#/System:%20Settings" target="_blank">docs</a>'
         result = version_html(html)
         assert result == html  # unchanged
 
     def test_multiple_tags(self):
-        from turnstone import __version__
-        from turnstone.core.web_helpers import version_html
+        from pebble import __version__
+        from pebble.core.web_helpers import version_html
 
         html = (
             '<link rel="stylesheet" href="/shared/base.css">\n'
@@ -92,15 +92,15 @@ class TestVersionHtml:
         assert '/shared/hljs-11.11.1/highlight.min.js"' in result
 
     def test_version_matches_package(self):
-        from turnstone import __version__
-        from turnstone.core.web_helpers import version_html
+        from pebble import __version__
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/static/app.js"></script>'
         result = version_html(html)
         assert f"?v={__version__}" in result
 
     def test_double_apply_is_idempotent(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/static/app.js"></script>'
         once = version_html(html)
@@ -109,7 +109,7 @@ class TestVersionHtml:
         assert twice.count("?v=") == 1
 
     def test_existing_query_string_preserved(self):
-        from turnstone.core.web_helpers import version_html
+        from pebble.core.web_helpers import version_html
 
         html = '<script src="/static/app.js?foo=bar"></script>'
         result = version_html(html)
@@ -129,12 +129,12 @@ class TestLatin1SafeFilename:
         assert all(0x20 <= ord(c) <= 0x7E and c not in '"\\' for c in out)
 
     def test_plain_ascii_unchanged(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         assert latin1_safe_filename("report_2026.md") == "report_2026.md"
 
     def test_non_latin1_folds_to_question_marks(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         # CJK + em dash (U+2014) are printable but non-latin-1 → fold to '?'.
         out = latin1_safe_filename("文書 — v1.md")
@@ -142,7 +142,7 @@ class TestLatin1SafeFilename:
         self._assert_wire_safe(out)
 
     def test_latin1_but_control_chars_are_stripped(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         # All latin-1 encodable, so the old strip/fold left them in the header
         # and the HTTP server layer then 500'd (h11 rejects NUL/CR/LF/FF/VT;
@@ -153,14 +153,14 @@ class TestLatin1SafeFilename:
         self._assert_wire_safe(out)
 
     def test_crlf_and_quote_stripped(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         out = latin1_safe_filename('a"\r\nX-Evil: 1.md')
         assert "\r" not in out and "\n" not in out and '"' not in out
         self._assert_wire_safe(out)
 
     def test_backslash_stripped(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         # Backslash is the RFC 6266 quoted-pair escape inside filename="..." —
         # a trailing '\' would escape the closing quote, and '\x' mid-name
@@ -171,7 +171,7 @@ class TestLatin1SafeFilename:
         self._assert_wire_safe(latin1_safe_filename("a\\b\\c"))
 
     def test_empty_after_sanitizing_uses_fallback(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         # A name of only quotes / controls sanitizes to empty → fallback,
         # never ``filename=""``.
@@ -180,13 +180,13 @@ class TestLatin1SafeFilename:
         assert latin1_safe_filename("", fallback="preview") == "preview"
 
     def test_all_non_latin1_stays_non_empty_no_fallback(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         # An all-CJK name folds to '???' (truthy) — must NOT hit the fallback.
         assert latin1_safe_filename("日本語", fallback="preview") == "???"
 
     def test_fallback_is_also_sanitized(self):
-        from turnstone.core.web_helpers import latin1_safe_filename
+        from pebble.core.web_helpers import latin1_safe_filename
 
         # The fallback fires only when the name sanitizes to empty, and it is
         # cleaned by the SAME rules — a caller can't reintroduce the crash /

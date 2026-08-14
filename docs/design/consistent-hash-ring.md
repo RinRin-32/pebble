@@ -3,7 +3,7 @@
 **Status**: Reference — alternative routing strategy
 
 Live routing uses **rendezvous (HRW) hashing** in
-`turnstone/core/rendezvous.py` and `turnstone/console/router.py`.  This
+`pebble/core/rendezvous.py` and `pebble/console/router.py`.  This
 document captures a vnode-ring approach as a reference for future
 evaluation if the cluster outgrows rendezvous's O(N)-per-route
 characteristic.

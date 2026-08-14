@@ -1,4 +1,4 @@
-"""Tests for turnstone.core.session — ChatSession construction."""
+"""Tests for pebble.core.session — ChatSession construction."""
 
 import base64
 import contextlib
@@ -18,8 +18,8 @@ from tests._session_helpers import (
     scripted_anthropic_client,
     scripted_chat_client,
 )
-from turnstone.core.session import _IMAGE_EXTENSIONS, _IMAGE_SIZE_CAP, ChatSession
-from turnstone.core.trajectory import (
+from pebble.core.session import _IMAGE_EXTENSIONS, _IMAGE_SIZE_CAP, ChatSession
+from pebble.core.trajectory import (
     Turn,
     dicts_from_turns,
     turn_from_dict,
@@ -154,7 +154,7 @@ def _send_with_mocks(session, responses, mock_execute, **extra_patches):
         stack.enter_context(_patch.object(session, "_emit_state"))
         stack.enter_context(_patch.object(session, "_visible_memory_count", return_value=0))
         stack.enter_context(_patch.object(session, "_apply_post_execute_advisories"))
-        save_msg = stack.enter_context(_patch("turnstone.core.session.save_message"))
+        save_msg = stack.enter_context(_patch("pebble.core.session.save_message"))
         yield save_msg
 
 
@@ -238,8 +238,8 @@ class TestSkillCommand:
         )
 
         with (
-            patch("turnstone.core.session.get_skill_by_name", return_value=skill),
-            patch("turnstone.core.session.save_message") as save_message,
+            patch("pebble.core.session.get_skill_by_name", return_value=skill),
+            patch("pebble.core.session.save_message") as save_message,
         ):
             session.handle_command(command)
 
@@ -354,7 +354,7 @@ class TestTaskExec:
             "name": "research",
             "content": "# Research Skill\nws={{ws_id}} model={{model}} node={{node_id}}",
         }
-        with patch("turnstone.core.session.get_skill_by_name", return_value=skill):
+        with patch("pebble.core.session.get_skill_by_name", return_value=skill):
             item = session._prepare_task("c1", {"prompt": "investigate X", "skill": "research"})
 
         # Item carries the minimized projection — name/content/risk_level only.
@@ -421,8 +421,8 @@ class TestTaskExec:
         }
         skill = {"name": "research", "content": "# Research Skill"}
         with (
-            patch("turnstone.core.session.get_skill_by_name", return_value=skill),
-            patch("turnstone.core.session.get_storage") as gs,
+            patch("pebble.core.session.get_skill_by_name", return_value=skill),
+            patch("pebble.core.session.get_storage") as gs,
         ):
             gs.return_value.get_persona_by_name.return_value = persona_row
             item = session._prepare_task(
@@ -448,7 +448,7 @@ class TestTaskExec:
     def test_unknown_persona_returns_error(self, tmp_db) -> None:
         """Unknown persona name → clean error item, no approval."""
         session = _make_session()
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_persona_by_name.return_value = None
             item = session._prepare_task("c1", {"prompt": "do x", "persona": "ghost"})
         assert item.get("needs_approval") is False
@@ -468,7 +468,7 @@ class TestTaskExec:
             "enabled": True,
             "applies_to_kinds": ["coordinator"],
         }
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_persona_by_name.return_value = coord_row
             item = session._prepare_task("c1", {"prompt": "do x", "persona": "orchestrator"})
         assert item.get("needs_approval") is False
@@ -494,7 +494,7 @@ class TestTaskExec:
             "enabled": True,
             "applies_to_kinds": ["interactive"],
         }
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_persona_by_name.return_value = persona_row
             item = session._prepare_task("c1", {"prompt": "edit auth", "persona": "readonly"})
         assert item["persona_tools"] == frozenset({"read_file", "search"})
@@ -583,7 +583,7 @@ class TestTaskExec:
             "enabled": True,
             "applies_to_kinds": ["interactive"],
         }
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_persona_by_name.return_value = persona_row
             item = session._prepare_task("c1", {"prompt": "do x", "persona": "sandboxed"})
         assert item["persona_mcp"] is False
@@ -620,7 +620,7 @@ class TestTaskExec:
             "enabled": True,
             "applies_to_kinds": ["interactive"],
         }
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_persona_by_name.return_value = persona_row
             item = session._prepare_task("c1", {"prompt": "do x", "persona": "nomem"})
         assert item["persona_memory"] is False
@@ -657,7 +657,7 @@ class TestTaskExec:
             "enabled": True,
             "applies_to_kinds": ["interactive"],
         }
-        with patch("turnstone.core.session.get_storage") as gs:
+        with patch("pebble.core.session.get_storage") as gs:
             gs.return_value.get_persona_by_name.return_value = persona_row
             item = session._prepare_task("c1", {"prompt": "do x", "persona": "engineer"})
         session._evaluate_intent([item])
@@ -684,7 +684,7 @@ class TestTaskExec:
         Skill validation lives in _prepare_task so an LLM passing a
         bogus name fails fast at approval time rather than at exec."""
         session = _make_session()
-        with patch("turnstone.core.session.get_skill_by_name", return_value=None):
+        with patch("pebble.core.session.get_skill_by_name", return_value=None):
             item = session._prepare_task("c1", {"prompt": "do x", "skill": "ghost"})
         assert item.get("needs_approval") is False
         assert "unknown skill 'ghost'" in item["error"]
@@ -701,7 +701,7 @@ class TestTaskExec:
             "content": "# Retired",
             "enabled": False,
         }
-        with patch("turnstone.core.session.get_skill_by_name", return_value=disabled_skill):
+        with patch("pebble.core.session.get_skill_by_name", return_value=disabled_skill):
             item = session._prepare_task("c1", {"prompt": "do x", "skill": "retired"})
         assert item.get("needs_approval") is False
         assert "is disabled" in item["error"]
@@ -721,7 +721,7 @@ class TestTaskExec:
             "enabled": True,
             "risk_level": "critical",
         }
-        with patch("turnstone.core.session.get_skill_by_name", return_value=risky_skill):
+        with patch("pebble.core.session.get_skill_by_name", return_value=risky_skill):
             item = session._prepare_task("c1", {"prompt": "do x", "skill": "danger"})
         assert item.get("needs_approval") is False
         assert "principal-load-only" in item["header"]
@@ -741,7 +741,7 @@ class TestTaskExec:
             "enabled": True,
             "risk_level": "low",
         }
-        with patch("turnstone.core.session.get_skill_by_name", return_value=ok_skill):
+        with patch("pebble.core.session.get_skill_by_name", return_value=ok_skill):
             item = session._prepare_task("c1", {"prompt": "do x", "skill": "research"})
         assert "skill: research" in item["header"]
         assert "risk:" not in item["header"]
@@ -762,7 +762,7 @@ class TestTaskExec:
         monkeypatch.setattr(session, "_ensure_judge", lambda: fake_judge)
 
         skill = {"name": "research", "content": "# Research", "enabled": True}
-        with patch("turnstone.core.session.get_skill_by_name", return_value=skill):
+        with patch("pebble.core.session.get_skill_by_name", return_value=skill):
             item = session._prepare_task("c1", {"prompt": "investigate X", "skill": "research"})
         session._evaluate_intent([item])
 
@@ -862,8 +862,8 @@ class TestTaskExec:
         delegation contract), not the parent conversation."""
         import threading
 
-        from turnstone.core.session_ui_base import SessionUIBase
-        from turnstone.core.trajectory import turns_from_dicts
+        from pebble.core.session_ui_base import SessionUIBase
+        from pebble.core.trajectory import turns_from_dicts
 
         class _GateUI(SessionUIBase):
             pass
@@ -936,7 +936,7 @@ class TestTaskExec:
         daemon would be watching."""
         from unittest.mock import PropertyMock
 
-        from turnstone.core.judge import JudgeConfig
+        from pebble.core.judge import JudgeConfig
 
         captured: dict[str, Any] = {}
         fake_verdict = MagicMock()
@@ -1408,7 +1408,7 @@ class TestAgentModelOverride:
 
     @staticmethod
     def _registry():
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         return ModelRegistry(
             models={
@@ -1482,7 +1482,7 @@ class TestAgentModelOverride:
     def test_refresh_picks_up_new_aliases(self, tmp_db) -> None:
         """Adding a new model and calling refresh_agent_tool_schemas updates
         the description without requiring a fresh session."""
-        from turnstone.core.model_registry import ModelConfig
+        from pebble.core.model_registry import ModelConfig
 
         reg = self._registry()
         session = _make_session(registry=reg, model_alias="default")
@@ -1508,7 +1508,7 @@ class TestAgentModelOverride:
         task_alias.  The LLM should reach the per-role default by omitting
         ``model=`` instead.
         """
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         reg = ModelRegistry(
             models={
@@ -1530,7 +1530,7 @@ class TestAgentModelOverride:
         """Single-CLI-model registries (only ``default`` in registry) leave
         the base description untouched — the LLM sees ``"No alternative
         aliases configured"`` rather than an empty alias list."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         reg = ModelRegistry(
             models={"default": ModelConfig("default", "x", "x", "m")},
@@ -1546,7 +1546,7 @@ class TestAgentModelOverride:
         """A reload that drops the registry to only ``default`` must clear
         stale alias names from the previously-rendered tool descriptions —
         not return early and leave them in place."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         reg = ModelRegistry(
             models={
@@ -1578,7 +1578,7 @@ class TestAgentModelOverride:
     def test_module_level_constants_not_mutated(self, tmp_db) -> None:
         """Rendering must not pollute the module-level TOOLS list shared
         across all sessions."""
-        from turnstone.core.tools import TOOLS
+        from pebble.core.tools import TOOLS
 
         # Construct purely for the side effect of rendering on init.
         _make_session(registry=self._registry(), model_alias="default")
@@ -1716,8 +1716,8 @@ class TestGetCapabilitiesOverride:
 
     def test_config_override_applies(self, tmp_db):
         """capabilities dict from ModelConfig is merged onto provider caps."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.providers._protocol import ModelCapabilities
 
         cfg = ModelConfig(
             alias="qwen-vl",
@@ -1749,7 +1749,7 @@ class TestTitleRetry:
     """_generate_title resets _title_generated on failure."""
 
     def test_title_generated_reset_on_failure(self, tmp_db):
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = _make_session()
         session._title_generated = True
@@ -1769,7 +1769,7 @@ class TestTitleRetry:
         assert session._title_generated is False
 
     def test_title_generated_stays_true_on_success(self, tmp_db):
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = _make_session()
         session._title_generated = True
@@ -1785,7 +1785,7 @@ class TestTitleRetry:
         session._provider.get_capabilities.return_value = ModelCapabilities()
         session._provider.create_streaming.return_value = as_stream(result)
 
-        with patch("turnstone.core.session.update_workstream_title"):
+        with patch("pebble.core.session.update_workstream_title"):
             session._generate_title()
 
         # Flag stays True after successful generation
@@ -1798,8 +1798,8 @@ class TestTitleRetry:
         so the title pass gives reasoning room (raised max_tokens), reuses
         ``_strip_reasoning``, and peels wrapping decoration — keeping INTERNAL
         punctuation (the hyphen survives)."""
-        from turnstone.core.providers._protocol import ModelCapabilities
-        from turnstone.core.session import _TITLE_MAX_TOKENS
+        from pebble.core.providers._protocol import ModelCapabilities
+        from pebble.core.session import _TITLE_MAX_TOKENS
 
         session = _make_session()
         session._title_generated = True
@@ -1815,7 +1815,7 @@ class TestTitleRetry:
 
         captured: dict[str, str] = {}
         with patch(
-            "turnstone.core.session.update_workstream_title",
+            "pebble.core.session.update_workstream_title",
             side_effect=lambda ws_id, title: captured.update(title=title),
         ):
             session._generate_title()
@@ -1833,7 +1833,7 @@ class TestTitleRetry:
         cut-off content that broke titling), the cleaner yields no words — so
         nothing is persisted rather than a fragment of reasoning becoming the
         title."""
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = _make_session()
         session._title_generated = True
@@ -1844,7 +1844,7 @@ class TestTitleRetry:
         session._provider.get_capabilities.return_value = ModelCapabilities()
         session._provider.create_streaming.return_value = as_stream(result)
 
-        with patch("turnstone.core.session.update_workstream_title") as upd:
+        with patch("pebble.core.session.update_workstream_title") as upd:
             session._generate_title()
 
         upd.assert_not_called()
@@ -1854,7 +1854,7 @@ class TestTitleRetry:
         survive: an opener-absent ``…</think>`` (templates that pre-inject the
         opening tag), a paired ``<reasoning>`` block, and a trailing
         explanation after the title (only the first non-empty line is kept)."""
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         cases = [
             ("I should weigh the options here</think>\n\nRendezvous Routing", "Rendezvous Routing"),
@@ -1876,7 +1876,7 @@ class TestTitleRetry:
 
             captured: dict[str, str] = {}
             with patch(
-                "turnstone.core.session.update_workstream_title",
+                "pebble.core.session.update_workstream_title",
                 side_effect=lambda ws_id, title, _c=captured: _c.update(title=title),
             ):
                 session._generate_title()
@@ -1885,8 +1885,8 @@ class TestTitleRetry:
     def test_title_truncates_to_max_chars(self, tmp_db):
         """The ``[:_TITLE_MAX_CHARS]`` slice is the only length guard now that
         the persist-time ``title[:80]`` is gone — a long title is bounded."""
-        from turnstone.core.providers._protocol import ModelCapabilities
-        from turnstone.core.session import _TITLE_MAX_CHARS
+        from pebble.core.providers._protocol import ModelCapabilities
+        from pebble.core.session import _TITLE_MAX_CHARS
 
         session = _make_session()
         session._title_generated = True
@@ -1899,7 +1899,7 @@ class TestTitleRetry:
 
         captured: dict[str, str] = {}
         with patch(
-            "turnstone.core.session.update_workstream_title",
+            "pebble.core.session.update_workstream_title",
             side_effect=lambda ws_id, title: captured.update(title=title),
         ):
             session._generate_title()
@@ -1907,7 +1907,7 @@ class TestTitleRetry:
 
     def test_title_skipped_after_resume_changes_ws_id(self, tmp_db):
         """If ws_id changes (via resume) during title generation, discard the result."""
-        from turnstone.core.providers._protocol import ModelCapabilities
+        from pebble.core.providers._protocol import ModelCapabilities
 
         session = _make_session()
         session._title_generated = True
@@ -1931,7 +1931,7 @@ class TestTitleRetry:
 
         session._provider.create_streaming.side_effect = _change_ws_id
 
-        with patch("turnstone.core.session.update_workstream_title") as mock_update:
+        with patch("pebble.core.session.update_workstream_title") as mock_update:
             session._generate_title()
 
         # Title should NOT be applied to the new workstream
@@ -1973,7 +1973,7 @@ class TestTitleRetry:
 
         with (
             _send_with_mocks(session, responses, mock_execute),
-            patch("turnstone.core.session.threading.Thread", capture_cls),
+            patch("pebble.core.session.threading.Thread", capture_cls),
         ):
             session.send("refactor the auth layer")
 
@@ -1993,7 +1993,7 @@ class TestTitleRetry:
             session = _make_session()
             with (
                 _send_with_mocks(session, [{"role": "assistant", "content": "ok"}], mock_execute),
-                patch("turnstone.core.session.threading.Thread", capture_cls),
+                patch("pebble.core.session.threading.Thread", capture_cls),
             ):
                 session.send(user_input, **kwargs)
             assert session._generate_title not in started
@@ -2005,8 +2005,8 @@ class TestLiveConfigUpdate:
 
     def test_memory_config_reads_from_config_store(self, tmp_db):
         """_mem_cfg returns live values from ConfigStore when present."""
-        from turnstone.core.config_store import ConfigStore
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.config_store import ConfigStore
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_db), create_tables=True)
         cs = ConfigStore(storage)
@@ -2021,9 +2021,9 @@ class TestLiveConfigUpdate:
 
     def test_judge_config_reads_from_config_store(self, tmp_db):
         """_judge_cfg returns live behavioral flags from ConfigStore."""
-        from turnstone.core.config_store import ConfigStore
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.config_store import ConfigStore
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_db), create_tables=True)
         cs = ConfigStore(storage)
@@ -2041,9 +2041,9 @@ class TestLiveConfigUpdate:
 
     def test_judge_client_config_stays_frozen(self, tmp_db):
         """LLM client fields (model, provider) are frozen from creation time."""
-        from turnstone.core.config_store import ConfigStore
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.config_store import ConfigStore
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_db), create_tables=True)
         cs = ConfigStore(storage)
@@ -2058,9 +2058,9 @@ class TestLiveConfigUpdate:
 
     def test_judge_disable_after_init_stops_future_use(self, tmp_db):
         """Disabling judge.enabled after IntentJudge is created returns None."""
-        from turnstone.core.config_store import ConfigStore
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.storage._sqlite import SQLiteBackend
+        from pebble.core.config_store import ConfigStore
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.storage._sqlite import SQLiteBackend
 
         storage = SQLiteBackend(str(tmp_db), create_tables=True)
         cs = ConfigStore(storage)
@@ -2079,7 +2079,7 @@ class TestLiveConfigUpdate:
 
     def test_fallback_to_frozen_without_config_store(self, tmp_db):
         """Without ConfigStore (CLI mode), frozen config is used."""
-        from turnstone.core.memory_relevance import MemoryConfig
+        from pebble.core.memory_relevance import MemoryConfig
 
         session = _make_session(memory_config=MemoryConfig(relevance_k=3))
         assert session._mem_cfg.relevance_k == 3
@@ -2090,8 +2090,8 @@ class TestAgentOutputGuard:
 
     def test_agent_loop_calls_evaluate_output(self):
         """_run_agent passes tool output through _evaluate_output when output_guard is enabled."""
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session(judge_config=JudgeConfig(output_guard=True))
         session._provider = OpenAIChatCompletionsProvider()
@@ -2145,8 +2145,8 @@ class TestAgentOutputGuard:
 
     def test_agent_loop_skips_guard_when_disabled(self):
         """_run_agent does not call _evaluate_output when output_guard is disabled."""
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session(judge_config=JudgeConfig(output_guard=False))
         session._provider = OpenAIChatCompletionsProvider()
@@ -2188,8 +2188,8 @@ class TestAgentOutputGuard:
         synthesis still flows through _evaluate_output.  This is the
         cross-workstream summary laundering path called out in issue #560.
         """
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session(judge_config=JudgeConfig(output_guard=True))
         session._provider = OpenAIChatCompletionsProvider()
@@ -2219,8 +2219,8 @@ class TestAgentOutputGuard:
 
     def test_length_truncation_path_is_guarded(self):
         """finish_reason='length' returns the partial synthesis through the guard."""
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session(judge_config=JudgeConfig(output_guard=True))
         session._provider = OpenAIChatCompletionsProvider()
@@ -2249,8 +2249,8 @@ class TestAgentOutputGuard:
     def test_context_limit_recovery_path_is_guarded(self):
         """When the API raises a context-limit error, the last prior assistant
         content is returned via the guard."""
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session(judge_config=JudgeConfig(output_guard=True))
         session._provider = OpenAIChatCompletionsProvider()
@@ -2288,8 +2288,8 @@ class TestAgentOutputGuard:
         partial assistant work — regression guard: narrowing the salvage gate to
         overflow-only discarded a completed synthesis when the final call died on a
         persistent non-overflow error (e.g. a 5xx/timeout after retries)."""
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session(judge_config=JudgeConfig(output_guard=True))
         session._provider = OpenAIChatCompletionsProvider()
@@ -2319,7 +2319,7 @@ class TestAgentOutputGuard:
         """With no partial assistant work to salvage, a non-overflow terminal error
         re-raises so the real failure surfaces to the coordinator rather than being
         masked as an empty success."""
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -2339,8 +2339,8 @@ class TestAgentOutputGuard:
     def test_turn_limit_forced_synthesis_is_guarded(self):
         """When max_tool_turns is exhausted, the forced synthesis call's
         content flows through the guard."""
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session(judge_config=JudgeConfig(output_guard=True))
         session._provider = OpenAIChatCompletionsProvider()
@@ -2393,7 +2393,7 @@ class TestAgentChildRegistration:
     UI can nest the step (the producer side of the SessionUIBase tagging)."""
 
     def test_sub_tool_registered_under_parent(self):
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -2438,7 +2438,7 @@ class TestAgentChildRegistration:
         # Pre-mint both mapped to "task-1::call_0": the live card collapsed the
         # rows (bug-3) while FIFO recall kept them apart — the two disagreed on
         # identical input.
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -2518,7 +2518,7 @@ class TestAgentChildRegistration:
         # same parent id still alias at the card level.  Parent ids are
         # main-loop ids; de-colliding them is the main-loop id-hygiene
         # follow-up, not this change.
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -2558,7 +2558,7 @@ class TestAgentChildRegistration:
         # id keeps the minted "::" form.
         import json as _json
 
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -2622,7 +2622,7 @@ class TestAgentChildRegistration:
         # rebuilt the turn from content + tool_calls and the model re-reasoned
         # from scratch every tool turn (and commercial Anthropic rejects a
         # thinking-enabled tool_use turn without its thinking block).
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         session = _make_session()
         session._provider = AnthropicProvider()
@@ -2659,7 +2659,7 @@ class TestAgentChildRegistration:
             # module-level resolver (not the session wrapper), so the pin
             # patches the module function — the seam production reads.
             patch(
-                "turnstone.core.model_turn.resolve_replay_reasoning_to_model",
+                "pebble.core.model_turn.resolve_replay_reasoning_to_model",
                 return_value=True,
             ),
         ):
@@ -2700,7 +2700,7 @@ class TestAgentChildRegistration:
         # was dropped for the turn, losing the thinking block's reasoning
         # continuity; the total drop remains only as the pairing-mismatch
         # fallback (pinned in test_model_turn).
-        from turnstone.core.providers._anthropic import AnthropicProvider
+        from pebble.core.providers._anthropic import AnthropicProvider
 
         session = _make_session()
         session._provider = AnthropicProvider()
@@ -2736,7 +2736,7 @@ class TestAgentChildRegistration:
             # agent path resolves it) so the lane content below is
             # attributable to the repair alone, not a False replay flag.
             patch(
-                "turnstone.core.model_turn.resolve_replay_reasoning_to_model",
+                "pebble.core.model_turn.resolve_replay_reasoning_to_model",
                 return_value=True,
             ),
         ):
@@ -2784,8 +2784,8 @@ class TestAgentChildRegistration:
         # synthesized reasoning_text lane has no client tool blocks at all.
         from types import SimpleNamespace
 
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-        from turnstone.core.providers._openai_common import OPENAI_COMPAT_DEFAULT
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_common import OPENAI_COMPAT_DEFAULT
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -2848,8 +2848,8 @@ class TestAgentChildRegistration:
         # ``_provider_content`` key itself never reaches the wire).
         from types import SimpleNamespace
 
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-        from turnstone.core.providers._openai_common import OPENAI_COMPAT_DEFAULT
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.providers._openai_common import OPENAI_COMPAT_DEFAULT
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -2918,8 +2918,8 @@ class TestRunAgentDenialMessage:
     returned as ``approve_tools``'s second value."""
 
     def _run_with_denial(self, approve_side_effect):
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-        from turnstone.core.trajectory import Turn
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.trajectory import Turn
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -3006,7 +3006,7 @@ class TestProjectAgentSteps:
     result by call_id, landmine-safe on a multimodal result."""
 
     def test_calls_matched_to_results_in_order(self):
-        from turnstone.core.trajectory import ToolCall, Turn
+        from pebble.core.trajectory import ToolCall, Turn
 
         turns = [
             Turn.system("sys"),
@@ -3036,7 +3036,7 @@ class TestProjectAgentSteps:
         # A vision tool result is a list[dict] mis-stored as TextBlock.text; the
         # projection must NOT call Turn.text (would TypeError) — it reads the
         # payload directly and placeholders a non-str so /history stays text-only.
-        from turnstone.core.trajectory import ToolCall, Turn
+        from pebble.core.trajectory import ToolCall, Turn
 
         turns = [
             Turn.assistant(
@@ -3048,8 +3048,8 @@ class TestProjectAgentSteps:
         assert steps[0]["output"] == "[non-text result]"
 
     def test_output_capped(self):
-        from turnstone.core.session import _AGENT_STEP_OUTPUT_CAP
-        from turnstone.core.trajectory import ToolCall, Turn
+        from pebble.core.session import _AGENT_STEP_OUTPUT_CAP
+        from pebble.core.trajectory import ToolCall, Turn
 
         big = "a" * (_AGENT_STEP_OUTPUT_CAP + 500)
         turns = [
@@ -3063,7 +3063,7 @@ class TestProjectAgentSteps:
     def test_unanswered_call_has_empty_output(self):
         # A tool call with no matching result (cancelled mid-flight) recalls
         # honestly as empty, not dropped.
-        from turnstone.core.trajectory import ToolCall, Turn
+        from pebble.core.trajectory import ToolCall, Turn
 
         turns = [Turn.assistant(tool_calls=(ToolCall(id="c1", name="bash", arguments="{}"),))]
         steps = ChatSession._project_agent_steps(turns)
@@ -3077,7 +3077,7 @@ class TestProjectAgentSteps:
         # Parented runs can no longer produce this input (_run_agent mints
         # unique ids), but the FIFO stays as honest pairing for input a mint
         # never touched — an unparented run, or turns constructed directly.
-        from turnstone.core.trajectory import ToolCall, Turn
+        from pebble.core.trajectory import ToolCall, Turn
 
         turns = [
             Turn.assistant(
@@ -3093,8 +3093,8 @@ class TestProjectAgentSteps:
         assert [s["output"] for s in steps] == ["out-A", "out-B"]
 
     def test_step_count_capped_with_honest_marker(self):
-        from turnstone.core.session import _AGENT_STEP_COUNT_CAP
-        from turnstone.core.trajectory import ToolCall, Turn
+        from pebble.core.session import _AGENT_STEP_COUNT_CAP
+        from pebble.core.trajectory import ToolCall, Turn
 
         turns = []
         for i in range(_AGENT_STEP_COUNT_CAP + 5):
@@ -3117,7 +3117,7 @@ class TestAgentTrajectoryStashWiring:
     """``_stash_agent_trajectory`` projects + forwards to the UI, getattr-guarded."""
 
     def test_projects_and_forwards(self):
-        from turnstone.core.trajectory import ToolCall, Turn
+        from pebble.core.trajectory import ToolCall, Turn
 
         session = _make_session()
         session.ui = MagicMock()
@@ -3154,7 +3154,7 @@ class TestReadFilesIsolation:
         assert session._current_read_files is session._read_files
 
     def test_active_contextvar_overrides_then_restores(self):
-        from turnstone.core.session import _active_read_files
+        from pebble.core.session import _active_read_files
 
         session = _make_session()
         sub: set[str] = set()
@@ -3170,7 +3170,7 @@ class TestReadFilesIsolation:
         # per-agent set must be used, NOT fall through to the main set, or a
         # fresh agent would inherit the main session's reads and mis-suppress
         # its own blind-overwrite guard.
-        from turnstone.core.session import _active_read_files
+        from pebble.core.session import _active_read_files
 
         session = _make_session()
         session._read_files.add("/main/file")
@@ -3213,8 +3213,8 @@ class TestSubAgentErrorRecall:
     than a green 'done' step (the most serious review finding)."""
 
     def test_errored_sub_tool_turn_marked_is_error(self):
-        from turnstone.core.providers._openai_chat import OpenAIChatCompletionsProvider
-        from turnstone.core.trajectory import Role
+        from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+        from pebble.core.trajectory import Role
 
         session = _make_session()
         session._provider = OpenAIChatCompletionsProvider()
@@ -3300,7 +3300,7 @@ class TestEvaluateOutputLLMStage:
         self, *, llm_enabled: bool
     ) -> tuple[ChatSession, list[dict[str, object]]]:
         """Build a ChatSession whose UI records every record_output_assessment call."""
-        from turnstone.core.judge import JudgeConfig
+        from pebble.core.judge import JudgeConfig
 
         records: list[dict[str, object]] = []
 
@@ -3367,7 +3367,7 @@ class TestEvaluateOutputLLMStage:
 
     def test_llm_enabled_success_overrides_heuristic(self) -> None:
         """LLM verdict wins when it succeeds; both tier rows persisted."""
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, records = self._make_session_with_recording_ui(llm_enabled=True)
         # Heuristic would say "none" on this; LLM disagrees.
@@ -3408,7 +3408,7 @@ class TestEvaluateOutputLLMStage:
         so audit can distinguish 'LLM attempted but failed' from 'LLM
         disabled' (review finding cp-3).
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, records = self._make_session_with_recording_ui(llm_enabled=True)
         camo = (
@@ -3455,7 +3455,7 @@ class TestEvaluateOutputLLMStage:
         positive — the judge reads adversarial output and may escalate but
         must not be able to hide a deterministic regex hit.
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, records = self._make_session_with_recording_ui(llm_enabled=True)
         # Heuristic flags this (recommendation + caps action SELL), but the
@@ -3518,7 +3518,7 @@ class TestEvaluateOutputLLMStage:
         'none' for prompt-injection, redaction still wins — secrets do not
         flow into context just because the LLM doesn't see injection.
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, records = self._make_session_with_recording_ui(llm_enabled=True)
         # Heuristic detects a credential leak — sanitized is populated.
@@ -3551,7 +3551,7 @@ class TestEvaluateOutputLLMStage:
         """sec-4: when the per-session token bucket is exhausted, the LLM
         stage is skipped and the heuristic stands.  No LLM row is written.
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, records = self._make_session_with_recording_ui(llm_enabled=True)
         # Drain the token bucket.
@@ -3580,7 +3580,7 @@ class TestEvaluateOutputLLMStage:
         regex set misses get a semantic pass.  Guards against re-introducing
         an 'only judge what the heuristic flagged' gate.
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, records = self._make_session_with_recording_ui(llm_enabled=True)
         # Plain build output — the regex stage finds nothing here.
@@ -3609,7 +3609,7 @@ class TestEvaluateOutputLLMStage:
         self, *, llm_enabled: bool
     ) -> tuple[ChatSession, list[dict[str, object]]]:
         """Build a ChatSession whose UI captures every on_output_warning dict."""
-        from turnstone.core.judge import JudgeConfig
+        from pebble.core.judge import JudgeConfig
 
         warnings: list[dict[str, object]] = []
 
@@ -3629,7 +3629,7 @@ class TestEvaluateOutputLLMStage:
         inline chip can annotate the finding and show how certain the judge
         was.  Must match build_merged_output_assessment_payload's replay shape.
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, warnings = self._make_session_capturing_warnings(llm_enabled=True)
         clean_text = "The build completed in 3.2 seconds with no warnings."
@@ -3687,7 +3687,7 @@ class TestEvaluateOutputLLMStage:
         'make tier follow the flags' source' refactor can't silently
         change what the chip shows.
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session, warnings = self._make_session_capturing_warnings(llm_enabled=True)
         with_secret = (
@@ -3725,7 +3725,7 @@ class TestBatchEvaluateOutputs:
     """Concurrent guard pre-pass for the per-tool-result loop (perf-2)."""
 
     def _make_session(self, llm_enabled: bool):
-        from turnstone.core.judge import JudgeConfig
+        from pebble.core.judge import JudgeConfig
 
         return _make_session(
             judge_config=JudgeConfig(
@@ -3757,7 +3757,7 @@ class TestBatchEvaluateOutputs:
         judge-call duration, not four — proves the worker pool is doing
         the work in parallel.
         """
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session = self._make_session(llm_enabled=True)
 
@@ -3799,8 +3799,8 @@ class TestTruncateBeforeJudge:
         what the loop feeds into _evaluate_output, so the judge sees the
         truncated form.
         """
-        from turnstone.core.judge import JudgeConfig
-        from turnstone.core.output_guard_judge import OutputJudgeVerdict
+        from pebble.core.judge import JudgeConfig
+        from pebble.core.output_guard_judge import OutputJudgeVerdict
 
         session = _make_session(judge_config=JudgeConfig(output_guard=True, output_guard_llm=True))
 
@@ -3833,7 +3833,7 @@ class TestProviderExtraParams:
     """Tests for _provider_extra_params — server_compat passthrough only."""
 
     def _session_with_provider(self, provider_name: str, tmp_db) -> ChatSession:
-        from turnstone.core.providers import create_provider
+        from pebble.core.providers import create_provider
 
         session = _make_session(reasoning_effort="medium")
         session._provider = create_provider(provider_name)
@@ -3869,7 +3869,7 @@ class TestProviderExtraParams:
 
     def test_server_compat_extra_body_passes_through(self, tmp_db):
         """server_compat.extra_body workarounds forward as extra_params."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         session = self._session_with_provider("openai-compatible", tmp_db)
         cfg = ModelConfig(
@@ -3886,7 +3886,7 @@ class TestProviderExtraParams:
 
     def test_operator_chat_template_kwargs_pass_through(self, tmp_db):
         """Operator-set chat_template_kwargs (e.g. for gpt-oss) forwards verbatim."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         session = self._session_with_provider("openai-compatible", tmp_db)
         cfg = ModelConfig(
@@ -3903,7 +3903,7 @@ class TestProviderExtraParams:
 
     def test_model_alias_resolves_target_compat(self, tmp_db):
         """model_alias parameter selects compat from the target, not the primary."""
-        from turnstone.core.model_registry import ModelConfig, ModelRegistry
+        from pebble.core.model_registry import ModelConfig, ModelRegistry
 
         session = self._session_with_provider("openai-compatible", tmp_db)
         primary = ModelConfig(
@@ -4042,7 +4042,7 @@ class TestSafePrepareTool:
 
         import pytest as _pytest
 
-        from turnstone.core.session import GenerationCancelled
+        from pebble.core.session import GenerationCancelled
 
         session = _make_session()
         tc = {"id": "call_1", "function": {"name": "bash", "arguments": "{}"}}
@@ -4154,8 +4154,8 @@ class TestCoordinatorMemoryScope:
     """
 
     def test_coordinator_session_resolves_to_user_id(self, tmp_db):
-        from turnstone.core.session import ChatSession
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.session import ChatSession
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="coord-1",
@@ -4171,7 +4171,7 @@ class TestCoordinatorMemoryScope:
         is the session kind, not the scope_id value.  Children get an
         empty scope_id which ``_validate_scope`` translates into an
         explicit reject."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="child-a",
@@ -4185,7 +4185,7 @@ class TestCoordinatorMemoryScope:
         """An IC session with no parent also has no coord context — same
         empty scope_id, same explicit reject from ``_validate_scope`` —
         even when authenticated as a user who owns coordinators."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="ws-top",
@@ -4196,7 +4196,7 @@ class TestCoordinatorMemoryScope:
         assert session._resolve_scope_id("coordinator") == ""
 
     def test_validate_rejects_coord_scope_for_top_level_interactive(self, tmp_db):
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="ws-top",
@@ -4213,7 +4213,7 @@ class TestCoordinatorMemoryScope:
         we're closing.  An adversarially-steered child (e.g. one whose
         MCP tool output contained injection content) could otherwise
         plant text into the coord's next system message."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="child-a",
@@ -4225,7 +4225,7 @@ class TestCoordinatorMemoryScope:
         assert err["error"].startswith("Error: 'coordinator' scope is only valid")
 
     def test_validate_accepts_coord_scope_for_coord_session(self, tmp_db):
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="coord-1",
@@ -4239,7 +4239,7 @@ class TestCoordinatorMemoryScope:
         scope='coordinator' through to the execute item with scope_id
         resolved to the coord's creator user_id (the durable per-user
         namespace key)."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="coord-1",
@@ -4265,7 +4265,7 @@ class TestCoordinatorMemoryScope:
         scope and not write into the coord's namespace.  The child
         shares the parent's user_id — exactly the credentials a
         user-keyed scope would accept if kind weren't the gate."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         session = _make_session(
             ws_id="child-a",
@@ -4290,8 +4290,8 @@ class TestCoordinatorMemoryScope:
         sessions (ALL of them — the namespace is per-user durable) but
         NOT to children (same user!), NOT to unrelated IC sessions, and
         NOT to another user's coordinators."""
-        from turnstone.core.memory import save_structured_memory
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.memory import save_structured_memory
+        from pebble.core.workstream import WorkstreamKind
 
         save_structured_memory(
             "private_plan",
@@ -4356,8 +4356,8 @@ class TestCoordinatorMemoryScope:
         namespace focused: a memory written by a sibling interactive
         session under scope='user' must not leak into the coord's
         system-message memory injection."""
-        from turnstone.core.memory import save_structured_memory
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.memory import save_structured_memory
+        from pebble.core.workstream import WorkstreamKind
 
         # Seed every non-coord scope with a sentinel memory.
         save_structured_memory("global_note", "anyone can read", scope="global")
@@ -4399,8 +4399,8 @@ class TestCoordinatorMemoryScope:
         assert "user_note" in ic_visible
 
     def test_coord_search_only_searches_coord_scope(self, tmp_db):
-        from turnstone.core.memory import save_structured_memory
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.memory import save_structured_memory
+        from pebble.core.workstream import WorkstreamKind
 
         save_structured_memory("global_x", "some content", scope="global")
         save_structured_memory(
@@ -4423,7 +4423,7 @@ class TestCoordinatorMemoryScope:
     def test_coord_validate_rejects_non_coord_scopes(self, tmp_db):
         """Coord sessions reject scope='global'/'workstream'/'user' with
         a clear error pointing them at scope='coordinator'."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         coord = _make_session(
             ws_id="coord-1",
@@ -4441,7 +4441,7 @@ class TestCoordinatorMemoryScope:
         either land in a namespace the coord can't read back from
         (workstream/user) or fall back to global which the new
         visibility rules also exclude."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         coord = _make_session(
             ws_id="coord-1",
@@ -4461,7 +4461,7 @@ class TestCoordinatorMemoryScope:
         walk only the coordinator scope — the IC walk
         (workstream → user → global) would be wasted lookups against
         rows the coord can't see."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         coord = _make_session(
             ws_id="coord-1",
@@ -4479,7 +4479,7 @@ class TestCoordinatorMemoryScope:
         """Interactive sessions retain the narrowest-to-widest walk:
         workstream → user → global.  Coord scope is excluded — IC
         sessions can't see/write it anyway."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         ic = _make_session(
             ws_id="ic-1",
@@ -4500,7 +4500,7 @@ class TestCoordinatorMemoryScope:
         of the same user (fresh ws_id) — the regression this scope
         redesign exists to fix.  Under ws_id keying the second session
         was born into an empty namespace every time."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         first = _make_session(
             ws_id="coord-old",
@@ -4543,7 +4543,7 @@ class TestCoordinatorMemoryScope:
         mint child-spawn tokens for a phantom principal."""
         import pytest
 
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         with pytest.raises(ValueError, match="authenticated user_id"):
             _make_session(
@@ -4562,7 +4562,7 @@ class TestCoordinatorMemoryScope:
         ever reaches the memory layer as an unauthenticated coordinator
         (test double, future host bypass), the save lane is refused at
         validation and scope resolution stays empty/fail-closed."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         coord = _make_session(
             ws_id="coord-1",
@@ -4585,7 +4585,7 @@ class TestCoordinatorMemoryScope:
         # ("coordinator", "") would otherwise read EVERY user's
         # coordinator rows.  Seed another user's row and prove the
         # unauthenticated double sees nothing, not everything.
-        from turnstone.core.memory import save_structured_memory
+        from pebble.core.memory import save_structured_memory
 
         save_structured_memory(
             "other_users_row",
@@ -4614,7 +4614,7 @@ class TestMemoryToolAudit:
 
     @staticmethod
     def _audit_rows(action: str) -> list[dict]:
-        from turnstone.core.storage._registry import get_storage
+        from pebble.core.storage._registry import get_storage
 
         return get_storage().list_audit_events(action=action)
 
@@ -4784,13 +4784,13 @@ class TestMemoryToolAudit:
             },
         )
         with patch(
-            "turnstone.core.audit.record_audit",
+            "pebble.core.audit.record_audit",
             side_effect=RuntimeError("audit storage exploded"),
         ):
             _, msg = session._exec_memory(item)
         assert "Saved memory 'fact_one'" in msg
         # The save itself still landed.
-        from turnstone.core.memory import get_structured_memory_by_name
+        from pebble.core.memory import get_structured_memory_by_name
 
         assert get_structured_memory_by_name("fact_one", "user", "user-1") is not None
 
@@ -4806,7 +4806,7 @@ class TestPerKindToolVariants:
     """
 
     def test_coord_memory_tool_has_coord_only_scope_enum(self):
-        from turnstone.core.tools import COORDINATOR_TOOLS
+        from pebble.core.tools import COORDINATOR_TOOLS
 
         memory = next(t for t in COORDINATOR_TOOLS if t["function"]["name"] == "memory")
         scope = memory["function"]["parameters"]["properties"]["scope"]
@@ -4815,7 +4815,7 @@ class TestPerKindToolVariants:
         assert scope["enum"] == ["coordinator", "project"]
 
     def test_coord_memory_tool_description_mentions_orchestration(self):
-        from turnstone.core.tools import COORDINATOR_TOOLS
+        from pebble.core.tools import COORDINATOR_TOOLS
 
         memory = next(t for t in COORDINATOR_TOOLS if t["function"]["name"] == "memory")
         desc = memory["function"]["description"]
@@ -4826,7 +4826,7 @@ class TestPerKindToolVariants:
         assert "not visible" in desc.lower()
 
     def test_ic_memory_tool_has_ic_scope_enum(self):
-        from turnstone.core.tools import INTERACTIVE_TOOLS
+        from pebble.core.tools import INTERACTIVE_TOOLS
 
         memory = next(t for t in INTERACTIVE_TOOLS if t["function"]["name"] == "memory")
         scope = memory["function"]["parameters"]["properties"]["scope"]
@@ -4834,7 +4834,7 @@ class TestPerKindToolVariants:
         assert scope["enum"] == ["global", "workstream", "user", "project"]
 
     def test_ic_memory_tool_description_omits_coord_scope(self):
-        from turnstone.core.tools import INTERACTIVE_TOOLS
+        from pebble.core.tools import INTERACTIVE_TOOLS
 
         memory = next(t for t in INTERACTIVE_TOOLS if t["function"]["name"] == "memory")
         desc = memory["function"]["description"]
@@ -4846,7 +4846,7 @@ class TestPerKindToolVariants:
         """Mutating one kind's tool dict must not bleed into the other
         kind's dict or the union ``TOOLS`` list — the per-kind copy
         is deep, not shared."""
-        from turnstone.core.tools import COORDINATOR_TOOLS, INTERACTIVE_TOOLS, TOOLS
+        from pebble.core.tools import COORDINATOR_TOOLS, INTERACTIVE_TOOLS, TOOLS
 
         coord_mem = next(t for t in COORDINATOR_TOOLS if t["function"]["name"] == "memory")
         ic_mem = next(t for t in INTERACTIVE_TOOLS if t["function"]["name"] == "memory")
@@ -4866,7 +4866,7 @@ class TestPerKindToolVariants:
         """Tools that don't define ``kind_variants`` (e.g. inspect_workstream,
         spawn_workstream) must appear in the kind list with their base
         description / parameters intact — no spurious deep copies."""
-        from turnstone.core.tools import COORDINATOR_TOOLS, TOOLS
+        from pebble.core.tools import COORDINATOR_TOOLS, TOOLS
 
         for name in ("inspect_workstream", "spawn_workstream"):
             coord_t = next(t for t in COORDINATOR_TOOLS if t["function"]["name"] == name)
@@ -4896,7 +4896,7 @@ class TestMemoryCompositionDeferral:
         assert session._system_composed_with_context is True
 
     def test_send_recomposes_memory_block_on_first_user_turn(self, tmp_db):
-        from turnstone.core.memory_relevance import extract_recent_context
+        from pebble.core.memory_relevance import extract_recent_context
 
         session = _make_session()
         session._title_generated = True  # suppress the auto-title daemon thread
@@ -4949,7 +4949,7 @@ class TestMemoryAccessTouch:
 
     @staticmethod
     def _access_count(name: str, scope: str = "global", scope_id: str = "") -> int:
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         mem = get_storage().get_structured_memory_by_name(name, scope, scope_id)
         assert mem is not None, f"memory {name!r} not found"
@@ -4957,7 +4957,7 @@ class TestMemoryAccessTouch:
 
     @staticmethod
     def _save(name: str, content: str) -> None:
-        from turnstone.core.memory import save_structured_memory
+        from pebble.core.memory import save_structured_memory
 
         save_structured_memory(name, content, scope="global")
 
@@ -5034,7 +5034,7 @@ class TestMemoryAccessTouch:
         )
         touched: list[tuple[str, str, str]] = []
         with patch(
-            "turnstone.core.session.touch_structured_memories",
+            "pebble.core.session.touch_structured_memories",
             side_effect=lambda keys: touched.extend(keys),
         ):
             session._init_system_messages()
@@ -5047,7 +5047,7 @@ class TestMemoryAccessTouch:
     def test_composition_survives_touch_storage_error(self, tmp_db):
         """A storage blow-up inside the touch must not break composition —
         the facade swallows it and the memory block still lands."""
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         session = self._empty_session()
         self._save("kafka_runbook", "restart the kafka broker pods")
@@ -5166,7 +5166,7 @@ class TestMemoryAccessTouch:
         content-only re-save keeps the stored type/description, while an
         explicit field overwrites it.  Guards the _prepare_memory omit->None
         logic that the storage-level tests don't exercise."""
-        from turnstone.core.memory import get_structured_memory_by_name
+        from pebble.core.memory import get_structured_memory_by_name
 
         session = self._empty_session()
         item = session._prepare_memory(
@@ -5255,7 +5255,7 @@ class TestMetacognitiveBuffers:
         session.messages.append(turn_from_dict({"role": "user", "content": "hello there"}))
         session._msg_tokens.append(1)
         session._queue_user_advisory("correction", "ALERT_TEXT")
-        with patch("turnstone.core.session.save_message"):
+        with patch("pebble.core.session.save_message"):
             session._emit_pending_user_nudges()
         # User turn untouched; a system turn now follows it.
         assert turn_to_dict(session.messages[-2]) == {"role": "user", "content": "hello there"}
@@ -5273,7 +5273,7 @@ class TestMetacognitiveBuffers:
         session.messages.append(turn_from_dict({"role": "user", "content": "untouched"}))
         session._msg_tokens.append(1)
         pre_len = len(session.messages)
-        with patch("turnstone.core.session.save_message"):
+        with patch("pebble.core.session.save_message"):
             session._emit_pending_user_nudges()
         # No nudges → no system turn appended.
         assert len(session.messages) == pre_len
@@ -5285,7 +5285,7 @@ class TestMetacognitiveBuffers:
         session._msg_tokens.append(1)
         session._queue_user_advisory("denial", "FIRST")
         session._queue_user_advisory("correction", "SECOND")
-        with patch("turnstone.core.session.save_message"):
+        with patch("pebble.core.session.save_message"):
             session._emit_pending_user_nudges()
         sys_turns = [m for m in dicts_from_turns(session.messages) if m.get("role") == "system"]
         assert sys_turns == [
@@ -5335,7 +5335,7 @@ class TestMetacognitiveBuffers:
     def test_collect_advisories_guard_finding_renders_inline(self, tmp_db):
         """An output-guard assessment becomes an ``output_guard`` spec with
         the rendered findings as content (flags + risk + annotations)."""
-        from turnstone.core.output_guard import OutputAssessment
+        from pebble.core.output_guard import OutputAssessment
 
         session = _make_session()
         specs = session._collect_advisories(
@@ -5396,7 +5396,7 @@ class TestMetacognitiveBuffers:
         """A different authenticated participant cannot interject into another
         user's in-flight turn: folding it in would borrow the initiator's MCP
         credentials and misattribute the message, so queue_message rejects."""
-        from turnstone.core.session import CrossUserInterjectionError
+        from pebble.core.session import CrossUserInterjectionError
 
         session = _make_session(user_id="owner")  # effective user = owner
         with pytest.raises(CrossUserInterjectionError):
@@ -5411,7 +5411,7 @@ class TestMetacognitiveBuffers:
         session.queue_message("and also this", interjector_user_id="alice", queue_msg_id="q1")
         assert "q1" in session._queued_messages
         # ...but the owner (not the acting user) cannot interject alice's turn.
-        from turnstone.core.session import CrossUserInterjectionError
+        from pebble.core.session import CrossUserInterjectionError
 
         with pytest.raises(CrossUserInterjectionError):
             session.queue_message("owner butting in", interjector_user_id="owner")
@@ -5431,7 +5431,7 @@ class TestMetacognitiveBuffers:
         ConsoleCoordinatorUI) so web clients can gate cross-user sends. This is
         the state those UIs serialize into the state_change event's
         acting_user_id."""
-        from turnstone.core.session_ui_base import SessionUIBase
+        from pebble.core.session_ui_base import SessionUIBase
 
         class _WebUI(SessionUIBase):
             def on_state_change(self, state: str) -> None:
@@ -5548,7 +5548,7 @@ class TestMetacognitiveBuffers:
         Drives the REAL ``_execute_tools`` two-phase gate with real
         ``_nudges_enabled`` / ``should_nudge`` gating; only the prepare
         step and the UI approval are stubbed."""
-        from turnstone.core.metacognition import format_nudge
+        from pebble.core.metacognition import format_nudge
 
         session = _make_session()
         # ``should_nudge`` skips the very first message — give the session
@@ -5997,7 +5997,7 @@ class TestMetacognitiveBuffers:
         system turn have been appended. Asserts the start nudge became a
         first-class ``system`` turn following the (clean) user turn and
         the buffer drained."""
-        from turnstone.core.session import GenerationCancelled
+        from pebble.core.session import GenerationCancelled
 
         session = _make_session()
         # Stub visible memories so the start-nudge `memory_count > 0`
@@ -6037,7 +6037,7 @@ class TestMetacognitiveBuffers:
         session.messages.append(turn_from_dict({"role": "user", "content": "noted"}))
         session._msg_tokens.append(1)
         session._queue_user_advisory("correction", "watch out")
-        with patch("turnstone.core.session.save_message"):
+        with patch("pebble.core.session.save_message"):
             session._emit_pending_user_nudges()
         info_lines = [call.args[0] for call in session.ui.on_info.call_args_list if call.args]
         assert not any("metacognition: nudge injected" in line for line in info_lines), (
@@ -6053,7 +6053,7 @@ class TestMetacognitiveBuffers:
         session.messages.append(turn_from_dict({"role": "user", "content": "noted"}))
         session._msg_tokens.append(1)
         session._queue_user_advisory("correction", "watch out")
-        with patch("turnstone.core.session.save_message"):
+        with patch("pebble.core.session.save_message"):
             session._emit_pending_user_nudges()
         assert session.ui.on_system_turn.call_count == 1
         content, source, meta = session.ui.on_system_turn.call_args.args
@@ -6072,7 +6072,7 @@ class TestMetacognitiveBuffers:
         session.messages.append(turn_from_dict({"role": "user", "content": "noted"}))
         session._msg_tokens.append(1)
         session._queue_user_advisory("correction", "watch out")
-        with patch("turnstone.core.session.save_message"):
+        with patch("pebble.core.session.save_message"):
             session._emit_pending_user_nudges()
         # The system turn was appended despite the hook raising.
         assert turn_to_dict(session.messages[-1]) == {
@@ -6086,7 +6086,7 @@ class TestMetacognitiveBuffers:
     def test_cancel_handler_clears_tool_advisory_buffer(self, tmp_db):
         """A tool_error/repeat advisory queued before a cancel must not
         leak into the next generation's batch."""
-        from turnstone.core.session import GenerationCancelled
+        from pebble.core.session import GenerationCancelled
 
         session = _make_session()
         session._queue_tool_advisory("tool_error", "leftover")
@@ -6370,7 +6370,7 @@ class TestUserAdvisoryCancelClear:
     """
 
     def test_generation_cancelled_clears_user_advisory_buffer(self, tmp_db):
-        from turnstone.core.session import GenerationCancelled
+        from pebble.core.session import GenerationCancelled
 
         session = _make_session()
         session._queue_user_advisory("denial", "leftover")
@@ -6458,7 +6458,7 @@ class TestUserAdvisoryCancelClear:
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
             patch.object(session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.send("first message")
 
@@ -6537,7 +6537,7 @@ class TestDeliverWakeNudge:
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
             patch.object(session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.deliver_wake_nudge_from_queue()
         # Queue drained.
@@ -6569,7 +6569,7 @@ class TestDeliverWakeNudge:
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
             patch.object(session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.deliver_wake_nudge_from_queue()
         user_msgs = [m for m in dicts_from_turns(session.messages) if m.get("role") == "user"]
@@ -6592,7 +6592,7 @@ class TestDeliverWakeNudge:
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
             patch.object(session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.deliver_wake_nudge_from_queue()
         # `finally` block resets the tag; production code outside the
@@ -6628,7 +6628,7 @@ class TestDeliverWakeNudge:
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
             patch.object(session, "_visible_memory_count", return_value=10),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.deliver_wake_nudge_from_queue()
         # No fresh correction entry was enqueued during the wake send.
@@ -6671,7 +6671,7 @@ class TestDeliverWakeNudge:
             patch.object(session, "_print_status_line"),
             patch.object(session, "_emit_state"),
             patch.object(session, "_visible_memory_count", return_value=0),
-            patch("turnstone.core.session.save_message"),
+            patch("pebble.core.session.save_message"),
         ):
             session.deliver_wake_nudge_from_queue()
 
@@ -6718,7 +6718,7 @@ class TestDeliverWakeNudge:
         tab connecting via /history would see the assistant turn with
         no preceding wake context.
         """
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         session = _make_session()
         session._title_generated = True
@@ -6749,7 +6749,7 @@ class TestDeliverWakeNudge:
         as a first-class ``system`` row (``_source`` = the nudge type,
         content = the nudge text), following the synthetic empty user row.
         """
-        from turnstone.core.storage import get_storage
+        from pebble.core.storage import get_storage
 
         session = _make_session()
         session._title_generated = True
@@ -6862,7 +6862,7 @@ class TestReminderSidechannelIsolation:
         threads ``_source`` onto every fork row so reconnecting tabs see
         the same marker the source workstream's originating tab rendered.
         """
-        from turnstone.core.memory import register_workstream, save_message
+        from pebble.core.memory import register_workstream, save_message
 
         register_workstream("fork_source")
         save_message("fork_source", "user", "real turn")
@@ -6896,8 +6896,8 @@ class TestReminderSidechannelIsolation:
         ws_id (driving the fixed bulk-save), then reload the fork's rows
         and assert the provider blocks survived.
         """
-        from turnstone.core.memory import register_workstream
-        from turnstone.core.storage import get_storage
+        from pebble.core.memory import register_workstream
+        from pebble.core.storage import get_storage
 
         register_workstream("fork_pc_src")
         get_storage().save_message(
@@ -6935,7 +6935,7 @@ class TestSessionUIBaseSystemTurnHook:
     events."""
 
     def test_on_system_turn_enqueues_sse_event(self):
-        from turnstone.core.session_ui_base import SessionUIBase
+        from pebble.core.session_ui_base import SessionUIBase
 
         class _RecordingUI(SessionUIBase):
             def __init__(self) -> None:
@@ -6967,7 +6967,7 @@ class TestSessionUIBaseSystemTurnHook:
         }
 
     def test_on_system_turn_carries_each_source_kind(self):
-        from turnstone.core.session_ui_base import SessionUIBase
+        from pebble.core.session_ui_base import SessionUIBase
 
         class _RecordingUI(SessionUIBase):
             def __init__(self) -> None:
@@ -6989,7 +6989,7 @@ class TestSearchLineTruncation:
 
     def test_search_truncates_long_lines_preserves_path(self):
         """Long lines are truncated but path:line: prefix is preserved for file counting."""
-        from turnstone.core.session import (
+        from pebble.core.session import (
             _MAX_SEARCH_LINE_LENGTH,
             _SEARCH_LINE_MARGIN,
             _SEARCH_TRUNCATION_SUFFIX,
@@ -6997,12 +6997,12 @@ class TestSearchLineTruncation:
 
         # path:line:content where content is way over the cap+margin
         long_content = "x" * 5000
-        stdout = f"turnstone/core/session.py:100:{long_content}\n".encode()
+        stdout = f"pebble/core/session.py:100:{long_content}\n".encode()
 
         output = _run_exec_search(_make_session(), (stdout, 0, b"", False))
 
         assert _SEARCH_TRUNCATION_SUFFIX in output
-        assert "turnstone/core/session.py" in output
+        assert "pebble/core/session.py" in output
         # The *content portion* (after the 2nd colon) is what's bounded by
         # the per-line cap; the path prefix is unbounded.
         max_content_len = (
@@ -7018,23 +7018,23 @@ class TestSearchLineTruncation:
     def test_search_file_counting_with_truncated_lines(self):
         """File counting works correctly even with truncated lines."""
         stdout = (
-            "turnstone/core/session.py:100:" + "x" * 5000 + "\n"
-            "turnstone/core/auth.py:50:normal line\n"
-            "turnstone/core/session.py:200:" + "y" * 3000 + "\n"
+            "pebble/core/session.py:100:" + "x" * 5000 + "\n"
+            "pebble/core/auth.py:50:normal line\n"
+            "pebble/core/session.py:200:" + "y" * 3000 + "\n"
         ).encode()
 
         output = _run_exec_search(_make_session(), (stdout, 0, b"", False))
 
         assert "3 matches across 2 files" in output
-        assert "turnstone/core/session.py" in output
-        assert "turnstone/core/auth.py" in output
+        assert "pebble/core/session.py" in output
+        assert "pebble/core/auth.py" in output
 
     def test_search_drops_lines_without_colon(self):
         """Lines without any colon are dropped at the parsing step."""
-        from turnstone.core.session import _SEARCH_ALL_TRUNCATED_MSG
+        from pebble.core.session import _SEARCH_ALL_TRUNCATED_MSG
 
         # No colon anywhere — parsed records list is empty.
-        stdout = ("turnstone/core/session.py" + "x" * 5000 + "\n").encode()
+        stdout = ("pebble/core/session.py" + "x" * 5000 + "\n").encode()
 
         output = _run_exec_search(_make_session(), (stdout, 0, b"", False))
 
@@ -7042,10 +7042,10 @@ class TestSearchLineTruncation:
 
     def test_search_handles_single_colon_lines(self):
         """Lines with one colon and a non-numeric line-number portion are dropped."""
-        from turnstone.core.session import _SEARCH_ALL_TRUNCATED_MSG
+        from pebble.core.session import _SEARCH_ALL_TRUNCATED_MSG
 
         # path:100xxxxx... — partition's lineno chunk has trailing junk, .isdigit() fails
-        stdout = ("turnstone/core/session.py:100" + "x" * 5000 + "\n").encode()
+        stdout = ("pebble/core/session.py:100" + "x" * 5000 + "\n").encode()
 
         output = _run_exec_search(_make_session(), (stdout, 0, b"", False))
 
@@ -7053,7 +7053,7 @@ class TestSearchLineTruncation:
 
     def test_search_no_truncation_for_short_lines(self):
         """Short lines pass through unchanged."""
-        stdout = b"turnstone/core/session.py:100:short line\n"
+        stdout = b"pebble/core/session.py:100:short line\n"
 
         output = _run_exec_search(_make_session(), (stdout, 0, b"", False))
 
@@ -7106,33 +7106,33 @@ class TestSearchBackendSelection:
     """Tests for backend detection (rg vs grep) and arg construction."""
 
     def test_detect_uses_rg_when_on_path(self):
-        from turnstone.core.session import _detect_search_backend
+        from pebble.core.session import _detect_search_backend
 
         # Reset cache so the patch takes effect.
         _detect_search_backend.cache_clear()
         try:
-            with patch("turnstone.core.session.shutil.which", return_value="/usr/bin/rg"):
+            with patch("pebble.core.session.shutil.which", return_value="/usr/bin/rg"):
                 assert _detect_search_backend() == "rg"
         finally:
             _detect_search_backend.cache_clear()
 
     def test_detect_falls_back_to_grep(self):
-        from turnstone.core.session import _detect_search_backend
+        from pebble.core.session import _detect_search_backend
 
         _detect_search_backend.cache_clear()
         try:
-            with patch("turnstone.core.session.shutil.which", return_value=None):
+            with patch("pebble.core.session.shutil.which", return_value=None):
                 assert _detect_search_backend() == "grep"
         finally:
             _detect_search_backend.cache_clear()
 
     def test_detect_caches_result(self):
-        from turnstone.core.session import _detect_search_backend
+        from pebble.core.session import _detect_search_backend
 
         _detect_search_backend.cache_clear()
         try:
             with patch(
-                "turnstone.core.session.shutil.which", return_value="/usr/bin/rg"
+                "pebble.core.session.shutil.which", return_value="/usr/bin/rg"
             ) as mock_which:
                 _detect_search_backend()
                 _detect_search_backend()
@@ -7142,7 +7142,7 @@ class TestSearchBackendSelection:
             _detect_search_backend.cache_clear()
 
     def test_rg_args_include_size_and_column_caps(self):
-        from turnstone.core.session import (
+        from pebble.core.session import (
             _MAX_SEARCH_LINE_LENGTH,
             _SEARCH_MAX_FILESIZE,
             _build_search_args,
@@ -7178,7 +7178,7 @@ class TestSearchBackendSelection:
         script as a per-file preprocessor and surface its stdout as
         search results.
         """
-        from turnstone.core.session import _build_search_args
+        from pebble.core.session import _build_search_args
 
         args = _build_search_args("foo", "--pre=/tmp/evil.sh", "rg")
         assert "--" in args
@@ -7188,7 +7188,7 @@ class TestSearchBackendSelection:
         assert args[-1] == "--pre=/tmp/evil.sh"
 
     def test_grep_args_include_excludes_and_separator(self):
-        from turnstone.core.session import _build_search_args
+        from pebble.core.session import _build_search_args
 
         args = _build_search_args("foo", "/some/path", "grep")
         assert args[0] == "grep"
@@ -7209,7 +7209,7 @@ class TestSearchOutputBudget:
     """Tests for tier-based degradation when output exceeds the budget."""
 
     def test_tier1_fits_full_output(self):
-        from turnstone.core.session import _format_search_results
+        from pebble.core.session import _format_search_results
 
         records = [
             ("foo.py", "1", "small match"),
@@ -7224,7 +7224,7 @@ class TestSearchOutputBudget:
 
     def test_tier2_samples_when_over_budget(self):
         """Many matches per file → degrade to K samples per file with overflow notes."""
-        from turnstone.core.session import _SEARCH_OUTPUT_BUDGET, _format_search_results
+        from pebble.core.session import _SEARCH_OUTPUT_BUDGET, _format_search_results
 
         # 3 files × 200 matches/file × ~80 chars/line ≈ 48 KB → over the 32 KB budget
         records = []
@@ -7245,7 +7245,7 @@ class TestSearchOutputBudget:
 
     def test_tier3_counts_only_when_too_many_files(self):
         """Thousands of files × matches → degrade to per-file counts."""
-        from turnstone.core.session import _SEARCH_OUTPUT_BUDGET, _format_search_results
+        from pebble.core.session import _SEARCH_OUTPUT_BUDGET, _format_search_results
 
         records = []
         # 2000 files × 50 matches × 80 chars = 8 MB; well past budget even at 1/file
@@ -7260,7 +7260,7 @@ class TestSearchOutputBudget:
 
     def test_tier1_preserves_file_order(self):
         """Tier 1 emits files in insertion order (so first-seen file appears first)."""
-        from turnstone.core.session import _format_search_results
+        from pebble.core.session import _format_search_results
 
         records = [
             ("z.py", "1", "first"),
@@ -7273,7 +7273,7 @@ class TestSearchOutputBudget:
         assert z_idx < a_idx, "first-seen file (z.py) should appear before later-seen (a.py)"
 
     def test_capped_flag_propagates_to_summary(self):
-        from turnstone.core.session import _format_search_results
+        from pebble.core.session import _format_search_results
 
         records = [("foo.py", "1", "match")]
         out = _format_search_results(records, capped=True)
@@ -7284,7 +7284,7 @@ class TestSearchOutputBudget:
         down the (5, 3, 1) ladder before falling through to Tier 3.
         Regression test for the perf-2 → ladder-collapse bug.
         """
-        from turnstone.core.session import _SEARCH_OUTPUT_BUDGET, _format_search_results
+        from pebble.core.session import _SEARCH_OUTPUT_BUDGET, _format_search_results
 
         # Tune so K=5 doesn't fit but a smaller K does. ~70 files with
         # ~30 matches each at ~120 chars/line: K=5 emits ~42 KB (over
@@ -7318,7 +7318,7 @@ class TestSearchCaptureStreaming:
         trailing line."""
         import sys
 
-        from turnstone.core.session import _SEARCH_RAW_BYTE_CAP
+        from pebble.core.session import _SEARCH_RAW_BYTE_CAP
 
         session = _make_session()
         # Each line is "p:1:" + 1023 'x' chars + '\n' = 1028 bytes; emit
@@ -7348,7 +7348,7 @@ class TestSearchCaptureStreaming:
         this from 'all malformed' via the dedicated byte-cap message."""
         import sys
 
-        from turnstone.core.session import _SEARCH_RAW_BYTE_CAP
+        from pebble.core.session import _SEARCH_RAW_BYTE_CAP
 
         session = _make_session()
         # 5 MB of bytes, no newlines anywhere.
@@ -7403,7 +7403,7 @@ class TestSearchCaptureStreaming:
         assert rc == 0
         assert stdout == b"a.py:1:done\n"
         # stderr was drained; the captured prefix is bounded by the cap.
-        from turnstone.core.session import _SEARCH_STDERR_CAP
+        from pebble.core.session import _SEARCH_STDERR_CAP
 
         assert len(stderr) <= _SEARCH_STDERR_CAP
 
@@ -7429,7 +7429,7 @@ class _AuxRecordingUI(NullUI):
 def test_utility_completion_records_aux_usage():
     """A utility completion's token usage is routed to on_aux_usage with the
     fields mapped from the provider's UsageInfo and the session model."""
-    from turnstone.core.providers._protocol import (
+    from pebble.core.providers._protocol import (
         CompletionResult,
         ModelCapabilities,
         UsageInfo,
@@ -7469,7 +7469,7 @@ def test_utility_completion_defers_temperature_to_session():
     one operator-set ``[models.*]`` temperature governs every lane and code never
     fights a thinking/no-temp model by hard-coding a constant.  An explicit
     override still wins for any caller that genuinely needs one."""
-    from turnstone.core.providers._protocol import CompletionResult, ModelCapabilities
+    from pebble.core.providers._protocol import CompletionResult, ModelCapabilities
 
     session = _make_session()
     session.temperature = 0.42
@@ -7494,7 +7494,7 @@ def test_web_fetch_extraction_inherits_session_max_tokens_and_effort():
     forced values fought — this lane now behaves like the main turn."""
     from unittest.mock import patch
 
-    from turnstone.core.providers._protocol import CompletionResult
+    from pebble.core.providers._protocol import CompletionResult
 
     session = _make_session(max_tokens=512, reasoning_effort="high")
 
@@ -7504,7 +7504,7 @@ def test_web_fetch_extraction_inherits_session_max_tokens_and_effort():
     resp.text = "The page body that holds the answer."
 
     with (
-        patch("turnstone.core.session.fetch_with_ssrf_guard", return_value=resp),
+        patch("pebble.core.session.fetch_with_ssrf_guard", return_value=resp),
         patch.object(
             session,
             "_utility_completion",
@@ -7529,7 +7529,7 @@ def test_web_fetch_extraction_caps_max_tokens_to_window_reserve():
     model can't push prompt + output past the window."""
     from unittest.mock import patch
 
-    from turnstone.core.providers._protocol import CompletionResult
+    from pebble.core.providers._protocol import CompletionResult
 
     # context_window=8192 -> reserve 2048; the session budget is far larger.
     session = _make_session(max_tokens=16384, context_window=8192)
@@ -7540,7 +7540,7 @@ def test_web_fetch_extraction_caps_max_tokens_to_window_reserve():
     resp.text = "The page body that holds the answer."
 
     with (
-        patch("turnstone.core.session.fetch_with_ssrf_guard", return_value=resp),
+        patch("pebble.core.session.fetch_with_ssrf_guard", return_value=resp),
         patch.object(
             session,
             "_utility_completion",
@@ -7580,7 +7580,7 @@ def test_record_aux_usage_skips_when_usage_missing():
 def test_record_aux_usage_noop_without_ui_hook():
     """Minimal UI stubs predating on_aux_usage (e.g. NullUI) must not crash
     a title-gen or sub-agent turn — recording silently no-ops."""
-    from turnstone.core.providers._protocol import UsageInfo
+    from pebble.core.providers._protocol import UsageInfo
 
     session = _make_session(ui=NullUI())  # NullUI has no on_aux_usage
     session._record_aux_usage(
@@ -7593,7 +7593,7 @@ def test_record_aux_usage_attributes_explicit_model():
     _api_call passes model=agent_model so plan/task spend attributes to the
     sub-agent's model, not the coordinating session's. Verify the override
     reaches on_aux_usage rather than defaulting to self.model."""
-    from turnstone.core.providers._protocol import UsageInfo
+    from pebble.core.providers._protocol import UsageInfo
 
     ui = _AuxRecordingUI()
     session = _make_session(ui=ui)  # session model == "test-model"

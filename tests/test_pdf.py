@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from turnstone.core.pdf import extract_pdf_text, rasterize_pdf
+from pebble.core.pdf import extract_pdf_text, rasterize_pdf
 
 
 def _minimal_pdf(text: str = "Hello PDF") -> bytes:

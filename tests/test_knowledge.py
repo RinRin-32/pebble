@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from turnstone.core import knowledge as kb
+from pebble.core import knowledge as kb
 
 
 @pytest.fixture(autouse=True)
 def _vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TURNSTONE_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path / "workspace"))
 
 
 class TestSlugAndLinks:

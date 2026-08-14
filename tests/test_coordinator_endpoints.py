@@ -5,7 +5,7 @@ an auth-injector middleware.  Verifies the permission gate, 503
 remediation when coord_mgr / model alias is missing, ownership
 enforcement, and lazy rehydration on GET /{ws_id}. Also exercises
 the lifted ``approve`` and ``close`` handlers from
-``turnstone.core.session_routes`` wired through the coord
+``pebble.core.session_routes`` wired through the coord
 ``SessionEndpointConfig`` — same code path the live console uses.
 """
 
@@ -33,8 +33,8 @@ from tests._coord_test_helpers import (
     _FakeConfigStore,
     _seed_children,
 )
-from turnstone.console.coordinator_ui import ConsoleCoordinatorUI
-from turnstone.console.server import (
+from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+from pebble.console.server import (
     _audit_cancel_coordinator,
     _audit_close_coordinator,
     _audit_coordinator_create,
@@ -49,11 +49,11 @@ from turnstone.console.server import (
     coordinator_children,
     coordinator_tasks,
 )
-from turnstone.core.attachments import (
+from pebble.core.attachments import (
     classify_upload as _coord_test_classify_upload,
 )
-from turnstone.core.auth import AuthResult
-from turnstone.core.session_routes import (
+from pebble.core.auth import AuthResult
+from pebble.core.session_routes import (
     AttachmentUploadHelpers,
     SessionEndpointConfig,
     make_approve_handler,
@@ -72,7 +72,7 @@ from turnstone.core.session_routes import (
     make_send_handler,
     make_set_title_handler,
 )
-from turnstone.core.workstream import WorkstreamKind
+from pebble.core.workstream import WorkstreamKind
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -90,8 +90,8 @@ def _coord_attach_owner(request, ws_id, mgr):
     """
     from starlette.responses import JSONResponse
 
-    from turnstone.core.auth import WorkstreamProjectVisibility
-    from turnstone.core.web_helpers import auth_user_id
+    from pebble.core.auth import WorkstreamProjectVisibility
+    from pebble.core.web_helpers import auth_user_id
 
     ws = mgr.get(ws_id)
     if ws is None:
@@ -139,14 +139,14 @@ def storage(tmp_path):
     # registry singleton), not the instance passed to ``_make_client``/``_build_mgr``.
     # Register the test backend so ``get_attachment`` & co. hit this fresh db rather
     # than a stale default — otherwise schema drift (e.g. a new column) surfaces here.
-    from turnstone.core.storage import init_storage, reset_storage
+    from pebble.core.storage import init_storage, reset_storage
 
     reset_storage()
     backend = init_storage("sqlite", path=str(tmp_path / "coord.db"), run_migrations=False)
     # The per-node upload buffer is a process-global singleton; clear it so a
     # prior test's staged uploads can't leak into this one (pending uploads
     # live here now, not in storage).
-    from turnstone.core.attachment_buffer import get_attachment_buffer
+    from pebble.core.attachment_buffer import get_attachment_buffer
 
     get_attachment_buffer().clear()
     yield backend
@@ -433,7 +433,7 @@ def test_coord_refresh_title_unknown_ws_404(storage):
 
 
 def test_coord_set_title_stores_alias_and_broadcasts(storage):
-    from turnstone.core.memory import get_workstream_display_name
+    from pebble.core.memory import get_workstream_display_name
 
     mgr = _build_mgr(storage)
     ws = mgr.create(user_id="user-1", name="c1")
@@ -479,7 +479,7 @@ def test_coord_set_title_rejects_unowned_ws_404(storage):
     /title route: set_workstream_alias is a global kind-unscoped UPDATE, so
     the handler 404s on the in-memory coord lookup BEFORE writing — no
     silent 200, no cross-kind alias write."""
-    from turnstone.core.memory import get_workstream_display_name
+    from pebble.core.memory import get_workstream_display_name
 
     mgr = _build_mgr(storage)
     # An interactive-kind row in storage, NOT held by coord_mgr.
@@ -683,12 +683,12 @@ def test_create_with_multipart_attachments_stages_to_buffer(storage):
 
     No ``initial_message`` here, so the staged upload remains in the buffer
     for the workstream after create returns."""
-    from turnstone.core.attachment_buffer import get_attachment_buffer
+    from pebble.core.attachment_buffer import get_attachment_buffer
 
     mgr = _build_mgr(storage)
     client = _make_client(storage, coord_mgr=mgr, registry=_fake_registry())
 
-    import turnstone.core.storage._registry as _reg
+    import pebble.core.storage._registry as _reg
 
     _old_storage = _reg._storage
     _reg._storage = storage
@@ -728,7 +728,7 @@ def test_create_with_multipart_attachments_and_initial_message_resolves(storage)
     mgr = _build_mgr(storage)
     client = _make_client(storage, coord_mgr=mgr, registry=_fake_registry())
 
-    import turnstone.core.storage._registry as _reg
+    import pebble.core.storage._registry as _reg
 
     _old_storage = _reg._storage
     _reg._storage = storage
@@ -769,7 +769,7 @@ def test_create_attachment_failure_no_phantom_create_close_pair(storage):
     coord_collector = mgr._adapter._collector  # type: ignore[attr-defined]
     client = _make_client(storage, coord_mgr=mgr, registry=_fake_registry())
 
-    import turnstone.core.storage._registry as _reg
+    import pebble.core.storage._registry as _reg
 
     _old_storage = _reg._storage
     _reg._storage = storage
@@ -800,7 +800,7 @@ def test_create_rejects_disabled_skill(storage):
     """Coord parity gain — disabled skills now rejected at the lift,
     matching interactive's pre-lift behaviour. Pre-lift coord silently
     let disabled skills through."""
-    import turnstone.core.storage._registry as _reg
+    import pebble.core.storage._registry as _reg
 
     _old_storage = _reg._storage
     _reg._storage = storage
@@ -898,7 +898,7 @@ def saved_storage(tmp_path):
     a fresh SQLite db and yields the same backend so the test can also
     seed conversation rows directly.
     """
-    from turnstone.core.storage import init_storage, reset_storage
+    from pebble.core.storage import init_storage, reset_storage
 
     db_path = str(tmp_path / "saved.db")
     reset_storage()
@@ -1132,7 +1132,7 @@ def _seed_pending(ws, *call_ids: str, func_name: str = "spawn_workstream"):
     ``approve_tools`` gate does, returning the cycle for direct
     event/result assertions (the pre-cycle singleton
     ``_approval_event`` / ``_approval_result`` slots are gone)."""
-    from turnstone.core.session_ui_base import ApprovalCycle
+    from pebble.core.session_ui_base import ApprovalCycle
 
     items = [
         {
@@ -1779,7 +1779,7 @@ def test_cancel_swallows_forensics_exception(storage):
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.core.session_routes import (
+    from pebble.core.session_routes import (
         SessionEndpointConfig,
         make_cancel_handler,
     )
@@ -1815,7 +1815,7 @@ def test_cancel_swallows_audit_emit_exception(storage):
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.core.session_routes import (
+    from pebble.core.session_routes import (
         SessionEndpointConfig,
         make_cancel_handler,
     )
@@ -1878,8 +1878,8 @@ def test_coord_cancel_cascades_to_children(storage):
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.console.server import _cascade_cancel_to_children
-    from turnstone.core.session_routes import SessionEndpointConfig, make_cancel_handler
+    from pebble.console.server import _cascade_cancel_to_children
+    from pebble.core.session_routes import SessionEndpointConfig, make_cancel_handler
 
     mgr = _build_mgr(storage)
     coord = mgr.create(user_id="user-1", name="coord-a")
@@ -1935,9 +1935,9 @@ def test_coord_cancel_cascade_denied_for_service_token_without_grant(storage):
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.console.server import _cascade_cancel_to_children
-    from turnstone.core.auth import AuthResult
-    from turnstone.core.session_routes import SessionEndpointConfig, make_cancel_handler
+    from pebble.console.server import _cascade_cancel_to_children
+    from pebble.core.auth import AuthResult
+    from pebble.core.session_routes import SessionEndpointConfig, make_cancel_handler
 
     mgr = _build_mgr(storage)
     coord = mgr.create(user_id="svc-user", name="coord-a")
@@ -1991,7 +1991,7 @@ def test_coord_cancel_cascade_failure_does_not_fail_owner_cancel(storage):
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    from turnstone.core.session_routes import SessionEndpointConfig, make_cancel_handler
+    from pebble.core.session_routes import SessionEndpointConfig, make_cancel_handler
 
     mgr = _build_mgr(storage)
     coord = mgr.create(user_id="user-1", name="coord-a")
@@ -2032,7 +2032,7 @@ def test_coord_events_replay_yields_connected_first():
     yields ``connected`` first so the dashboard's status bar populates
     the model cell before any history arrives — mirrors the
     interactive replay (turnstone/server.py:_interactive_events_replay)."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, request = _make_coord_replay_mocks()
     out = list(_coord_events_replay(ws, ui, request))
@@ -2047,7 +2047,7 @@ def test_coord_events_replay_includes_status_only_when_last_usage_present():
     resume. Skipped when ``session._last_usage`` is None (a freshly-
     created coordinator that hasn't completed a turn) — matches
     interactive behaviour."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, request = _make_coord_replay_mocks()
     out = list(_coord_events_replay(ws, ui, request))
@@ -2058,7 +2058,7 @@ def test_coord_events_replay_status_payload_shape():
     """When ``last_usage`` exists, the replayed ``status`` event carries
     every field the dashboard's updateStatusBar() reads — same shape
     SessionUI.on_status emits live."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, request = _make_coord_replay_mocks(
         last_usage={
@@ -2089,7 +2089,7 @@ def test_coord_events_replay_skips_session_block_when_no_session():
     connected/status preamble and falls through to the pending-prompt
     branches.  Mirrors interactive's defensive guard at
     turnstone/server.py:665."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, _request = _make_coord_replay_mocks()
     ws.session = None
@@ -2104,7 +2104,7 @@ def test_coord_events_replay_yields_pending_approval():
     restructures as a generator the lifted body iterates and yields as
     ``data:`` lines, but the payload identity is preserved. Pure-read —
     never mutates ``ui``."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, request = _make_coord_replay_mocks(
         _pending_approval={"type": "approve_request", "items": []},
@@ -2125,7 +2125,7 @@ def test_coord_events_replay_yields_cached_verdicts_after_pending_approval():
     until the operator re-invokes the action — intent_verdict is a
     one-shot SSE event with no late-subscriber push. Mirrors the
     interactive replay path."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, request = _make_coord_replay_mocks(
         _pending_approval={
@@ -2156,7 +2156,7 @@ def test_coord_events_replay_skips_verdict_replay_without_pending_approval():
     """Verdict replay rides on top of pending_approval — no prompt,
     no chip. Stale verdicts from a previously-resolved round must
     not surface on a fresh connect."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, request = _make_coord_replay_mocks(
         _llm_verdicts={"old": {"verdict_id": "stale"}},
@@ -2173,7 +2173,7 @@ def test_coord_events_replay_yields_only_connected_when_no_pending():
     """A workstream with a session but no pending approval / plan
     review and no last_usage yields just the ``connected`` preamble.
     The lifted body falls through to the live loop immediately after."""
-    from turnstone.console.server import _coord_events_replay
+    from pebble.console.server import _coord_events_replay
 
     ws, ui, request = _make_coord_replay_mocks()
     out = list(_coord_events_replay(ws, ui, request))
@@ -2786,7 +2786,7 @@ def test_coordinator_rows_filters_by_caller_identity(storage):
     invariant, which the phase-3 dashboard merge originally bypassed."""
     from unittest.mock import MagicMock
 
-    from turnstone.console.server import _coordinator_rows
+    from pebble.console.server import _coordinator_rows
 
     mgr = _build_mgr(storage)
     mgr.create(user_id="alice", name="alice-coord")
@@ -2833,8 +2833,8 @@ def test_coordinator_rows_surfaces_closed_coordinators_from_storage(storage):
     /v1/api/cluster/workstreams?node=console — the persisted-rows
     merge path surfaces closed rows so the operator can still see
     them alongside active ones."""
-    from turnstone.console.server import _coordinator_rows
-    from turnstone.core.workstream import WorkstreamKind
+    from pebble.console.server import _coordinator_rows
+    from pebble.core.workstream import WorkstreamKind
 
     mgr = _build_mgr(storage)
     # Seed a persisted-but-not-loaded closed coordinator directly —
@@ -2868,7 +2868,7 @@ def test_coordinator_rows_dedupes_by_ws_id_in_memory_wins(storage):
     state (model / model_alias / current state) stays authoritative.
     The storage row has stale fields after every restart / refresh,
     so merging it twice is strictly worse."""
-    from turnstone.console.server import _coordinator_rows
+    from pebble.console.server import _coordinator_rows
 
     mgr = _build_mgr(storage)
     live = mgr.create(user_id="alice", name="alice-live")
@@ -2892,8 +2892,8 @@ def test_coordinator_rows_persisted_cluster_wide(storage):
     # Trusted-team visibility: every caller sees every persisted row,
     # including rows from other identities and orphan (empty-user_id)
     # rows.  ``user_id`` stays on the response as metadata.
-    from turnstone.console.server import _coordinator_rows
-    from turnstone.core.workstream import WorkstreamKind
+    from pebble.console.server import _coordinator_rows
+    from pebble.core.workstream import WorkstreamKind
 
     mgr = _build_mgr(storage)
     storage.register_workstream(
@@ -2946,8 +2946,8 @@ def test_coordinator_rows_surface_persisted_title(storage):
     used ``ws.name`` / the ``name`` column, so a generated title was
     written but never read back: it reverted to ``ws-xxxx`` on every
     dashboard refresh."""
-    from turnstone.console.server import _coordinator_rows
-    from turnstone.core.workstream import WorkstreamKind
+    from pebble.console.server import _coordinator_rows
+    from pebble.core.workstream import WorkstreamKind
 
     mgr = _build_mgr(storage)
 
@@ -3099,7 +3099,7 @@ class TestCoordinatorAttachments:
         **interactive** workstreams via the coord attachment surface.
         The kind-strict resolver returns 404 (no storage fallback) so
         a cross-kind ws_id never resolves to its owner."""
-        from turnstone.core.workstream import WorkstreamKind
+        from pebble.core.workstream import WorkstreamKind
 
         # Persist an interactive workstream row directly — never loaded
         # into the coord_mgr.

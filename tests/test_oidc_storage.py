@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from turnstone.core.storage import StorageConflictError
+from pebble.core.storage import StorageConflictError
 
 # ---------------------------------------------------------------------------
 # Atomic OIDC user provisioning
@@ -268,7 +268,7 @@ class TestOIDCPendingState:
         # Insert a row with an old created_at timestamp directly
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import oidc_pending_states
+        from pebble.core.storage._schema import oidc_pending_states
 
         with db._engine.connect() as conn:
             conn.execute(
@@ -327,7 +327,7 @@ class TestOIDCPendingState:
         """Create expired + fresh, cleanup removes only expired."""
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import oidc_pending_states
+        from pebble.core.storage._schema import oidc_pending_states
 
         # Insert an expired state directly with old timestamp
         with db._engine.connect() as conn:
@@ -364,7 +364,7 @@ class TestOIDCPendingState:
         """Cleanup with all expired states removes all."""
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import oidc_pending_states
+        from pebble.core.storage._schema import oidc_pending_states
 
         with db._engine.connect() as conn:
             for i in range(3):
@@ -389,7 +389,7 @@ class TestOIDCPendingState:
 
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import oidc_pending_states
+        from pebble.core.storage._schema import oidc_pending_states
 
         # Insert a state created 60 seconds ago
         old_ts = (datetime.now(UTC) - timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S")
@@ -418,7 +418,7 @@ class TestOIDCPendingState:
         """Popping an expired state should delete the row (not leave orphan)."""
         import sqlalchemy as sa
 
-        from turnstone.core.storage._schema import oidc_pending_states
+        from pebble.core.storage._schema import oidc_pending_states
 
         with db._engine.connect() as conn:
             conn.execute(

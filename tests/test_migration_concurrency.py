@@ -28,7 +28,7 @@ import sqlalchemy as sa
 
 def _pg_base_url() -> str:
     return os.environ.get(
-        "TURNSTONE_TEST_PG_URL",
+        "PEBBLE_TEST_PG_URL",
         "postgresql+psycopg://postgres:postgres@localhost:5432/turnstone_test",
     )
 
@@ -74,7 +74,7 @@ class _EngineStub:
 
 
 def test_concurrent_run_migrations_no_deadlock(fresh_pg_url: Any) -> None:
-    from turnstone.core.storage._migrate import run_migrations
+    from pebble.core.storage._migrate import run_migrations
 
     n_workers = 4
     errors: list[BaseException] = []

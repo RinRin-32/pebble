@@ -1,6 +1,6 @@
-"""Tests for turnstone.core.metacognition — detection, nudging, formatting."""
+"""Tests for pebble.core.metacognition — detection, nudging, formatting."""
 
-from turnstone.core.metacognition import (
+from pebble.core.metacognition import (
     NUDGE_COMPLETION,
     NUDGE_CORRECTION,
     NUDGE_DENIAL,
@@ -510,7 +510,7 @@ class TestSanitizeName:
     """
 
     def test_empty_input_returns_empty(self):
-        from turnstone.core.metacognition import sanitize_name
+        from pebble.core.metacognition import sanitize_name
 
         assert sanitize_name("") == ""
 
@@ -518,7 +518,7 @@ class TestSanitizeName:
         """Strict variant: TAB/LF/CR are stripped so a hostile name with
         an embedded newline can't break a bullet's one-line structure.
         """
-        from turnstone.core.metacognition import sanitize_name
+        from pebble.core.metacognition import sanitize_name
 
         # All three become spaces (then collapsed to one inline space
         # by the trailing ``strip()``-on-leading/trailing-only step
@@ -529,13 +529,13 @@ class TestSanitizeName:
         assert sanitize_name("a\rb") == "a b"
 
     def test_strips_other_ascii_control_chars(self):
-        from turnstone.core.metacognition import sanitize_name
+        from pebble.core.metacognition import sanitize_name
 
         assert sanitize_name("a\x07b\x0bc\x0cd") == "a b c d"
         assert sanitize_name("a\x7fb") == "a b"
 
     def test_strips_angle_bracket_tag_breakers(self):
-        from turnstone.core.metacognition import sanitize_name
+        from pebble.core.metacognition import sanitize_name
 
         assert sanitize_name("a</thinking>b") == "a/thinkingb"
 
@@ -549,13 +549,13 @@ class TestSanitizePayload:
     """
 
     def test_empty_input_returns_empty(self):
-        from turnstone.core.metacognition import sanitize_payload
+        from pebble.core.metacognition import sanitize_payload
 
         assert sanitize_payload("") == ""
 
     def test_strips_ascii_control_chars(self):
         """``\\x00``-``\\x1f`` minus TAB/LF/CR plus ``\\x7f`` (DEL) become spaces."""
-        from turnstone.core.metacognition import sanitize_payload
+        from pebble.core.metacognition import sanitize_payload
 
         # BEL (0x07), VT (0x0b), FF (0x0c) — all in strip set.
         assert sanitize_payload("a\x07b\x0bc\x0cd") == "a b c d"
@@ -566,20 +566,20 @@ class TestSanitizePayload:
         """TAB / LF / CR are intentionally preserved so multi-line shell
         output keeps its line structure when sanitised as a watch payload.
         """
-        from turnstone.core.metacognition import sanitize_payload
+        from pebble.core.metacognition import sanitize_payload
 
         # Newlines kept; only the leading + trailing strip happens.
         out = sanitize_payload("line1\nline2\n\tindented\rline3")
         assert out == "line1\nline2\n\tindented\rline3"
 
     def test_strips_bidi_and_zero_width(self):
-        from turnstone.core.metacognition import sanitize_payload
+        from pebble.core.metacognition import sanitize_payload
 
         # U+202E RIGHT-TO-LEFT OVERRIDE; U+200B ZERO WIDTH SPACE.
         assert sanitize_payload("a‮b​c") == "a b c"
 
     def test_strips_angle_bracket_tag_breakers(self):
-        from turnstone.core.metacognition import sanitize_payload
+        from pebble.core.metacognition import sanitize_payload
 
         # "<" / ">" go away entirely (not replaced with space) so a name
         # like "</thinking>" doesn't leave a hole the model can read as
