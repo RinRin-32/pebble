@@ -984,6 +984,14 @@ class StorageBackend(Protocol):
         """Remove a channel user mapping. Returns True if existed."""
         ...
 
+    def kb_overview(self) -> list[dict[str, Any]]:
+        """Notes with link counts plus the dangling-link frontier."""
+        ...
+
+    def coding_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Workstreams bound to a repo, most recently updated first."""
+        ...
+
     # -- Repos (coding-agent dispatch) ----------------------------------------
 
     def list_repos(self, enabled_only: bool = True) -> list[dict[str, Any]]:
