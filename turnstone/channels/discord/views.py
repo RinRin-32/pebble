@@ -155,25 +155,39 @@ class ApprovalView:
             )
             return
 
+        import asyncio
+
         ws_id, correlation_id, owner_id = parsed
+        clicker_id = str(interaction.user.id)
 
-        # Owner check: the gateway forwards approvals using its own
-        # service-scoped JWT, and the server short-circuits scope checks
-        # for service tokens — so the adapter is the only place this
-        # can be enforced.  Reject any other clicker, including linked
-        # users, with an ephemeral message.
-        if not owner_id or str(interaction.user.id) != owner_id:
-            verb = "always-approve" if always else ("approve" if approved else "reject")
-            await _deny_non_owner(interaction, verb)
-            return
+        # Identity resolution: the clicker's own /link takes precedence; a
+        # global-linked guild lets ANY member act as the shared guild user.
+        member_link = await self.bot.router.resolve_user("discord", clicker_id)
+        guild_link = None
+        if interaction.guild_id is not None:
+            guild_link = await asyncio.to_thread(
+                self.bot.storage.get_channel_user, "guild", str(interaction.guild_id)
+            )
 
-        # Verify user is linked (session owner should already be linked).
-        user_id = await self.bot.router.resolve_user("discord", str(interaction.user.id))
-        if user_id is None:
+        # Must be reachable at all: individually linked, or in a global-linked
+        # guild (where everyone is treated as the guild user by default).
+        if member_link is None and guild_link is None:
             await interaction.response.send_message(
-                "Your Discord account is not linked. Use `/link` first.",
+                "Your Discord account is not linked. Use `/link` first, "
+                "or ask an admin to use `/global-link`.",
                 ephemeral=True,
             )
+            return
+
+        # Owner boundary: approvals ride the gateway's service-scoped JWT (which
+        # short-circuits server-side scope checks), so the adapter is the only
+        # place this can be enforced.  In a global-linked guild the members
+        # share one trusted identity, so anyone may approve communally;
+        # otherwise only the workstream's own invoker may.
+        is_owner = bool(owner_id) and clicker_id == owner_id
+        if not is_owner and guild_link is None:
+            verb = "always-approve" if always else ("approve" if approved else "reject")
+            await _deny_non_owner(interaction, verb)
             return
 
         # Defer before doing async work so Discord doesn't time out.

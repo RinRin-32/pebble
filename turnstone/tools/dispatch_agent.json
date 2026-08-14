@@ -1,0 +1,38 @@
+{
+  "name": "dispatch_agent",
+  "description": "Hand a coding task to an external coding agent (opencode, Claude Code, or Codex) running in this workstream's isolated git worktree. Use for real code changes: implementing a feature, fixing a bug, refactoring, or running and fixing tests. The agent reads and edits files itself and its progress streams back live. Returns a summary plus the resulting diff. Requires the workstream to be bound to a repo first (bind_repo). Prefer this over editing many files by hand.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "task": {
+        "type": "string",
+        "description": "The coding task, written as you would brief a competent engineer: what to change, where, and any constraints or acceptance criteria."
+      },
+      "agent": {
+        "type": "string",
+        "description": "Which agent CLI to use. Defaults to the server-configured agent, falling back to whichever is installed.",
+        "enum": ["opencode", "claude", "codex"],
+        "default": ""
+      },
+      "model": {
+        "type": "string",
+        "description": "Optional model override passed to the agent (opencode expects 'provider/model'). Blank uses the agent's own default.",
+        "default": ""
+      },
+      "continue_session": {
+        "type": "boolean",
+        "description": "Continue the previous dispatch in this workstream instead of starting fresh, so the agent keeps its context. Use for follow-up instructions on the same task.",
+        "default": false
+      },
+      "timeout": {
+        "type": "integer",
+        "description": "Seconds before the agent run is aborted. Defaults to 1800.",
+        "default": 1800
+      }
+    },
+    "required": ["task"]
+  },
+  "interactive": true,
+  "coordinator": true,
+  "primary_key": "task"
+}

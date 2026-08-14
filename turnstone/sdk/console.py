@@ -238,6 +238,7 @@ class AsyncTurnstoneConsole(_BaseClient):
         resume_ws: str = "",
         target_node: str = "",
         user_id: str = "",
+        acting_user_id: str = "",
         client_type: str = "",
         ws_id: str = "",
         kind: str = "",
@@ -272,6 +273,10 @@ class AsyncTurnstoneConsole(_BaseClient):
             body["target_node"] = target_node
         if user_id:
             body["user_id"] = user_id
+        if acting_user_id:
+            # Enforcement identity (allow-list checks), distinct from the owner
+            # user_id — honored server-side only for service-scoped callers.
+            body["acting_user_id"] = acting_user_id
         if client_type:
             body["client_type"] = client_type
         if kind:

@@ -701,7 +701,19 @@ class TurnstoneBot:
                     audio_b64 = match.group(2)
                     try:
                         audio_bytes = base64.b64decode(audio_b64)
-                        ext = media_type.split("/")[-1] or "mpeg"
+                        # Discord only renders an inline audio player for known
+                        # extensions — ".mpeg" (from audio/mpeg) is treated as a
+                        # generic download, so map to the extensions it recognises.
+                        ext_map = {
+                            "audio/mpeg": "mp3",
+                            "audio/mp3": "mp3",
+                            "audio/wav": "wav",
+                            "audio/x-wav": "wav",
+                            "audio/ogg": "ogg",
+                            "audio/aac": "aac",
+                            "audio/flac": "flac",
+                        }
+                        ext = ext_map.get(media_type, media_type.split("/")[-1] or "mp3")
                         disc_file = discord.File(io.BytesIO(audio_bytes), filename=f"tts.{ext}")
                         await thread.send(file=disc_file)
                         log.info("discord.tts_audio_sent", ws_id=ws_id, size=len(audio_bytes))
@@ -1031,12 +1043,15 @@ class TurnstoneBot:
         *,
         model: str = "",
         persona: str = "",
+        acting_user_id: str = "",
         attachment_ids: list[str] | None = None,
     ) -> str:
         """Route every message in *channel* to a turnstone workstream.
 
         Returns the workstream ID.
         *discord_user_id* is the Discord user who started it (for approval gating).
+        *acting_user_id* is the linked turnstone user the workstream acts as
+        (owner + authority scope); empty falls back to the service identity.
         """
         ws_id, _is_new = await self.router.get_or_create_workstream(
             channel_type="discord_session",
@@ -1046,6 +1061,7 @@ class TurnstoneBot:
             persona=persona,
             initial_message="",
             client_type="chat",
+            acting_user_id=acting_user_id,
         )
         self._channel_sessions[channel.id] = (ws_id, discord_user_id)
         if discord_user_id:

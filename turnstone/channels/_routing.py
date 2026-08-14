@@ -303,6 +303,7 @@ class ChannelRouter:
         initial_message: str = "",
         client_type: str = "",
         kind: str = "",
+        acting_user_id: str = "",
     ) -> tuple[str, bool]:
         """Look up or create a workstream for a channel.
 
@@ -382,6 +383,12 @@ class ChannelRouter:
                     auto_approve_tools=_tools_csv,
                     client_type=client_type,
                     kind=kind,
+                    # Enforce the linked user's model/persona limits WITHOUT
+                    # changing ownership: the workstream stays owned by the
+                    # channel-gateway service identity so the gateway's own
+                    # send/SSE calls keep resolving it.  acting_user_id is used
+                    # server-side only for allow-list checks.
+                    acting_user_id=acting_user_id,
                 )
                 ws_id = data.get("ws_id", "")
             else:
@@ -396,6 +403,7 @@ class ChannelRouter:
                     auto_approve_tools=_tools_csv,
                     client_type=client_type,
                     kind=kind,
+                    acting_user_id=acting_user_id,
                 )
                 ws_id = resp.ws_id
                 data = {"ws_id": resp.ws_id, "name": resp.name}

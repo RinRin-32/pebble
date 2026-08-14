@@ -292,6 +292,11 @@ services:
     volumes:
       - turnstone-data:/data
       - ${WORKSPACE_MOUNT:-workspace}:/workspace
+      # Agent credentials are NOT mounted here: the path is machine-specific and
+      # a missing bind source makes Docker silently create a root-owned
+      # directory, which breaks the login it was meant to supply.  Put them in
+      # compose.override.yaml (gitignored, auto-merged) instead — see
+      # docs/coding-dispatch.md, "Authentication".
     environment: &node-env
       TURNSTONE_JWT_SECRET: *jwt-secret
       TURNSTONE_DB_BACKEND: *db-backend
@@ -305,6 +310,19 @@ services:
       MODEL: ${MODEL:-}
       MCP_CONFIG: ${MCP_CONFIG:-}
       SKIP_PERMISSIONS: ${SKIP_PERMISSIONS:-}
+      # --- Coding-agent dispatch (dispatch_agent tool) -------------------
+      # The agent CLIs ship in the image; only credentials come from here.
+      # Claude Code runs with --bare, which deliberately does NOT read OAuth
+      # logins or the host keychain, so it needs an API key:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # opencode reads provider keys from the environment too, and otherwise
+      # falls back to ~/.local/share/opencode/auth.json inside the container.
+      # To reuse your HOST login instead of issuing an API key, bind-mount the
+      # auth file by adding this to the node volumes below (the file must
+      # already exist, or Docker will helpfully create a DIRECTORY there):
+      #   - ${HOME}/.local/share/opencode/auth.json:/home/turnstone/.local/share/opencode/auth.json:ro
+      # Which agent dispatch_agent picks when the caller doesn't say:
+      TURNSTONE_DEFAULT_AGENT: ${TURNSTONE_DEFAULT_AGENT:-}
       TURNSTONE_NODE_ID: node-1
       TURNSTONE_ADVERTISE_URL: http://node-1:8080
     extra_hosts:

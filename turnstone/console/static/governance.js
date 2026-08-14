@@ -827,6 +827,159 @@ function submitUserRoles() {
 }
 
 // ---------------------------------------------------------------------------
+// User model/persona access (allow-lists)
+// ---------------------------------------------------------------------------
+
+let _uaWired = false;
+function _uaWire() {
+  if (_uaWired) return;
+  _uaWired = true;
+  document
+    .getElementById("ua-submit")
+    .addEventListener("click", submitUserAccess);
+}
+
+function _uaCheckboxList(items, opts) {
+  // items: [{value, label, checked, note, disabled}] — returns HTML.
+  let html = '<div class="user-roles-list">';
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    html +=
+      '<label class="toggle-switch user-role-toggle">' +
+      '<input type="checkbox" value="' +
+      escapeHtml(it.value) +
+      '" name="' +
+      opts.name +
+      '"' +
+      (it.checked ? " checked" : "") +
+      (it.disabled ? " disabled" : "") +
+      ">" +
+      '<span class="toggle-track" aria-hidden="true"></span>' +
+      '<span class="toggle-label">' +
+      escapeHtml(it.label) +
+      (it.note ? ' <span class="toggle-note">' + escapeHtml(it.note) + "</span>" : "") +
+      "</span></label>";
+  }
+  if (!items.length)
+    html += '<div class="dashboard-empty">None available</div>';
+  html += "</div>";
+  return html;
+}
+
+function showUserAccessModal(userId) {
+  _uaWire();
+  const shelf = document.getElementById("user-access-shelf");
+  document
+    .getElementById("user-access-shelf-error")
+    .classList.remove("is-visible");
+  document.getElementById("ua-user-id").value = userId;
+  const modelsEl = document.getElementById("ua-models");
+  const personasEl = document.getElementById("ua-personas");
+  setSafeHtml(modelsEl, '<div class="dashboard-empty">Loading...</div>');
+  setSafeHtml(personasEl, "");
+  window.TurnstoneHatch.openShelf(shelf);
+  Promise.all([
+    authFetch("/v1/api/admin/users/" + userId + "/models").then(function (r) {
+      return r.json();
+    }),
+    authFetch("/v1/api/admin/users/" + userId + "/personas").then(function (r) {
+      return r.json();
+    }),
+  ])
+    .then(function (results) {
+      const allowedModels = {};
+      const am = results[0].aliases || [];
+      for (let i = 0; i < am.length; i++) allowedModels[am[i]] = true;
+      const modelItems = (results[0].available || []).map(function (m) {
+        return {
+          value: m.alias,
+          label: m.alias,
+          note: m.model && m.model !== m.alias ? m.model : "",
+          checked: !!allowedModels[m.alias],
+        };
+      });
+      setSafeHtml(modelsEl, _uaCheckboxList(modelItems, { name: "ua-model" }));
+
+      const allowedPersonas = {};
+      const ap = results[1].persona_ids || [];
+      for (let j = 0; j < ap.length; j++) allowedPersonas[ap[j]] = true;
+      const personaItems = (results[1].available || []).map(function (p) {
+        // The kind default is always usable regardless of the allow-list, so
+        // show it checked + disabled to make that guarantee explicit.
+        return {
+          value: p.persona_id,
+          label: p.display_name || p.name,
+          checked: p.is_default || !!allowedPersonas[p.persona_id],
+          disabled: !!p.is_default,
+          note: p.is_default ? "default — always available" : "",
+        };
+      });
+      setSafeHtml(
+        personasEl,
+        _uaCheckboxList(personaItems, { name: "ua-persona" }),
+      );
+    })
+    .catch(function () {
+      setSafeHtml(
+        modelsEl,
+        '<div class="dashboard-empty">Failed to load access</div>',
+      );
+    });
+}
+
+function hideUserAccessModal() {
+  window.TurnstoneHatch.closeShelf(
+    document.getElementById("user-access-shelf"),
+  );
+}
+
+function _uaCollect(name) {
+  const boxes = document.querySelectorAll('input[name="' + name + '"]');
+  const out = [];
+  for (let i = 0; i < boxes.length; i++) {
+    // Disabled = the always-available kind default; never persist it as an
+    // explicit allow-list entry (would be redundant and confusing).
+    if (boxes[i].checked && !boxes[i].disabled) out.push(boxes[i].value);
+  }
+  return out;
+}
+
+function submitUserAccess() {
+  const userId = document.getElementById("ua-user-id").value;
+  const shelf = document.getElementById("user-access-shelf");
+  window.TurnstoneHatch.setBusy(shelf, true);
+  const models = _uaCollect("ua-model");
+  const personas = _uaCollect("ua-persona");
+  Promise.all([
+    authFetch("/v1/api/admin/users/" + userId + "/models", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aliases: models }),
+    }),
+    authFetch("/v1/api/admin/users/" + userId + "/personas", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ persona_ids: personas }),
+    }),
+  ])
+    .then(function (rs) {
+      for (let i = 0; i < rs.length; i++) {
+        if (!rs[i].ok) throw new Error("save failed");
+      }
+      window.TurnstoneHatch.setBusy(shelf, false);
+      hideUserAccessModal();
+      showToast("Access updated");
+    })
+    .catch(function () {
+      window.TurnstoneHatch.setBusy(shelf, false);
+      _showModalError(
+        document.getElementById("user-access-shelf-error"),
+        "Failed to update access",
+      );
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Tool Policies
 // ---------------------------------------------------------------------------
 

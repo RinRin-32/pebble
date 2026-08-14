@@ -7234,6 +7234,138 @@ async def admin_unassign_role(request: Request) -> JSONResponse:
     return JSONResponse({"error": "Role assignment not found"}, status_code=404)
 
 
+async def admin_get_user_models(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/users/{user_id}/models — a user's allowed model aliases.
+
+    Empty list == unrestricted (the user may use any model).
+    """
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    user_id = request.path_params["user_id"]
+    # Include the catalog of enabled aliases so the panel renders checkboxes
+    # from one admin.users-gated call (no separate persona.read fetch).
+    available = [
+        {"alias": r["alias"], "model": r.get("model", ""), "provider": r.get("provider", "")}
+        for r in storage.list_model_definitions(enabled_only=True)
+    ]
+    return JSONResponse(
+        {
+            "aliases": storage.list_user_allowed_models(user_id),
+            "available": available,
+        }
+    )
+
+
+async def admin_set_user_models(request: Request) -> JSONResponse:
+    """PUT /v1/api/admin/users/{user_id}/models — replace a user's allowed models.
+
+    Body ``{"aliases": [...]}``.  An empty list clears the restriction
+    (unrestricted).
+    """
+    from turnstone.core.audit import record_audit
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import read_json_or_400, require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    user_id = request.path_params["user_id"]
+    if storage.get_user(user_id) is None:
+        return JSONResponse({"error": "User not found"}, status_code=404)
+    body = await read_json_or_400(request)
+    if isinstance(body, JSONResponse):
+        return body
+    raw = body.get("aliases")
+    if not isinstance(raw, list):
+        return JSONResponse({"error": "aliases must be a list"}, status_code=400)
+    aliases = [str(a).strip() for a in raw if str(a).strip()]
+    storage.set_user_allowed_models(user_id, aliases)
+    audit_uid, ip = _audit_context(request)
+    record_audit(
+        storage, audit_uid, "user.models.set", "user", user_id, {"count": len(aliases)}, ip
+    )
+    return JSONResponse({"aliases": storage.list_user_allowed_models(user_id)})
+
+
+async def admin_get_user_personas(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/users/{user_id}/personas — a user's allowed persona_ids.
+
+    Empty list == unrestricted (the kind default persona is always usable).
+    """
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    user_id = request.path_params["user_id"]
+    # Include the enabled-persona catalog so the panel renders from one
+    # admin.users-gated call.  ``is_default`` is surfaced so the UI can mark
+    # the always-available kind defaults.
+    available = [
+        {
+            "persona_id": p["persona_id"],
+            "name": p["name"],
+            "display_name": p.get("display_name", ""),
+            "is_default": bool(p.get("is_default")),
+            "applies_to_kinds": p.get("applies_to_kinds", []),
+        }
+        for p in await asyncio.to_thread(storage.list_personas, False)
+    ]
+    return JSONResponse(
+        {
+            "persona_ids": storage.list_user_allowed_personas(user_id),
+            "available": available,
+        }
+    )
+
+
+async def admin_set_user_personas(request: Request) -> JSONResponse:
+    """PUT /v1/api/admin/users/{user_id}/personas — replace a user's allowed personas.
+
+    Body ``{"persona_ids": [...]}``.  An empty list clears the restriction.
+    """
+    from turnstone.core.audit import record_audit
+    from turnstone.core.auth import require_permission
+    from turnstone.core.web_helpers import read_json_or_400, require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    user_id = request.path_params["user_id"]
+    if storage.get_user(user_id) is None:
+        return JSONResponse({"error": "User not found"}, status_code=404)
+    body = await read_json_or_400(request)
+    if isinstance(body, JSONResponse):
+        return body
+    raw = body.get("persona_ids")
+    if not isinstance(raw, list):
+        return JSONResponse({"error": "persona_ids must be a list"}, status_code=400)
+    persona_ids = [str(p).strip() for p in raw if str(p).strip()]
+    storage.set_user_allowed_personas(user_id, persona_ids)
+    audit_uid, ip = _audit_context(request)
+    record_audit(
+        storage, audit_uid, "user.personas.set", "user", user_id, {"count": len(persona_ids)}, ip
+    )
+    return JSONResponse({"persona_ids": storage.list_user_allowed_personas(user_id)})
+
+
 async def admin_list_orgs(request: Request) -> JSONResponse:
     """GET /v1/api/admin/orgs — list all organizations."""
     from turnstone.core.auth import require_permission
@@ -14542,6 +14674,19 @@ def create_app(
                         "/api/admin/users/{user_id}/roles/{role_id}",
                         admin_unassign_role,
                         methods=["DELETE"],
+                    ),
+                    # Per-user access allow-lists (models + personas)
+                    Route("/api/admin/users/{user_id}/models", admin_get_user_models),
+                    Route(
+                        "/api/admin/users/{user_id}/models",
+                        admin_set_user_models,
+                        methods=["PUT"],
+                    ),
+                    Route("/api/admin/users/{user_id}/personas", admin_get_user_personas),
+                    Route(
+                        "/api/admin/users/{user_id}/personas",
+                        admin_set_user_personas,
+                        methods=["PUT"],
                     ),
                     # Governance: Orgs
                     Route("/api/admin/orgs", admin_list_orgs),

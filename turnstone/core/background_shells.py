@@ -243,7 +243,11 @@ def drain_pipe_lines(pipe: Any, on_line: Callable[[str], None]) -> None:
 
 
 def spawn_group_leader(
-    command: str, *, stop_on_error: bool, env: dict[str, str] | None
+    command: str,
+    *,
+    stop_on_error: bool,
+    env: dict[str, str] | None,
+    cwd: str | None = None,
 ) -> tuple[subprocess.Popen[str], int, str]:
     """Write the script, fork the detached group leader, snapshot its pgid.
 
@@ -258,6 +262,11 @@ def spawn_group_leader(
     pgid snapshot happens while the leader is alive (``start_new_session``
     makes ``pgid == pid``); the microseconds-wide pid-wraparound TOCTOU is
     the same accepted one as always.
+
+    ``cwd`` is the workstream's git worktree when one is bound (see
+    :mod:`turnstone.core.workspace`), so concurrent coding agents edit
+    isolated checkouts instead of one shared directory.  ``None`` keeps the
+    legacy behavior — inherit the server process's directory.
     """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
         preamble = "set -o pipefail\n"
@@ -274,6 +283,7 @@ def spawn_group_leader(
             errors="replace",
             start_new_session=True,
             env=env,
+            cwd=cwd,
         )
     except BaseException:
         with contextlib.suppress(OSError):
@@ -440,6 +450,7 @@ class BackgroundShellRegistry:
         env: dict[str, str] | None = None,
         owner: str | None = None,
         stop_on_error: bool = False,
+        cwd: str | None = None,
     ) -> BackgroundShell:
         """Start ``command`` as a detached shell; return its record.
 
@@ -459,7 +470,9 @@ class BackgroundShellRegistry:
             self._check_capacity_locked(owner)
         # Shared prologue with the foreground bash tool — the waiter unlinks
         # the script after exit.
-        proc, pgid, script_path = spawn_group_leader(command, stop_on_error=stop_on_error, env=env)
+        proc, pgid, script_path = spawn_group_leader(
+            command, stop_on_error=stop_on_error, env=env, cwd=cwd
+        )
         try:
             with self._lock:
                 # Authoritative re-check: a concurrent spawn/close may have

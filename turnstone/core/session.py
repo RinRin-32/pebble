@@ -9835,6 +9835,9 @@ class ChatSession:
             "recall": self._prepare_recall,
             "notify": self._prepare_notify,
             "tts": self._prepare_tts,
+            "bind_repo": self._prepare_bind_repo,
+            "dispatch_agent": self._prepare_dispatch_agent,
+            "kb": self._prepare_kb,
             "watch": self._prepare_watch,
             "read_resource": self._prepare_read_resource,
             "use_prompt": self._prepare_use_prompt,
@@ -10050,8 +10053,25 @@ class ChatSession:
         active = _active_read_files.get()
         return active if active is not None else self._read_files
 
+    def _ws_path(self, path: str) -> str:
+        """Resolve a tool path argument against this workstream's worktree.
+
+        Absolute paths (and ``~``) are left alone; a RELATIVE path resolves
+        against the bound worktree so ``read_file("calc.py")`` and
+        ``bash: cat calc.py`` refer to the same file.  Without a bound worktree
+        the path comes back unchanged, preserving legacy behavior for every
+        ordinary chat session.
+        """
+        if not path:
+            return path
+        expanded = os.path.expanduser(path)
+        if os.path.isabs(expanded):
+            return expanded
+        base = self._workspace_cwd()
+        return os.path.join(base, expanded) if base else expanded
+
     def _prepare_read_file(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        path = args.get("path", "")
+        path = self._ws_path(args.get("path", ""))
         if not path:
             return {
                 "call_id": call_id,
@@ -10135,7 +10155,7 @@ class ChatSession:
                 "needs_approval": False,
                 "error": "Error: missing query",
             }
-        path = os.path.expanduser(args.get("path", "") or ".")
+        path = self._ws_path(args.get("path", "") or ".")
         preview = f"    {DIM}/{pattern}/ in {path}{RESET}"
         return {
             "call_id": call_id,
@@ -10205,7 +10225,7 @@ class ChatSession:
         }
 
     def _prepare_write_file(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        path = args.get("path", "")
+        path = self._ws_path(args.get("path", ""))
         content = args.get("content", "")
         if not path:
             return {
@@ -10301,7 +10321,7 @@ class ChatSession:
         }
 
     def _prepare_edit_file(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
-        path = args.get("path", "")
+        path = self._ws_path(args.get("path", ""))
         if not path:
             return {
                 "call_id": call_id,
@@ -14765,6 +14785,24 @@ class ChatSession:
 
     # -- Execute methods (do the work, report output via UI) -------------------
 
+    def _workspace_cwd(self) -> str | None:
+        """Directory the shell tools run in: this workstream's git worktree.
+
+        ``None`` for every workstream without a bound repo, which keeps the
+        legacy behavior (inherit the server's directory) for ordinary chat
+        sessions.  A coding workstream gets an isolated checkout so two
+        concurrent dispatches can't edit the same tree — see
+        :mod:`turnstone.core.workspace`.
+        """
+        try:
+            from turnstone.core.workspace import resolve_cwd
+
+            return resolve_cwd(self._ws_id)
+        except Exception:
+            # Workspace resolution must never be able to break the bash tool.
+            log.debug("workspace.cwd_resolve_failed", exc_info=True)
+            return None
+
     def _exec_bash(self, item: dict[str, Any]) -> tuple[str, str]:
         """Execute a bash command via temp script, streaming stdout."""
         self._check_cancelled()
@@ -14788,6 +14826,7 @@ class ChatSession:
                     command,
                     stop_on_error=item.get("stop_on_error") is True,
                     env=scrubbed_env(extra=self._skill_resource_env()),
+                    cwd=self._workspace_cwd(),
                 )
                 with self._procs_lock:
                     self._active_procs.add(proc)
@@ -14965,6 +15004,7 @@ class ChatSession:
                 env=scrubbed_env(extra=self._skill_resource_env()),
                 owner=_active_shell_owner.get(),
                 stop_on_error=item.get("stop_on_error") is True,
+                cwd=self._workspace_cwd(),
             )
         except (RuntimeError, OSError) as e:
             # TooManyShellsError / registry-closed / spawn failure — all
@@ -16859,14 +16899,380 @@ class ChatSession:
         audio_b64 = base64.b64encode(result.audio_bytes).decode()
         media_type = result.media_type or "audio/mpeg"
         # Truncate to stay within Discord's 8MB file limit — 4MB for b64 text.
+        # Align to a 4-char boundary so the tail still base64-decodes cleanly.
         max_b64 = 4_000_000
         if len(audio_b64) > max_b64:
-            audio_b64 = audio_b64[:max_b64]
-        output = (
+            audio_b64 = audio_b64[: max_b64 - (max_b64 % 4)]
+        # The full base64 blob rides the live channel event ONLY: the Discord
+        # bot decodes it and uploads the clip as a real file attachment. It must
+        # NOT become the model-facing tool result — a multi-megabyte base64
+        # string would flood the context window and derail the agent (it starts
+        # trying to "open_preview" its own audio). So report the payload to the
+        # channel, but return a short confirmation to the model.
+        channel_output = (
             f"TTS_AUDIO:{media_type}:{audio_b64}:END_AUDIO\n"
             f"Text: \"{text[:200]}\""
         )
-        self._report_tool_result(call_id, "tts", output)
+        self._report_tool_result(call_id, "tts", channel_output)
+        model_output = (
+            f"Spoken audio generated and delivered to the channel as a file "
+            f"({len(result.audio_bytes)} bytes, {media_type}). "
+            f"Text: \"{text[:200]}\""
+        )
+        return call_id, model_output
+
+    # -- Knowledge base -------------------------------------------------------
+
+    def _prepare_kb(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        action = (args.get("action") or "").strip().lower()
+        valid = {"search", "read", "write", "append", "links", "graph"}
+        if action not in valid:
+            return {
+                "call_id": call_id,
+                "func_name": "kb",
+                "header": f"✗ kb: unknown action {action!r}",
+                "preview": "",
+                "needs_approval": False,
+                "error": f"Error: action must be one of {', '.join(sorted(valid))}",
+            }
+        title = (args.get("title") or "").strip()
+        query = (args.get("query") or "").strip()
+        label = title or query or "(vault)"
+        tags = args.get("tags")
+        return {
+            "call_id": call_id,
+            "func_name": "kb",
+            "header": f"\U0001f4d3 kb {action}: {label}"[:120],
+            "preview": "",
+            # Notes are turnstone-owned data on its own volume, not the user's
+            # repo — recording knowledge shouldn't interrupt with a prompt.
+            "needs_approval": False,
+            "execute": self._exec_kb,
+            "action": action,
+            "title": title,
+            "query": query,
+            "content": args.get("content") or "",
+            "kind": (args.get("kind") or "note").strip() or "note",
+            "summary": (args.get("summary") or "").strip(),
+            "tags": [str(t) for t in tags] if isinstance(tags, list) else [],
+        }
+
+    def _exec_kb(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Read/write the linked markdown knowledge vault."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        action = item["action"]
+        from turnstone.core import knowledge as kb
+
+        def _fail(msg: str) -> tuple[str, str]:
+            self._report_tool_result(call_id, "kb", msg, is_error=True)
+            return call_id, msg
+
+        try:
+            if action == "graph":
+                g = kb.graph_summary()
+                hubs = ", ".join(f"{t} ({n})" for t, n in g["hubs"]) or "(none)"  # type: ignore[union-attr]
+                frontier = ", ".join(f"{t} ({n})" for t, n in g["frontier"]) or "(none)"  # type: ignore[union-attr]
+                orphans = ", ".join(g["orphans"]) or "(none)"  # type: ignore[arg-type]
+                out = (
+                    f"Vault: {g['notes']} notes, {g['links']} links\n"
+                    f"Most-linked: {hubs}\n"
+                    # Dangling targets are the useful frontier: named but unwritten.
+                    f"Frontier (linked but not yet written): {frontier}\n"
+                    f"Orphans (no links either way): {orphans}"
+                )
+            elif action == "search":
+                if not item["query"]:
+                    return _fail("Error: query is required for search")
+                hits = kb.search_notes(item["query"])
+                if not hits:
+                    out = f"No notes match {item['query']!r}. The vault may not cover this yet."
+                else:
+                    lines = [f"{len(hits)} match(es) for {item['query']!r}:"]
+                    for note, score in hits:
+                        detail = note.summary or note.body.strip().split("\n")[0][:100]
+                        lines.append(f"  [[{note.title}]] ({note.kind}, score {score}) — {detail}")
+                    out = "\n".join(lines)
+            elif action == "read":
+                if not item["title"]:
+                    return _fail("Error: title is required for read")
+                note = kb.read_note(item["title"])
+                if note is None:
+                    out = f"No note titled {item['title']!r}."
+                else:
+                    out = (
+                        f"# {note.title}\nkind: {note.kind}"
+                        f"{f' | tags: {', '.join(note.tags)}' if note.tags else ''}\n\n"
+                        f"{note.body.strip()}"
+                    )
+            elif action == "links":
+                if not item["title"]:
+                    return _fail("Error: title is required for links")
+                n = kb.neighbours(item["title"])
+                out = (
+                    f"[[{item['title']}]]\n"
+                    f"  links to: {', '.join(n['outgoing']) or '(none)'}\n"
+                    f"  linked from: {', '.join(n['backlinks']) or '(none)'}\n"
+                    f"  dangling (not yet written): {', '.join(n['dangling']) or '(none)'}"
+                )
+            else:  # write / append
+                if not item["title"]:
+                    return _fail(f"Error: title is required for {action}")
+                if not item["content"].strip():
+                    return _fail(f"Error: content is required for {action}")
+                note = kb.Note(
+                    title=item["title"],
+                    body=item["content"],
+                    kind=item["kind"],
+                    summary=item["summary"],
+                    tags=item["tags"],
+                    ws_id=self._ws_id,
+                    repo_id=self._bound_repo_id(),
+                )
+                path = kb.write_note(note, append=(action == "append"))
+                links = kb.extract_links(item["content"])
+                # Keep the DB graph index in step with the files it mirrors.
+                try:
+                    from turnstone.core.storage._registry import get_storage
+
+                    storage = get_storage()
+                    if storage is not None:
+                        kb.sync_index(storage)
+                except Exception:
+                    log.debug("kb.index_sync_failed", exc_info=True)
+                out = (
+                    f"{'Appended to' if action == 'append' else 'Wrote'} [[{item['title']}]] "
+                    f"({path.name})"
+                    + (f"\nLinks: {', '.join(links)}" if links else "\nNo outgoing links yet.")
+                )
+        except kb.KnowledgeError as exc:
+            return _fail(f"Error: {exc}")
+        except Exception as exc:
+            log.warning("kb.failed", action=action, exc_info=True)
+            return _fail(f"Error: knowledge base {action} failed: {exc}")
+
+        out = self._truncate_output(out)
+        self._report_tool_result(call_id, "kb", out)
+        return call_id, out
+
+    # -- Coding-agent dispatch ------------------------------------------------
+
+    def _bound_repo_id(self) -> str:
+        """Repo this workstream is bound to, from its persisted config."""
+        try:
+            return (load_workstream_config(self._ws_id) or {}).get("repo_id", "") or ""
+        except Exception:
+            log.debug("dispatch.repo_lookup_failed", exc_info=True)
+            return ""
+
+    def _prepare_bind_repo(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        repo = (args.get("repo") or "").strip()
+        return {
+            "call_id": call_id,
+            "func_name": "bind_repo",
+            "header": f"\U0001f4c1 bind_repo: {repo or '(status)'}",
+            "preview": "",
+            # Checking out a repo writes to the shared workspace volume, so it
+            # rides the same approval gate as any other side effect.
+            "needs_approval": bool(repo) and not self.skip_permissions,
+            "execute": self._exec_bind_repo,
+            "repo": repo,
+            "base_ref": (args.get("base_ref") or "").strip(),
+        }
+
+    def _exec_bind_repo(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Bind the workstream to a repo and check out its worktree."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        repo_name = item["repo"]
+        from turnstone.core.storage._registry import get_storage
+
+        storage = get_storage()
+        if storage is None:
+            msg = "Error: storage unavailable"
+            self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+            return call_id, msg
+
+        if not repo_name:
+            # Status form: what am I bound to, and what could I bind to?
+            current = self._bound_repo_id()
+            rows = storage.list_repos()
+            names = ", ".join(r["name"] for r in rows) or "(none registered)"
+            cur_name = ""
+            if current:
+                row = storage.get_repo(current)
+                cur_name = row["name"] if row else current
+            out = f"Bound repo: {cur_name or '(none)'}\nAvailable repos: {names}"
+            self._report_tool_result(call_id, "bind_repo", out)
+            return call_id, out
+
+        row = storage.get_repo_by_name(repo_name)
+        if row is None:
+            msg = f"Error: no repo named '{repo_name}'. Register it in the console first."
+            self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+            return call_id, msg
+
+        try:
+            from turnstone.core.workspace import create_worktree, ensure_mirror
+
+            ensure_mirror(row["repo_id"], row["git_url"])
+            info = create_worktree(
+                row["repo_id"],
+                self._ws_id,
+                base_ref=item["base_ref"] or row.get("default_branch") or "HEAD",
+            )
+        except Exception as exc:
+            msg = f"Error: could not prepare worktree: {exc}"
+            self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+            return call_id, msg
+
+        # Persist the binding so shell/file tools resolve to this worktree on
+        # every later turn, including after a rehydrate on another node.
+        try:
+            cfg = load_workstream_config(self._ws_id) or {}
+            cfg["repo_id"] = row["repo_id"]
+            save_workstream_config(self._ws_id, cfg)
+        except Exception:
+            log.warning("dispatch.bind_persist_failed", ws_id=self._ws_id, exc_info=True)
+
+        out = (
+            f"Bound to repo '{row['name']}' on branch {info.branch}.\n"
+            f"Working directory is now {info.path} — shell and file tools run there."
+        )
+        self._report_tool_result(call_id, "bind_repo", out)
+        return call_id, out
+
+    def _prepare_dispatch_agent(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        task = (args.get("task") or "").strip()
+        if not task:
+            return {
+                "call_id": call_id,
+                "func_name": "dispatch_agent",
+                "header": "✗ dispatch_agent: empty task",
+                "preview": "",
+                "needs_approval": False,
+                "error": "Error: task is required",
+            }
+        agent = (args.get("agent") or "").strip().lower()
+        preview = task if len(task) <= 200 else task[:200] + "..."
+        return {
+            "call_id": call_id,
+            "func_name": "dispatch_agent",
+            "header": f"\U0001f916 dispatch_agent{f' ({agent})' if agent else ''}",
+            "preview": f"    {DIM}{preview}{RESET}",
+            # A dispatched agent writes code and runs commands; that is exactly
+            # the class of effect the approval gate exists for.
+            "needs_approval": not self.skip_permissions,
+            "execute": self._exec_dispatch_agent,
+            "task": task,
+            "agent": agent,
+            "model": (args.get("model") or "").strip(),
+            "continue_session": bool(args.get("continue_session")),
+            "timeout": args.get("timeout"),
+        }
+
+    def _exec_dispatch_agent(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Run an external coding agent inside this workstream's worktree."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        from turnstone.core.agents import DEFAULT_TIMEOUT, available_agents, get_adapter, run_agent
+        from turnstone.core.workspace import WorkspaceError, worktree_diff, worktree_stat
+
+        cwd = self._workspace_cwd()
+        if not cwd:
+            msg = (
+                "Error: this workstream has no repo bound. Call bind_repo first "
+                "so the agent has an isolated checkout to work in."
+            )
+            self._report_tool_result(call_id, "dispatch_agent", msg, is_error=True)
+            return call_id, msg
+
+        installed = available_agents()
+        name = item["agent"] or (self._config_store.get("agents.default") or "")
+        if not name:
+            # Prefer whatever this node actually has, in a stable order.
+            name = next((n for n in ("claude", "opencode", "codex") if n in installed), "")
+        adapter = get_adapter(name) if name else None
+        if adapter is None:
+            msg = (
+                f"Error: no coding agent available. Installed on this node: "
+                f"{', '.join(installed) or 'none'}."
+            )
+            self._report_tool_result(call_id, "dispatch_agent", msg, is_error=True)
+            return call_id, msg
+
+        # Resume the prior run so a follow-up keeps the agent's own context.
+        session_id = ""
+        cfg_key = f"agent_session_{adapter.name}"
+        if item["continue_session"]:
+            session_id = (load_workstream_config(self._ws_id) or {}).get(cfg_key, "") or ""
+
+        timeout = item.get("timeout") or DEFAULT_TIMEOUT
+        try:
+            timeout = max(30, min(int(timeout), 7200))
+        except (TypeError, ValueError):
+            timeout = DEFAULT_TIMEOUT
+
+        def _on_event(ev: Any) -> None:
+            # Stream tool activity to the live surface (Discord thread / web UI)
+            # so a long dispatch shows progress instead of going quiet.
+            line = ev.summary()
+            if not line:
+                return
+            try:
+                self.ui.on_tool_output_chunk(call_id, line + "\n")
+            except Exception:
+                log.debug("dispatch.stream_failed", exc_info=True)
+
+        result = run_agent(
+            adapter,
+            item["task"],
+            cwd=cwd,
+            model=item["model"],
+            session_id=session_id,
+            timeout=timeout,
+            on_event=_on_event,
+        )
+
+        if result.session_id:
+            try:
+                cfg = load_workstream_config(self._ws_id) or {}
+                cfg[cfg_key] = result.session_id
+                save_workstream_config(self._ws_id, cfg)
+            except Exception:
+                log.debug("dispatch.session_persist_failed", exc_info=True)
+
+        # The diff is the deliverable — report it even on failure, because a
+        # timed-out or errored run usually still left useful work behind.
+        diff = ""
+        stat = ""
+        try:
+            stat = worktree_stat(self._ws_id)
+            diff = worktree_diff(self._ws_id, max_bytes=60_000)
+        except WorkspaceError as exc:
+            log.debug("dispatch.diff_failed", error=str(exc))
+
+        parts = [
+            f"Agent: {adapter.name}"
+            + (f" (model {item['model']})" if item["model"] else "")
+            + f" | tools: {result.tool_calls} | cost: ${result.cost_usd:.4f}"
+        ]
+        if result.error:
+            parts.append(f"Status: FAILED — {result.error}")
+        elif result.timed_out:
+            parts.append("Status: TIMED OUT")
+        else:
+            parts.append("Status: ok")
+        if result.final_text:
+            parts.append(f"\n{result.final_text}")
+        parts.append(f"\nChanges:\n{stat or '(no file changes)'}")
+        if diff.strip():
+            parts.append(f"\n```diff\n{diff}\n```")
+        output = "\n".join(parts)
+
+        self._report_tool_result(
+            call_id, "dispatch_agent", output, is_error=bool(result.error)
+        )
         return call_id, output
 
     # -- Watch tool ----------------------------------------------------------

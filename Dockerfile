@@ -63,6 +63,17 @@ RUN chown turnstone:turnstone /data
 # Workspace mount point — bind-mount a host directory here
 RUN mkdir -p /workspace && chown turnstone:turnstone /workspace
 
+# Coding-agent CLIs for dispatch (turnstone/core/agents/*).  The image already
+# carries node+npm for these; each is optional at runtime — the adapter reports
+# a clean "not installed" instead of failing the workstream, so a slimmer build
+# can drop this layer.  Credentials are NOT baked in: they arrive per-run as env
+# (console settings) or via a read-only mount of the operator's host login.
+RUN npm install -g --no-fund --no-audit \
+        @anthropic-ai/claude-code \
+        opencode-ai \
+    && npm cache clean --force \
+    && claude --version && opencode --version
+
 USER turnstone
 
 ENTRYPOINT ["entrypoint.sh"]

@@ -35,8 +35,11 @@ from turnstone.core.storage._schema import (
     channel_routes,
     channel_users,
     conversations,
+    guild_prefs,
     heuristic_rules,
     intent_verdicts,
+    kb_links,
+    kb_notes,
     mcp_oauth_pending,
     mcp_pending_consent,
     mcp_servers,
@@ -53,6 +56,7 @@ from turnstone.core.storage._schema import (
     project_members,
     projects,
     prompt_templates,
+    repos,
     role_permission_overrides,
     roles,
     scheduled_task_runs,
@@ -67,6 +71,8 @@ from turnstone.core.storage._schema import (
     tls_certificates,
     tool_policies,
     usage_events,
+    user_allowed_models,
+    user_allowed_personas,
     user_roles,
     users,
     watches,
@@ -77,6 +83,12 @@ from turnstone.core.storage._schema import (
 )
 from turnstone.core.storage._schema import (
     prompt_policies as prompt_policies_t,
+)
+from turnstone.core.storage._utils import (
+    repo_insert_values as _repo_insert_values,
+)
+from turnstone.core.storage._utils import (
+    repo_row_to_dict as _repo_row_to_dict,
 )
 from turnstone.core.storage._utils import (
     COMPACTION_SOURCE as _COMPACTION_SOURCE,
@@ -1652,6 +1664,146 @@ class PostgreSQLBackend:
                     "created": row[3],
                 }
             return None
+
+    # -- Per-user access allow-lists & per-guild prefs -----------------------
+    # Empty list from a list_* getter == unrestricted (enforced in
+    # turnstone/core/access.py); set_* replaces the whole set atomically.
+
+    def list_user_allowed_models(self, user_id: str) -> list[str]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(user_allowed_models.c.alias)
+                .where(user_allowed_models.c.user_id == user_id)
+                .order_by(user_allowed_models.c.alias)
+            ).fetchall()
+            return [r[0] for r in rows]
+
+    def set_user_allowed_models(self, user_id: str, aliases: list[str]) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        clean = sorted({a.strip() for a in aliases if a and a.strip()})
+        with self._conn() as conn:
+            conn.execute(
+                sa.delete(user_allowed_models).where(user_allowed_models.c.user_id == user_id)
+            )
+            if clean:
+                conn.execute(
+                    sa.insert(user_allowed_models),
+                    [{"user_id": user_id, "alias": a, "created": now} for a in clean],
+                )
+            conn.commit()
+
+    def list_user_allowed_personas(self, user_id: str) -> list[str]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(user_allowed_personas.c.persona_id)
+                .where(user_allowed_personas.c.user_id == user_id)
+                .order_by(user_allowed_personas.c.persona_id)
+            ).fetchall()
+            return [r[0] for r in rows]
+
+    def set_user_allowed_personas(self, user_id: str, persona_ids: list[str]) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        clean = sorted({p.strip() for p in persona_ids if p and p.strip()})
+        with self._conn() as conn:
+            conn.execute(
+                sa.delete(user_allowed_personas).where(user_allowed_personas.c.user_id == user_id)
+            )
+            if clean:
+                conn.execute(
+                    sa.insert(user_allowed_personas),
+                    [{"user_id": user_id, "persona_id": p, "created": now} for p in clean],
+                )
+            conn.commit()
+
+    def get_guild_persona(self, guild_id: str) -> str | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                sa.select(guild_prefs.c.persona).where(guild_prefs.c.guild_id == guild_id)
+            ).fetchone()
+            return row[0] if row and row[0] else None
+
+    def set_guild_persona(self, guild_id: str, persona: str | None) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                postgresql.insert(guild_prefs)
+                .values(guild_id=guild_id, persona=persona, updated=now)
+                .on_conflict_do_update(
+                    index_elements=["guild_id"],
+                    set_={"persona": persona, "updated": now},
+                )
+            )
+            conn.commit()
+
+
+    # -- Knowledge-base graph index (derived from the markdown vault) --------
+
+    def replace_kb_index(
+        self, notes: list[dict[str, Any]], links: list[dict[str, Any]]
+    ) -> None:
+        """Atomically rebuild the note/link index.
+
+        The vault files are authoritative; this index is derived, so a full
+        replace is both simplest and self-healing after edits made outside
+        turnstone (e.g. by hand in Obsidian).
+        """
+        with self._conn() as conn:
+            conn.execute(sa.delete(kb_links))
+            conn.execute(sa.delete(kb_notes))
+            if notes:
+                conn.execute(sa.insert(kb_notes), notes)
+            if links:
+                conn.execute(sa.insert(kb_links), links)
+            conn.commit()
+
+    def kb_backlinks(self, title: str) -> list[str]:
+        """Note titles linking TO *title* (uses the indexed edges)."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(kb_notes.c.title)
+                .select_from(kb_links.join(kb_notes, kb_links.c.from_note == kb_notes.c.note_id))
+                .where(kb_links.c.to_title == title)
+                .order_by(kb_notes.c.title)
+            ).fetchall()
+            return [r[0] for r in rows]
+
+    # -- Repos (coding-agent dispatch) ---------------------------------------
+
+    def list_repos(self, enabled_only: bool = True) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            q = sa.select(repos).order_by(repos.c.name)
+            if enabled_only:
+                q = q.where(repos.c.enabled == 1)
+            return [_repo_row_to_dict(r) for r in conn.execute(q).fetchall()]
+
+    def get_repo(self, repo_id: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute(sa.select(repos).where(repos.c.repo_id == repo_id)).fetchone()
+            return _repo_row_to_dict(row) if row is not None else None
+
+    def get_repo_by_name(self, name: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute(sa.select(repos).where(repos.c.name == name)).fetchone()
+            return _repo_row_to_dict(row) if row is not None else None
+
+    def create_repo(self, repo: dict[str, Any]) -> None:
+        if not repo.get("repo_id") or not repo.get("name") or not repo.get("git_url"):
+            raise ValueError("repo requires repo_id, name and git_url")
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            try:
+                conn.execute(sa.insert(repos), _repo_insert_values(repo, now))
+            except sa.exc.IntegrityError as exc:
+                raise ValueError(f"repo name already exists: {repo['name']}") from exc
+            conn.commit()
+
+    def delete_repo(self, repo_id: str) -> bool:
+        with self._conn() as conn:
+            result = conn.execute(sa.delete(repos).where(repos.c.repo_id == repo_id))
+            conn.commit()
+            return bool(result.rowcount)
 
     def list_channel_users_by_user(self, user_id: str) -> list[dict[str, str]]:
 

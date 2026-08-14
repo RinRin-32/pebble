@@ -2556,6 +2556,25 @@ def make_create_handler(
             ):
                 uid = body_uid
 
+        # Authority (allow-list) is checked against the ACTING user, which is
+        # distinct from the workstream OWNER.  Discord workstreams stay owned by
+        # the channel-gateway service identity (so the gateway's own send/SSE
+        # calls keep working), but a service caller may forward the linked
+        # end-user's id in ``acting_user_id`` so their model/persona limits are
+        # enforced.  Only "service"-scoped callers may set it; a normal user
+        # token can't, so this can't be used to dodge or forge limits.  Defaults
+        # to the owner ``uid`` (the console/interactive case, where the acting
+        # user IS the authenticated user).
+        enforcement_uid: str = uid
+        body_acting = body.get("acting_user_id")
+        if (
+            isinstance(body_acting, str)
+            and body_acting
+            and auth is not None
+            and auth.has_scope("service")
+        ):
+            enforcement_uid = body_acting
+
         # --- Per-kind pre-create validation ------------------------------
         # Interactive validates ws_id format, kind, parent ownership,
         # attachments+resume_ws combo. Coord 401s on empty uid.
@@ -2736,7 +2755,61 @@ def make_create_handler(
                                 status_code=503,
                             )
                 if persona_row is not None:
+                    # Per-user persona authority: a restricted user may only use
+                    # personas on their allow-list.  The kind's DEFAULT persona
+                    # is always permitted (is_default), so /orchestrate's
+                    # coordinator persona and the interactive default never get
+                    # blocked out from under a restricted user.  Checked against
+                    # ``enforcement_uid`` (the acting user), which is the owner
+                    # for console creates and the linked Discord user for gateway
+                    # creates — see the acting_user_id resolution above.
+                    from turnstone.core.access import (
+                        is_kind_default_persona,
+                        persona_allowed,
+                    )
+
+                    _st2 = _get_storage()
+                    if (
+                        enforcement_uid
+                        and _st2 is not None
+                        and not persona_allowed(
+                            _st2,
+                            enforcement_uid,
+                            persona_row.get("persona_id", ""),
+                            is_kind_default=is_kind_default_persona(persona_row),
+                        )
+                    ):
+                        return JSONResponse(
+                            {
+                                "error": (
+                                    f"persona '{persona_row.get('name', '')}' is not "
+                                    "permitted for this user"
+                                )
+                            },
+                            status_code=403,
+                        )
                     persona_snapshot = snapshot_from_persona(persona_row)
+
+            # Per-user model authority (create-time only — reopen/resume is not
+            # gated here so a later restriction can't lock a user out of an
+            # existing workstream).  Coerce/validate body["model"] before it
+            # flows into the factory: an explicit disallowed alias is a 403; an
+            # unspecified model for a restricted user falls back to a permitted
+            # alias.  Checked against ``enforcement_uid`` (the acting user).
+            if enforcement_uid:
+                from turnstone.core.access import resolve_allowed_model
+                from turnstone.core.storage._registry import get_storage as _get_storage
+
+                _stm = _get_storage()
+                if _stm is not None:
+                    _requested_model = (body.get("model") or "").strip()
+                    _eff_model, _model_err = resolve_allowed_model(
+                        _stm, enforcement_uid, _requested_model, ""
+                    )
+                    if _model_err:
+                        return JSONResponse({"error": _model_err}, status_code=403)
+                    if _eff_model:
+                        body["model"] = _eff_model
 
             kwargs = cfg.create_build_kwargs(
                 request, body, uid, skill_data, skill_id_resolved, applied_skill_version
