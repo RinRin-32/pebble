@@ -272,3 +272,18 @@ class TestStaleness:
         finally:
             os.environ["PATH"] = old
         assert "present" in res.output, "inherited PATH was discarded by a login shell"
+
+    def test_secrets_are_redacted_from_captured_output(self, tmp_path: Path) -> None:
+        """Captured output becomes a PERMANENT note.
+
+        A command that echoes a token would otherwise write it into the vault
+        forever, surviving the container and any later rotation.
+        """
+        res = kb.run_experiment(
+            "echo 'Authorization: Bearer sk-ant-api03-SUPERSECRETVALUE123'", cwd=tmp_path
+        )
+        assert "SUPERSECRETVALUE123" not in res.output, "a token reached the vault"
+
+    def test_redaction_keeps_the_useful_part(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("echo 'tests passed in 12.3s'", cwd=tmp_path)
+        assert "tests passed" in res.output

@@ -158,6 +158,26 @@ def _check_opencode_auth() -> Check:
     )
 
 
+def _check_worktree_debt() -> Check:
+    """Worktrees accumulate: every bind leaves one until something reaps it."""
+    root = Path(os.environ.get("TURNSTONE_WORKSPACE") or "/workspace") / "ws"
+    if not root.is_dir():
+        return Check("worktree debt", True, "no worktrees yet", severity=SEVERITY_OPTIONAL)
+    trees = [p for p in root.iterdir() if p.is_dir()]
+    total_mb = sum(
+        f.stat().st_size for p in trees for f in p.rglob("*") if f.is_file()
+    ) / (1024 * 1024)
+    detail = f"{len(trees)} worktree(s), {total_mb:.0f} MB"
+    if len(trees) > 50 or total_mb > 5000:
+        return Check(
+            "worktree debt", False, detail,
+            "Reap finished ones: workspace.reap_orphaned_worktrees(active_ws_ids). "
+            "Worktrees with uncommitted changes are kept unless force=True.",
+            severity=SEVERITY_OPTIONAL,
+        )
+    return Check("worktree debt", True, detail, severity=SEVERITY_OPTIONAL)
+
+
 def _check_path() -> Check:
     # A truncated PATH once presented as an authentication failure, because the
     # agent could not spawn the helpers its login flow needs.
@@ -241,6 +261,7 @@ def run_all() -> list[Check]:
         _check_nix(),
         _check_codegraph(),
         _check_path(),
+        _check_worktree_debt(),
     ]
     checks.extend(_check_storage())
     return checks
