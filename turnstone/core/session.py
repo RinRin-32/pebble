@@ -16924,9 +16924,21 @@ class ChatSession:
 
     # -- Knowledge base -------------------------------------------------------
 
+    def _sync_kb_index(self) -> None:
+        """Keep the DB link index in step with the vault files it mirrors."""
+        try:
+            from turnstone.core import knowledge as kb
+            from turnstone.core.storage._registry import get_storage
+
+            storage = get_storage()
+            if storage is not None:
+                kb.sync_index(storage)
+        except Exception:
+            log.debug("kb.index_sync_failed", exc_info=True)
+
     def _prepare_kb(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
         action = (args.get("action") or "").strip().lower()
-        valid = {"search", "read", "write", "append", "links", "graph"}
+        valid = {"search", "read", "write", "append", "links", "graph", "experiment", "stale"}
         if action not in valid:
             return {
                 "call_id": call_id,
@@ -16945,9 +16957,11 @@ class ChatSession:
             "func_name": "kb",
             "header": f"\U0001f4d3 kb {action}: {label}"[:120],
             "preview": "",
-            # Notes are turnstone-owned data on its own volume, not the user's
-            # repo — recording knowledge shouldn't interrupt with a prompt.
-            "needs_approval": False,
+            # Notes are turnstone-owned data on its own volume, so recording
+            # knowledge shouldn't interrupt with a prompt.  An experiment is
+            # different: it RUNS a command, which is exactly what the approval
+            # gate is for.
+            "needs_approval": action == "experiment",
             "execute": self._exec_kb,
             "action": action,
             "title": title,
@@ -16956,6 +16970,9 @@ class ChatSession:
             "kind": (args.get("kind") or "note").strip() or "note",
             "summary": (args.get("summary") or "").strip(),
             "tags": [str(t) for t in tags] if isinstance(tags, list) else [],
+            "hypothesis": args.get("hypothesis") or "",
+            "command": (args.get("command") or "").strip(),
+            "links": [str(x) for x in (args.get("links") or []) if str(x).strip()],
         }
 
     def _exec_kb(self, item: dict[str, Any]) -> tuple[str, str]:
@@ -17016,6 +17033,48 @@ class ChatSession:
                     f"  linked from: {', '.join(n['backlinks']) or '(none)'}\n"
                     f"  dangling (not yet written): {', '.join(n['dangling']) or '(none)'}"
                 )
+            elif action == "stale":
+                cwd = self._workspace_cwd()
+                if not cwd:
+                    return _fail("Error: no repo bound; nothing to compare findings against.")
+                head = kb.commit_of(cwd)
+                drifted = kb.stale_notes(head, repo_id=self._bound_repo_id())
+                if not drifted:
+                    out = f"No stale findings — every measured note matches HEAD ({head})."
+                else:
+                    lines = [f"{len(drifted)} finding(s) measured against older code (HEAD is {head}):"]
+                    lines += [f"  [[{n.title}]] measured at {c}" for n, c in drifted[:15]]
+                    lines.append("Re-run their experiments before relying on them.")
+                    out = "\n".join(lines)
+            elif action == "experiment":
+                if not item["title"]:
+                    return _fail("Error: title is required for experiment")
+                if not item["command"]:
+                    return _fail("Error: command is required for experiment")
+                cwd = self._workspace_cwd()
+                if not cwd:
+                    return _fail(
+                        "Error: no repo bound. Call bind_repo first — an experiment "
+                        "has to run against a real checkout to mean anything."
+                    )
+                res = kb.run_experiment(
+                    item["command"], cwd=cwd, wrap=self._nix_env_dir()
+                )
+                note = kb.experiment_note(
+                    item["title"], item["hypothesis"], res,
+                    repo_id=self._bound_repo_id(), ws_id=self._ws_id,
+                    tags=item["tags"], links=item["links"],
+                )
+                path = kb.write_note(note)
+                self._sync_kb_index()
+                status = "TIMED OUT" if res.timed_out else ("ok" if res.ok else f"exit {res.exit_code}")
+                out = (
+                    f"Experiment [[{item['title']}]] recorded ({path.name}).\n"
+                    f"{status} in {res.duration_s}s at commit {res.commit or 'unknown'}.\n\n"
+                    f"Output:\n{res.output[:1500] or '(none)'}\n\n"
+                    "Now read the note and fill in its Verdict — the measurement is "
+                    "evidence, the verdict is the knowledge."
+                )
             else:  # write / append
                 if not item["title"]:
                     return _fail(f"Error: title is required for {action}")
@@ -17032,15 +17091,7 @@ class ChatSession:
                 )
                 path = kb.write_note(note, append=(action == "append"))
                 links = kb.extract_links(item["content"])
-                # Keep the DB graph index in step with the files it mirrors.
-                try:
-                    from turnstone.core.storage._registry import get_storage
-
-                    storage = get_storage()
-                    if storage is not None:
-                        kb.sync_index(storage)
-                except Exception:
-                    log.debug("kb.index_sync_failed", exc_info=True)
+                self._sync_kb_index()
                 out = (
                     f"{'Appended to' if action == 'append' else 'Wrote'} [[{item['title']}]] "
                     f"({path.name})"

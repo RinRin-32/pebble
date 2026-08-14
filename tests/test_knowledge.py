@@ -156,3 +156,119 @@ class TestGraph:
         (root / "manual.md").write_text("no frontmatter at all, but [[Hub]]\n")
         notes = kb.list_notes()
         assert any(n.title == "manual" and n.links == ["Hub"] for n in notes)
+
+
+class TestExperiments:
+    """The KB records MEASURED facts, not claimed ones.
+
+    An experiment runs its own command, so a recorded number cannot be one an
+    agent invented after the fact. That is the whole point of it being a tool
+    action rather than free-form prose.
+    """
+
+    def test_runs_the_command_and_captures_real_output(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("echo hello-from-shell", cwd=tmp_path)
+        assert res.ok is True
+        assert "hello-from-shell" in res.output
+        assert res.exit_code == 0 and res.duration_s >= 0
+
+    def test_records_failure_honestly(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("exit 3", cwd=tmp_path)
+        assert res.ok is False and res.exit_code == 3
+
+    def test_captures_stderr_too(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("echo oops >&2", cwd=tmp_path)
+        assert "oops" in res.output
+
+    def test_output_is_bounded(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("head -c 200000 /dev/zero | tr '\\0' 'x'", cwd=tmp_path)
+        assert len(res.output) <= kb.MAX_CAPTURE + 100
+        assert "truncated" in res.output
+
+    def test_timeout_is_recorded_not_raised(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("sleep 5", cwd=tmp_path, timeout=1)
+        assert res.timed_out is True and res.ok is False
+
+    def test_note_carries_provenance(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("echo measured", cwd=tmp_path)
+        note = kb.experiment_note("Cost of X", "X should be cheap", res, repo_id="r1")
+        kb.write_note(note)
+        stored = kb.read_note("Cost of X")
+        assert stored is not None
+        assert stored.kind == "experiment"
+        assert "X should be cheap" in stored.body  # hypothesis
+        assert "echo measured" in stored.body  # method
+        assert "measured" in stored.body  # captured result
+        assert "Verdict" in stored.body  # prompts for interpretation
+
+    def test_note_links_related_findings(self, tmp_path: Path) -> None:
+        res = kb.run_experiment("true", cwd=tmp_path)
+        note = kb.experiment_note("A", "h", res, links=["Worktree isolation"])
+        kb.write_note(note)
+        assert "Worktree isolation" in kb.read_note("A").links
+
+
+class TestStaleness:
+    """A finding about code has an expiry date."""
+
+    def _repo(self, tmp_path: Path) -> Path:
+        import subprocess
+
+        src = tmp_path / "repo"
+        src.mkdir()
+        for cmd in (
+            ["git", "init", "-q", "-b", "main"],
+            ["git", "config", "user.email", "t@t"],
+            ["git", "config", "user.name", "t"],
+        ):
+            subprocess.run(cmd, cwd=src, check=True, capture_output=True)
+        (src / "a.txt").write_text("1\n")
+        subprocess.run(["git", "add", "-A"], cwd=src, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "one"], cwd=src, check=True, capture_output=True)
+        return src
+
+    def test_commit_of_real_repo(self, tmp_path: Path) -> None:
+        assert kb.commit_of(self._repo(tmp_path)) != ""
+
+    def test_commit_of_non_repo_is_empty(self, tmp_path: Path) -> None:
+        assert kb.commit_of(tmp_path) == ""
+
+    def test_finding_flagged_after_code_moves(self, tmp_path: Path) -> None:
+        import subprocess
+
+        repo = self._repo(tmp_path)
+        res = kb.run_experiment("echo v1", cwd=repo)
+        kb.write_note(kb.experiment_note("Finding", "h", res, repo_id="r1"))
+        assert kb.stale_notes(res.commit, repo_id="r1") == []
+        # Code moves on; the finding was measured against the old tree.
+        (repo / "a.txt").write_text("2\n")
+        subprocess.run(["git", "commit", "-aqm", "two"], cwd=repo, check=True, capture_output=True)
+        drifted = kb.stale_notes(kb.commit_of(repo), repo_id="r1")
+        assert len(drifted) == 1 and drifted[0][0].title == "Finding"
+
+    def test_notes_without_measurement_are_never_stale(self) -> None:
+        kb.write_note(kb.Note(title="Design decision", body="prose only"))
+        assert kb.stale_notes("abc1234") == []
+
+    def test_login_shell_does_not_reset_path(self, tmp_path: Path) -> None:
+        """Regression: `bash -lc` rebuilt PATH and discarded the Nix toolchain.
+
+        A wrapped experiment reported "command not found" for a tool that was
+        provisioned correctly — the same login-shell PATH reset that once made
+        Claude Code look unauthenticated.
+        """
+        import os
+
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        tool = fake_bin / "onlytool"
+        tool.write_text("#!/bin/sh\necho present\n")
+        tool.chmod(0o755)
+        env_path = f"{fake_bin}{os.pathsep}{os.environ['PATH']}"
+        old = os.environ["PATH"]
+        os.environ["PATH"] = env_path
+        try:
+            res = kb.run_experiment("onlytool", cwd=tmp_path)
+        finally:
+            os.environ["PATH"] = old
+        assert "present" in res.output, "inherited PATH was discarded by a login shell"
