@@ -40,6 +40,7 @@ enclosing-method collision upstream tracks for TypeScript (issue #1496).
 from __future__ import annotations
 
 import sqlite3
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -210,6 +211,49 @@ def prune(db_path: str | Path, *, dry_run: bool = True) -> AuditResult:
     result.pruned = len(result.suspects)
     log.info("codegraph.pruned_edges", db=str(db_path), pruned=result.pruned)
     return result
+
+
+# The MCP server every dispatched agent gets, unless the caller overrides it.
+# opencode and codex read this from their global config (written at image
+# build); Claude Code takes it per-run because its config file is bind-mounted
+# from the operator's host and would shadow the image's.
+DEFAULT_MCP_SERVERS: dict[str, object] = {
+    "codegraph": {"type": "stdio", "command": "codegraph", "args": ["serve", "--mcp"]}
+}
+
+
+def index_worktree(worktree: str | Path, *, timeout: int = 300) -> tuple[bool, str]:
+    """Build the graph for a worktree, then prune edges it could not justify.
+
+    Best-effort by contract: a repo whose language is unsupported, or an
+    indexer that fails, must not fail the bind — the agent simply works without
+    the graph, which is how it worked before.
+    """
+    root = Path(worktree)
+    if not root.is_dir():
+        return False, "worktree does not exist"
+    try:
+        proc = subprocess.run(  # noqa: S603 - fixed binary, argv list
+            ["codegraph", "init", "."],
+            cwd=str(root), capture_output=True, text=True,
+            errors="replace", timeout=timeout, check=False,
+        )
+    except FileNotFoundError:
+        return False, "codegraph is not installed on this node"
+    except subprocess.TimeoutExpired:
+        return False, f"codegraph init timed out after {timeout}s"
+    if proc.returncode != 0:
+        return False, (proc.stderr or proc.stdout or "").strip()[-200:]
+    db = root / ".codegraph" / "codegraph.db"
+    if not db.is_file():
+        return True, "indexed"
+    result = prune(db, dry_run=False)
+    note = f"indexed ({result.total_edges} edges"
+    if result.pruned:
+        note += f", pruned {result.pruned} unjustifiable"
+    if result.self_edges:
+        note += f", {len(result.self_edges)} self-edge(s) flagged"
+    return True, note + ")"
 
 
 def find_indexes(root: str | Path) -> list[Path]:

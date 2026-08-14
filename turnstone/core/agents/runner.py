@@ -13,8 +13,10 @@ end.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
+import tempfile
 import subprocess
 import threading
 from collections.abc import Callable
@@ -66,6 +68,7 @@ def run_agent(
     on_event: Callable[[AgentEvent], None] | None = None,
     env: dict[str, str] | None = None,
     wrap: str = "",
+    mcp_servers: dict[str, object] | None = None,
 ) -> AgentResult:
     """Dispatch *prompt* to *adapter* inside *cwd* and collect the outcome."""
     result = AgentResult()
@@ -82,6 +85,16 @@ def run_agent(
     cmd = adapter.build_command(
         prompt, cwd=cwd, model=model, session_id=session_id, agent=agent
     )
+    mcp_path = ""
+    if mcp_servers:
+        payload = adapter.mcp_payload(dict(mcp_servers))
+        if payload is not None:
+            # A real file, not an inline arg: configs grow, and an argv-length
+            # limit is a miserable way to discover that.
+            fd, mcp_path = tempfile.mkstemp(prefix="ts-mcp-", suffix=".json")
+            with os.fdopen(fd, "w") as fh:
+                fh.write(payload)
+            cmd = [*cmd[:1], *adapter.mcp_flags(mcp_path), *cmd[1:]]
     if wrap:
         # Run the agent inside a provisioned Nix shell. argv stays a vector, so
         # a prompt containing quotes or ';' is still inert.
@@ -186,6 +199,9 @@ def run_agent(
                 except OSError:
                     log.debug("agent.killpg_failed", agent=adapter.name, exc_info=True)
         err_thread.join(timeout=2)
+        if mcp_path:
+            with contextlib.suppress(OSError):
+                os.unlink(mcp_path)
 
     result.exit_code = proc.returncode
     result.session_id = seen_session

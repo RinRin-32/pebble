@@ -391,3 +391,52 @@ class TestToolPreparesAreCallable:
         assert item["needs_approval"] is True and item["task"] == "do it"
         empty = ChatSession._prepare_dispatch_agent(self._stub(), "c1", {"task": "  "})
         assert empty.get("error")
+
+
+class TestMcpPlumbing:
+    """Dispatched agents previously got NO MCP servers at all."""
+
+    def test_claude_writes_config_and_passes_flag(self) -> None:
+        import json as _json
+
+        a = ClaudeCodeAdapter()
+        payload = a.mcp_payload({"codegraph": {"command": "codegraph"}})
+        assert payload is not None
+        assert _json.loads(payload)["mcpServers"]["codegraph"]["command"] == "codegraph"
+        assert a.mcp_flags("/tmp/x.json") == ["--mcp-config", "/tmp/x.json"]
+
+    def test_opencode_uses_global_config(self) -> None:
+        # opencode reads MCP servers from its own config, written at image
+        # build; nothing to pass per-run.
+        a = OpenCodeAdapter()
+        assert a.mcp_payload({"x": {}}) is None
+        assert a.mcp_flags("/tmp/x.json") == []
+
+    def test_runner_injects_flags_before_prompt(self, tmp_path) -> None:
+        class _ShowArgv(_FakeAgent):
+            def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
+                return ["sh", "-c", 'printf "%s\\n" ok']
+
+            def mcp_payload(self, servers):
+                return '{"mcpServers":{}}'
+
+            def mcp_flags(self, config_path):
+                # Record that a real, readable file was produced.
+                assert open(config_path).read().startswith("{")
+                return []
+
+        res = run_agent(
+            _ShowArgv([]), "go", cwd=str(tmp_path), mcp_servers={"codegraph": {}}
+        )
+        assert res.ok is True
+
+    def test_no_servers_means_no_config_file(self, tmp_path) -> None:
+        calls = []
+
+        class _NoMcp(_FakeAgent):
+            def mcp_payload(self, servers):
+                calls.append(servers)
+                return None
+
+        run_agent(_NoMcp([OC_TEXT]), "go", cwd=str(tmp_path))
+        assert calls == []

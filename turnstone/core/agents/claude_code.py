@@ -74,6 +74,16 @@ class ClaudeCodeAdapter(AgentAdapter):
         cmd.append(prompt)
         return cmd
 
+    def mcp_payload(self, servers: dict[str, Any]) -> str | None:
+        # Shape per `codegraph install --print-config claude`.
+        return json.dumps({"mcpServers": servers})
+
+    def mcp_flags(self, config_path: str) -> list[str]:
+        # Passed per-run rather than relying on ~/.claude.json, which is
+        # bind-mounted from the operator's host and would shadow anything the
+        # image configured.
+        return ["--mcp-config", config_path]
+
     def _content_events(self, message: dict[str, Any], session_id: str) -> list[AgentEvent]:
         content = message.get("content")
         if isinstance(content, str):

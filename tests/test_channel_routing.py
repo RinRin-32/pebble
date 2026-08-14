@@ -64,7 +64,7 @@ class TestSendMessage:
         mock_send = AsyncMock()
         monkeypatch.setattr(router._server, "send", mock_send)
         await router.send_message("ws-1", "hello world")
-        mock_send.assert_awaited_once_with("hello world", "ws-1")
+        mock_send.assert_awaited_once_with("hello world", "ws-1", attachment_ids=None)
 
     @pytest.mark.anyio
     async def test_calls_console_route_send(
@@ -74,7 +74,7 @@ class TestSendMessage:
         mock_send = AsyncMock()
         monkeypatch.setattr(console_router._console, "route_send", mock_send)
         await console_router.send_message("ws-1", "hello world")
-        mock_send.assert_awaited_once_with("hello world", "ws-1")
+        mock_send.assert_awaited_once_with("hello world", "ws-1", attachment_ids=None)
 
 
 class TestSendApproval:

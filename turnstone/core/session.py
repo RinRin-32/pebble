@@ -17136,9 +17136,21 @@ class ChatSession:
         except Exception:
             log.warning("dispatch.bind_persist_failed", ws_id=self._ws_id, exc_info=True)
 
+        # Build the code graph now so the first dispatch has it. Best-effort:
+        # an unsupported language or a failed index must not fail the bind.
+        graph_note = ""
+        try:
+            from turnstone.core.codegraph import index_worktree
+
+            ok, detail = index_worktree(info.path)
+            graph_note = f"\nCode graph: {detail}" if ok else f"\nCode graph unavailable: {detail}"
+        except Exception:
+            log.debug("bind_repo.index_failed", exc_info=True)
+
         out = (
             f"Bound to repo '{row['name']}' on branch {info.branch}.\n"
             f"Working directory is now {info.path} — shell and file tools run there."
+            f"{graph_note}"
         )
         self._report_tool_result(call_id, "bind_repo", out)
         return call_id, out
@@ -17371,6 +17383,14 @@ class ChatSession:
         # Run inside the provisioned toolchain when there is one, so the agent
         # can build and test rather than only edit.
         env_dir = self._nix_env_dir()
+        # Hand the agent the code graph so it can resolve symbols and callers in
+        # one call instead of reconstructing structure by grepping.
+        try:
+            from turnstone.core.codegraph import DEFAULT_MCP_SERVERS
+
+            _mcp_servers = DEFAULT_MCP_SERVERS
+        except Exception:
+            _mcp_servers = None
         result = run_agent(
             adapter,
             item["task"],
@@ -17380,6 +17400,7 @@ class ChatSession:
             timeout=timeout,
             on_event=_on_event,
             wrap=env_dir or "",
+            mcp_servers=_mcp_servers,
         )
 
         if result.session_id:
