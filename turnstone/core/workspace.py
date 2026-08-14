@@ -258,6 +258,9 @@ _LOCAL_EXCLUDES = (
     ".ruff_cache/",
     ".mypy_cache/",
     "node_modules/",
+    # The code-graph index is turnstone infrastructure living inside the
+    # worktree; it showed up in a review diff on the first repo that used it.
+    ".codegraph/",
     ".venv/",
     "venv/",
     ".DS_Store",

@@ -162,11 +162,16 @@ class TestLocalExcludes:
         (info.path / "__pycache__" / "calc.cpython-312.pyc").write_bytes(b"\x00fake")
         (info.path / "node_modules").mkdir()
         (info.path / "node_modules" / "x.js").write_text("1")
+        # Turnstone's own code-graph index lives in the worktree and must not
+        # appear in a review diff — it did, on the first repo that used it.
+        (info.path / ".codegraph").mkdir()
+        (info.path / ".codegraph" / "codegraph.db").write_bytes(b"\x00")
         (info.path / "real_change.py").write_text("x = 1\n")
         diff = workspace.worktree_diff("wsexcl")
         assert "real_change.py" in diff
         assert "__pycache__" not in diff
         assert "node_modules" not in diff
+        assert ".codegraph" not in diff
 
     def test_repo_gitignore_untouched(self, origin: Path) -> None:
         workspace.ensure_mirror("repo1", str(origin))
