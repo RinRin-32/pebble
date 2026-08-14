@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-
 #: Capability gating whether a user may run a coding agent at all.
 CAPABILITY_CODE_DISPATCH = "code_dispatch"
 
@@ -130,9 +129,7 @@ def is_kind_default_persona(persona_row: dict[str, Any] | None) -> bool:
     return bool(persona_row and persona_row.get("is_default"))
 
 
-def can_dispatch_code(
-    storage: _AccessStore, user_id: str, *, require_grant: bool = False
-) -> bool:
+def can_dispatch_code(storage: _AccessStore, user_id: str, *, require_grant: bool = False) -> bool:
     """Whether *user_id* may run a coding agent.
 
     This is a different question from which model they may pick: a dispatch

@@ -7,11 +7,14 @@ over ``git``, so mocking the subprocess would test nothing that matters.
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from pebble.core import workspace
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _run(*args: str, cwd: Path) -> None:

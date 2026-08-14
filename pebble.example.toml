@@ -1,4 +1,4 @@
-# turnstone.toml — shared bootstrap configuration
+# pebble.toml — shared bootstrap configuration
 #
 # This file is read once at startup. Values here are overridden by
 # environment variables, which are in turn overridden by CLI flags.
@@ -9,13 +9,13 @@
 #   2. $PEBBLE_CONFIG env var
 #   3. ~/.config/pebble/config.toml
 
-# --- LLM API (turnstone, node, eval) ---
+# --- LLM API (pebble, node, eval) ---
 
 [api]
 # base_url = ""                # API endpoint; empty = binary default
 # api_key = ""                 # env: OPENAI_API_KEY or ANTHROPIC_API_KEY
 
-# --- Default Model (turnstone, node, eval) ---
+# --- Default Model (pebble, node, eval) ---
 
 [model]
 # name = ""                    # Model ID; empty = provider default (gpt-5 / claude-sonnet-4)
@@ -35,7 +35,7 @@
 # available aliases dynamically; bad aliases return an error so the
 # model retries with a valid choice.
 
-# --- Named Models (turnstone, node, eval) ---
+# --- Named Models (pebble, node, eval) ---
 # Define model aliases with per-model overrides. Useful for local model
 # servers or mixing providers. Reference by name with --model flag.
 #
@@ -53,7 +53,7 @@
 # name = "claude-opus-4-8"
 # provider = "anthropic"
 
-# --- Database (turnstone, node, console) ---
+# --- Database (pebble, node, console) ---
 
 [database]
 # url = ""                     # postgres://user:pass@host/db or /path/to.db
@@ -78,7 +78,7 @@
 # jwt_secret = ""              # HS256 signing secret (min 32 bytes recommended)
                                # env: PEBBLE_JWT_SECRET
 
-# --- Logging (turnstone, node, console) ---
+# --- Logging (pebble, node, console) ---
 
 [log]
 # level = ""                   # "debug", "info", "warn", "error"
@@ -86,14 +86,14 @@
                                # env: PEBBLE_LOG_LEVEL
 # json = false                 # JSON output; auto-enabled when stderr is not a TTY
 
-# --- Session (turnstone, node) ---
+# --- Session (pebble, node) ---
 
 [session]
 # instructions = ""            # Default system message
 # compact_max_tokens = 32768   # Max tokens for context compaction summary
 # auto_compact_pct = 0.8       # Trigger compaction at this % of context window
 
-# --- Tools (turnstone, node) ---
+# --- Tools (pebble, node) ---
 
 [tools]
 # timeout = 120                # Tool execution timeout in seconds
@@ -128,7 +128,7 @@
                                # NB: serving Qwen3-Reranker via vLLM REQUIRES --chat-template
                                # (the model's chat_template.jinja) or scores are near-random.
 
-# --- Judge (turnstone, node) ---
+# --- Judge (pebble, node) ---
 
 [judge]
 # enabled = true               # Enable intent validation
@@ -137,7 +137,7 @@
 # output_guard = true          # Scan tool output for security signals
 # redact_secrets = true        # Redact detected credentials in output
 
-# --- Memory (turnstone, node) ---
+# --- Memory (pebble, node) ---
 
 [memory]
 # relevance_k = 5              # Top-K memories for context injection
@@ -146,7 +146,7 @@
 # nudge_cooldown = 300         # Min seconds between metacognitive nudges
 # nudges = true                # Enable memory nudges
 
-# --- MCP (turnstone, node) ---
+# --- MCP (pebble, node) ---
 
 [mcp]
 # config_path = ""             # Path to MCP servers config file (JSON)

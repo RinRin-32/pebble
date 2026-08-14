@@ -31,10 +31,13 @@ import time
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pebble.core.log import get_logger
 from pebble.core.workspace import workspace_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 log = get_logger(__name__)
 
@@ -80,8 +83,13 @@ def vault_root() -> Path:
 
 def _git_vault(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - fixed binary, argv list
-        ["git", *args], cwd=str(vault_root()), capture_output=True, text=True,
-        errors="replace", timeout=timeout, check=False,
+        ["git", *args],
+        cwd=str(vault_root()),
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=timeout,
+        check=False,
     )
 
 
@@ -121,9 +129,7 @@ def _commit_vault(message: str) -> None:
     try:
         _git_vault("add", "-A")
         result = _git_vault("commit", "-q", "-m", message)
-        if result.returncode != 0 and "nothing to commit" not in (
-            result.stdout + result.stderr
-        ):
+        if result.returncode != 0 and "nothing to commit" not in (result.stdout + result.stderr):
             log.debug("kb.commit_failed", detail=(result.stderr or result.stdout)[:200])
     except (OSError, subprocess.SubprocessError):
         log.debug("kb.commit_error", exc_info=True)
@@ -248,7 +254,11 @@ def commit_of(worktree: str | Path) -> str:
     try:
         proc = subprocess.run(  # noqa: S603 - fixed binary, argv list
             ["git", "rev-parse", "--short", "HEAD"],
-            cwd=str(worktree), capture_output=True, text=True, timeout=30, check=False,
+            cwd=str(worktree),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -285,14 +295,23 @@ def run_experiment(
     timed_out = False
     try:
         proc = subprocess.run(  # noqa: S603 - argv list; command is operator/agent supplied
-            argv, cwd=str(cwd), capture_output=True, text=True,
-            errors="replace", timeout=timeout, check=False,
+            argv,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=timeout,
+            check=False,
         )
         code, out = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
     except subprocess.TimeoutExpired as exc:
         timed_out = True
         code = 124
-        out = (exc.stdout or b"").decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        out = (
+            (exc.stdout or b"").decode("utf-8", "replace")
+            if isinstance(exc.stdout, bytes)
+            else (exc.stdout or "")
+        )
         out += f"\n[timed out after {timeout}s]"
     except OSError as exc:
         code, out = 127, f"failed to run: {exc}"
@@ -310,8 +329,12 @@ def run_experiment(
     if len(out) > MAX_CAPTURE:
         out = out[:MAX_CAPTURE] + f"\n... [output truncated at {MAX_CAPTURE} bytes]"
     return ExperimentResult(
-        command=command, exit_code=code, duration_s=duration,
-        output=out.strip(), commit=commit_of(cwd), timed_out=timed_out,
+        command=command,
+        exit_code=code,
+        duration_s=duration,
+        output=out.strip(),
+        commit=commit_of(cwd),
+        timed_out=timed_out,
     )
 
 
@@ -327,7 +350,9 @@ def experiment_note(
 ) -> Note:
     """Render an experiment into a durable, provenance-carrying note."""
     linked = "".join(f"\n- [[{t}]]" for t in (links or []))
-    status = "TIMED OUT" if result.timed_out else ("ok" if result.ok else f"exit {result.exit_code}")
+    status = (
+        "TIMED OUT" if result.timed_out else ("ok" if result.ok else f"exit {result.exit_code}")
+    )
     body = (
         f"## Hypothesis\n\n{hypothesis.strip() or '(none stated)'}\n\n"
         f"## Method\n\n```\n{result.command}\n```\n\n"
@@ -396,7 +421,9 @@ def write_note(note: Note, *, append: bool = False) -> Path:
     path = note_path(title)
     path.parent.mkdir(parents=True, exist_ok=True)
     if append and path.exists():
-        existing = parse_note(path.read_text(encoding="utf-8", errors="replace"), fallback_title=title)
+        existing = parse_note(
+            path.read_text(encoding="utf-8", errors="replace"), fallback_title=title
+        )
         stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
         merged = existing.body.rstrip() + f"\n\n---\n\n_Added {stamp}_\n\n" + note.body.strip()
         note = Note(
@@ -507,9 +534,7 @@ def graph_summary() -> dict[str, object]:
             else:
                 dangling[target] = dangling.get(target, 0) + 1
     hubs = sorted(inbound.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
-    orphans = sorted(
-        n.title for n in notes if not n.links and inbound.get(n.title, 0) == 0
-    )
+    orphans = sorted(n.title for n in notes if not n.links and inbound.get(n.title, 0) == 0)
     return {
         "notes": len(notes),
         "links": edges,

@@ -136,8 +136,7 @@ def envs_root() -> Path:
 def _validate_name(name: str) -> str:
     if not name or not _SAFE_NAME.match(name):
         raise NixEnvError(
-            f"invalid environment name {name!r} "
-            "(lowercase letters, digits, dot, dash, underscore)"
+            f"invalid environment name {name!r} (lowercase letters, digits, dot, dash, underscore)"
         )
     return name
 
@@ -148,8 +147,13 @@ def env_path(name: str) -> Path:
 
 def _git(*args: str, cwd: Path, timeout: int = 60) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - fixed binary, argv list
-        ["git", *args], cwd=str(cwd), capture_output=True, text=True,
-        errors="replace", timeout=timeout, check=False,
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=timeout,
+        check=False,
     )
 
 
@@ -363,7 +367,11 @@ def provision(env: Env, *, timeout: int = _PROVISION_TIMEOUT) -> None:
     try:
         proc = subprocess.run(  # noqa: S603 - fixed binary, argv list
             [nix, "develop", f"path:{env.path}", "--command", "true"],
-            capture_output=True, text=True, errors="replace", timeout=timeout, check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired as exc:
         raise NixEnvError(f"nix develop timed out after {timeout}s") from exc

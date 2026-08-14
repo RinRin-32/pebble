@@ -27,7 +27,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-from tests._session_helpers import make_session
 from pebble.core.history_decoration import (
     extract_reasoning_for_history,
     extract_reasoning_text_from_provider_content,
@@ -36,6 +35,7 @@ from pebble.core.providers._anthropic import AnthropicProvider
 from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 from pebble.core.providers._protocol import StreamChunk, UsageInfo
+from tests._session_helpers import make_session
 
 _MARKER = "SECRET_REASONING_MARKER_xyz123_unlikely_collision"
 

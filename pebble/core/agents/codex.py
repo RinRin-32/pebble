@@ -83,9 +83,7 @@ class CodexAdapter(AgentAdapter):
 
         if etype in {"exec_command_end", "tool_result"}:
             out = msg.get("stdout") or msg.get("output") or ""
-            return [
-                AgentEvent(kind="tool_result", tool_output=str(out), session_id=session_id)
-            ]
+            return [AgentEvent(kind="tool_result", tool_output=str(out), session_id=session_id)]
 
         if etype in {"token_count", "usage"}:
             usage = msg.get("info") if isinstance(msg.get("info"), dict) else msg

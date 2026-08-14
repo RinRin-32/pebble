@@ -19,8 +19,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from tests.conftest import resolve_when_pending
 from pebble.console.coordinator_ui import ConsoleCoordinatorUI
+from tests.conftest import resolve_when_pending
 
 
 def _make_items(*specs: tuple[str, str], needs_approval: bool = True) -> list[dict[str, Any]]:

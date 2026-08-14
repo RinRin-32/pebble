@@ -364,8 +364,8 @@ class TestMemoryOff:
         # memory-off hides only the memory tool — recall stays visible, so an
         # actual compaction spills a summary AND the resume nudge points at
         # recall (NUDGE_COMPACTION_RESUME).
-        from tests._session_helpers import make_session
         from pebble.core.metacognition import NUDGE_COMPACTION_RESUME
+        from tests._session_helpers import make_session
 
         session = make_session(
             client=mock_openai_client,
@@ -388,8 +388,8 @@ class TestMemoryOff:
     ) -> None:
         # scribe-shaped empty toolset hides recall — the spill still happens
         # but the resume nudge switches to the no-recall variant.
-        from tests._session_helpers import make_session
         from pebble.core.metacognition import NUDGE_COMPACTION_RESUME_NO_RECALL
+        from tests._session_helpers import make_session
 
         session = make_session(
             client=mock_openai_client,
@@ -927,8 +927,8 @@ class TestTemplateIndependence:
 
 
 def _persona_collector() -> Any:
-    from tests._coord_test_helpers import MockStorage
     from pebble.console.collector import ClusterCollector
+    from tests._coord_test_helpers import MockStorage
 
     return ClusterCollector(storage=MockStorage(), discovery_interval=999)
 

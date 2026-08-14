@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
-from tests._session_helpers import fake_anthropic_stream, fake_chat_stream
 from pebble.core.lowering import repair_wire_messages
 from pebble.core.providers._openai import OpenAIProvider
 from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
@@ -32,6 +31,7 @@ from pebble.core.providers._protocol import (
     UsageInfo,
     drain_stream,
 )
+from tests._session_helpers import fake_anthropic_stream, fake_chat_stream
 
 # ---------------------------------------------------------------------------
 # Helpers

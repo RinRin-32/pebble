@@ -2109,9 +2109,7 @@ class TestUserHasPermission:
         """
         from pebble.core import auth as _auth_mod
 
-        monkeypatch.setattr(
-            "pebble.core.storage._registry.get_storage", lambda: None, raising=True
-        )
+        monkeypatch.setattr("pebble.core.storage._registry.get_storage", lambda: None, raising=True)
         assert _auth_mod.user_has_permission("alice", "model.skills.write") is False
 
     def test_each_call_hits_storage_no_implicit_cache(self):

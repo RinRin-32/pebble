@@ -16,10 +16,10 @@ from __future__ import annotations
 import contextlib
 import os
 import signal
-import tempfile
 import subprocess
+import tempfile
 import threading
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from pebble.core.agents.base import (
     COST_TOTAL,
@@ -28,6 +28,9 @@ from pebble.core.agents.base import (
     AgentResult,
 )
 from pebble.core.log import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 log = get_logger(__name__)
 
@@ -74,17 +77,14 @@ def run_agent(
     result = AgentResult()
     if not adapter.is_available():
         result.error = (
-            f"{adapter.name} is not installed on this node "
-            f"(missing '{adapter.binary}' on PATH)"
+            f"{adapter.name} is not installed on this node (missing '{adapter.binary}' on PATH)"
         )
         return result
     if not os.path.isdir(cwd):
         result.error = f"working directory does not exist: {cwd}"
         return result
 
-    cmd = adapter.build_command(
-        prompt, cwd=cwd, model=model, session_id=session_id, agent=agent
-    )
+    cmd = adapter.build_command(prompt, cwd=cwd, model=model, session_id=session_id, agent=agent)
     mcp_path = ""
     if mcp_servers:
         payload = adapter.mcp_payload(dict(mcp_servers))

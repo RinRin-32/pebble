@@ -19,11 +19,11 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from tests._session_helpers import make_session
 from pebble.core import fence
 from pebble.core.session import _prefix_sender_label
 from pebble.core.storage._utils import reconstruct_turns
 from pebble.core.trajectory import Role, turn_from_dict, turn_to_dict
+from tests._session_helpers import make_session
 
 
 def _authentic_label(name: str, nonce: str) -> str:

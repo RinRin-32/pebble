@@ -12,11 +12,11 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from tests._session_helpers import make_session
 from pebble.core import fence
 from pebble.core.lowering import drop_empty_user_turns, fold_system_turns
 from pebble.core.providers._protocol import ModelCapabilities
 from pebble.prompts import build_operator_instruction_declaration
+from tests._session_helpers import make_session
 
 if TYPE_CHECKING:
     import pytest

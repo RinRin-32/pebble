@@ -26,9 +26,9 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from pebble.core.trajectory import Turn
 from tests._session_helpers import as_stream, mock_completion_result
 from tests._session_helpers import make_session as _make_session
-from pebble.core.trajectory import Turn
 
 
 def _registry_with_flag(persist: bool = True, replay: bool = False) -> Any:

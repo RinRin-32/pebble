@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 import pytest
 from starlette.testclient import TestClient
 
-from tests._helpers import wait_until
 from pebble.core.workstream import INTERJECTION_CAP_CHARS
+from tests._helpers import wait_until
 
 _TEST_JWT_SECRET = "test-jwt-secret-minimum-32-chars!"
 

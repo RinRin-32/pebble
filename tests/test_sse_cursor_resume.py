@@ -25,10 +25,10 @@ from typing import TYPE_CHECKING, Any
 
 os.environ.setdefault("PEBBLE_JWT_SECRET", "x" * 32)
 
-from tests._session_helpers import make_session
 from pebble.core.session_routes import _resume_cursor_and_trim
 from pebble.core.session_ui_base import SessionUIBase
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests._session_helpers import make_session
 
 if TYPE_CHECKING:
     import pytest
@@ -292,9 +292,7 @@ def test_event_id_seeded_on_ui_construction(monkeypatch: Any) -> None:
         def get_max_event_id(self, ws_id: str) -> int | None:
             return 99
 
-    monkeypatch.setattr(
-        "pebble.core.storage._registry.get_storage", lambda: _Stub(), raising=True
-    )
+    monkeypatch.setattr("pebble.core.storage._registry.get_storage", lambda: _Stub(), raising=True)
     ui = _ConcreteUI(ws_id="ws-reopen", user_id="u")
     assert ui._event_id == 99
     # Next emitted event continues strictly above the seed (no collision).

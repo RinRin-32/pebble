@@ -26,12 +26,12 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from tests._session_helpers import as_stream, mock_completion_result
-from tests._session_helpers import make_session as _make_session
 from pebble.core.providers._anthropic import AnthropicProvider
 from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 from pebble.core.trajectory import turns_from_dicts
+from tests._session_helpers import as_stream, mock_completion_result
+from tests._session_helpers import make_session as _make_session
 
 
 def _vllm_registry(*, replay: bool = True, alias: str = "qwen3") -> Any:

@@ -33,6 +33,7 @@ def _migration() -> Any:
     spec.loader.exec_module(module)
     return module
 
+
 DELEGATION_CHAIN = ("bind_repo", "setup_env", "dispatch_agent")
 COMPREHENSION = ("read_file", "search", "diff_file")
 # Every route to doing the work directly instead of delegating it.
@@ -71,9 +72,7 @@ class TestDispatcherPersona:
         for tool in DELEGATION_CHAIN:
             assert tool in tools, f"a dispatcher must be able to call {tool}"
 
-    def test_can_understand_the_code_it_briefs_about(
-        self, dispatcher: dict[str, Any]
-    ) -> None:
+    def test_can_understand_the_code_it_briefs_about(self, dispatcher: dict[str, Any]) -> None:
         tools = set(dispatcher["tool_allowlist"] or [])
         for tool in COMPREHENSION:
             assert tool in tools, f"briefing an agent needs {tool}"
@@ -83,9 +82,7 @@ class TestDispatcherPersona:
         leaked = sorted(set(EDITING) & tools)
         assert not leaked, f"dispatcher could bypass delegation via {leaked}"
 
-    def test_allowlist_is_a_hard_set_not_unrestricted(
-        self, dispatcher: dict[str, Any]
-    ) -> None:
+    def test_allowlist_is_a_hard_set_not_unrestricted(self, dispatcher: dict[str, Any]) -> None:
         # None means unrestricted; the whole point is that this one is a set.
         assert dispatcher["tool_allowlist"] is not None
         assert len(dispatcher["tool_allowlist"]) > 0

@@ -8,14 +8,14 @@
 #   openshell sandbox run \
 #     --policy deploy/openshell/turnstone-policy.yaml \
 #     --workdir /project \
-#     -- python3 -m turnstone.server --host 0.0.0.0 --port 8080
+#     -- python3 -m pebble.server --host 0.0.0.0 --port 8080
 #
 # For inference routing (keeps real API keys out of the sandbox):
 #   openshell sandbox run \
 #     --policy deploy/openshell/turnstone-policy.yaml \
 #     --inference-routes deploy/openshell/routes.yaml \
 #     --workdir /project \
-#     -- python3 -m turnstone.server --host 0.0.0.0 --port 8080 \
+#     -- python3 -m pebble.server --host 0.0.0.0 --port 8080 \
 #         --base-url https://inference.local
 #
 # Note: inference.local is intercepted by the OpenShell proxy before

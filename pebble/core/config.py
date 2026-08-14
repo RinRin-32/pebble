@@ -42,6 +42,7 @@ def _default_config_path() -> Path:
     # creates it in the new location rather than resurrecting the old one.
     return current
 
+
 # Resolved config path — set by set_config_path() or $PEBBLE_CONFIG
 _config_path: Path | None = None
 

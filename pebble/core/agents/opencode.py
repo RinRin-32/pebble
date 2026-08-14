@@ -72,9 +72,7 @@ class OpenCodeAdapter(AgentAdapter):
 
         if etype == "reasoning":
             text = str(part.get("text") or "")
-            return (
-                [AgentEvent(kind="reasoning", text=text, session_id=session_id)] if text else []
-            )
+            return [AgentEvent(kind="reasoning", text=text, session_id=session_id)] if text else []
 
         if etype == "tool_use":
             state = part.get("state") if isinstance(part.get("state"), dict) else {}

@@ -1393,7 +1393,9 @@ def _tool_compose_logs(project_dir: Path, args: dict[str, Any]) -> str:
 def _tool_systemd_status(args: dict[str, Any]) -> str:
     unit = _safe_unit(str(args["unit"]))
     if unit is None:
-        return "Error: invalid unit name (expected a plain systemd unit, e.g. pebble-server.service)."
+        return (
+            "Error: invalid unit name (expected a plain systemd unit, e.g. pebble-server.service)."
+        )
     # Options first, then `--`, so the model-supplied unit can't be read as an option.
     return _run_readonly(["systemctl", "status", "--no-pager", "--lines", "20", "--", unit])
 
@@ -1401,7 +1403,9 @@ def _tool_systemd_status(args: dict[str, Any]) -> str:
 def _tool_journal_tail(args: dict[str, Any]) -> str:
     unit = _safe_unit(str(args["unit"]))
     if unit is None:
-        return "Error: invalid unit name (expected a plain systemd unit, e.g. pebble-server.service)."
+        return (
+            "Error: invalid unit name (expected a plain systemd unit, e.g. pebble-server.service)."
+        )
     lines = args.get("lines", 100)
     if not isinstance(lines, int) or lines < 1 or lines > 2000:
         lines = 100

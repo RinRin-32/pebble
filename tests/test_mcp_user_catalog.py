@@ -25,13 +25,13 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from tests.conftest import _run_on_loop
 from pebble.core.mcp_client import (
     MCPClientManager,
     PoolEntryState,
     _AuthCapture,
     _make_capturing_http_factory,
 )
+from tests.conftest import _run_on_loop
 
 # ---------------------------------------------------------------------------
 # Fixtures and helpers

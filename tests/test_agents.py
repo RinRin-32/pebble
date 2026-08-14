@@ -154,9 +154,7 @@ class TestClaudeCodeParsing:
         assert cmd[cmd.index("--resume") + 1] == "abc"
         assert cmd[-1] == "go"
 
-    def test_bare_is_opt_in_so_subscriptions_work(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_bare_is_opt_in_so_subscriptions_work(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # --bare cannot read the OAuth login a Claude subscription uses, so it
         # must not be on by default or subscription auth is impossible.
         monkeypatch.delenv("PEBBLE_CLAUDE_BARE", raising=False)
@@ -222,9 +220,7 @@ class TestRunner:
         assert res.ok is False and "working directory" in res.error
 
     def test_end_to_end_aggregation(self, tmp_path) -> None:
-        res = run_agent(
-            _FakeAgent([OC_TEXT, OC_TOOL, OC_STEP_FINISH]), "go", cwd=str(tmp_path)
-        )
+        res = run_agent(_FakeAgent([OC_TEXT, OC_TOOL, OC_STEP_FINISH]), "go", cwd=str(tmp_path))
         assert res.ok is True
         assert res.final_text == "pong"
         assert res.tool_calls == 1
@@ -318,7 +314,11 @@ class TestChildEnvironment:
         class _EnvProbe(_FakeAgent):
             def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
                 # Emit the PATH the child actually received, as a text event.
-                return ["sh", "-c", 'printf "{\\"type\\":\\"text\\",\\"part\\":{\\"text\\":\\"$PATH\\"}}\\n"']
+                return [
+                    "sh",
+                    "-c",
+                    'printf "{\\"type\\":\\"text\\",\\"part\\":{\\"text\\":\\"$PATH\\"}}\\n"',
+                ]
 
         res = run_agent(_EnvProbe([]), "go", cwd=str(tmp_path), env={"PATH": "/app/.venv/bin"})
         assert "/usr/bin" in res.final_text and "/bin" in res.final_text
@@ -422,12 +422,11 @@ class TestMcpPlumbing:
 
             def mcp_flags(self, config_path):
                 # Record that a real, readable file was produced.
-                assert open(config_path).read().startswith("{")
+                with open(config_path) as fh:
+                    assert fh.read().startswith("{")
                 return []
 
-        res = run_agent(
-            _ShowArgv([]), "go", cwd=str(tmp_path), mcp_servers={"codegraph": {}}
-        )
+        res = run_agent(_ShowArgv([]), "go", cwd=str(tmp_path), mcp_servers={"codegraph": {}})
         assert res.ok is True
 
     def test_no_servers_means_no_config_file(self, tmp_path) -> None:

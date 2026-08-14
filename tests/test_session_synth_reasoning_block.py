@@ -29,13 +29,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from tests._session_helpers import make_session as _make_session
 from pebble.core.model_turn import _server_type_of, synth_reasoning_block
 from pebble.core.providers._anthropic import (
     ANTHROPIC_VALID_BLOCK_TYPES,
     AnthropicProvider,
 )
 from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
+from tests._session_helpers import make_session as _make_session
 
 
 class TestSynthReasoningBlock:

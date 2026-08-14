@@ -264,9 +264,7 @@ def load_oidc_config() -> OIDCConfig:
         else:
             trusted_endpoint_hosts = _parse_trusted_endpoint_hosts(str(cfg_trusted))
 
-    redirect_base = _env_or_cfg_str("PEBBLE_OIDC_REDIRECT_BASE", cfg, "redirect_base").rstrip(
-        "/"
-    )
+    redirect_base = _env_or_cfg_str("PEBBLE_OIDC_REDIRECT_BASE", cfg, "redirect_base").rstrip("/")
     if redirect_base:
         parsed = urllib.parse.urlparse(redirect_base)
         if parsed.scheme not in ("https", "http"):

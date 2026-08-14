@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.conftest import _seed_static_state
 from pebble.core.mcp_client import MCPClientManager
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import _seed_static_state
 
 # ---------------------------------------------------------------------------
 # Helpers

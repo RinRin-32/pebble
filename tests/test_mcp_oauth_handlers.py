@@ -23,7 +23,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from tests.conftest import make_mcp_token_cipher
 from pebble.core.auth import AuthResult
 from pebble.core.mcp_crypto import MCPTokenStore
 from pebble.core.mcp_oauth import (
@@ -33,6 +32,7 @@ from pebble.core.mcp_oauth import (
 )
 from pebble.core.oidc import OIDCConfig
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import make_mcp_token_cipher
 
 if TYPE_CHECKING:
     from starlette.requests import Request

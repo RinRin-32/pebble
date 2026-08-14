@@ -1042,9 +1042,7 @@ def test_coordinator_pane_reconnects_on_reopen() -> None:
     assert "this._ctl.reconnect()" in shell, (
         "the coordinator pane's onReopen must drive the controller's reconnect"
     )
-    coord = (_ROOT / "pebble/console/static/coordinator/coordinator.js").read_text(
-        encoding="utf-8"
-    )
+    coord = (_ROOT / "pebble/console/static/coordinator/coordinator.js").read_text(encoding="utf-8")
     assert "function reconnect()" in coord
     assert "readyState !== EventSource.CLOSED) return" in coord.replace("\n", " "), (
         "reconnect must only act on a missing/CLOSED stream"

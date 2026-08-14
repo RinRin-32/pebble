@@ -206,9 +206,9 @@ def test_console_create_app_only_mounts_unified_workstream_paths() -> None:
     """The console's ``create_app`` mounts coord verbs only at the
     unified ``/api/workstreams/`` shape — no path under
     ``/api/coordinator/`` should remain (deleted in Step 0.4)."""
-    from tests._coord_test_helpers import MockStorage
     from pebble.console.collector import ClusterCollector
     from pebble.console.server import create_app
+    from tests._coord_test_helpers import MockStorage
 
     collector = ClusterCollector(storage=MockStorage(), discovery_interval=999)
     app = create_app(collector=collector)

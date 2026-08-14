@@ -694,7 +694,10 @@ class TurnstoneBot:
 
             # TTS audio: fetch the saved attachment and upload to Discord.
             if event.name == "tts" and event.output.startswith("TTS_AUDIO:"):
-                import re, io, base64
+                import base64
+                import io
+                import re
+
                 match = re.match(r"TTS_AUDIO:([^:]+):(.+?):END_AUDIO", event.output, re.DOTALL)
                 if match:
                     media_type = match.group(1)
@@ -811,7 +814,9 @@ class TurnstoneBot:
             # parses it back on click and routes the decision to exactly
             # this cycle.
             owner_id = self._session_owners.get(ws_id) or _thread_owner_id(
-                thread, thread_invokers=self._thread_invokers, channel_sessions=self._channel_sessions
+                thread,
+                thread_invokers=self._thread_invokers,
+                channel_sessions=self._channel_sessions,
             )
             log.info(
                 "discord.approval_embed_owner",
@@ -852,7 +857,7 @@ class TurnstoneBot:
 
         text = format_approval_request(items)
         embed = discord.Embed(
-            title=f"Child Tool Approval Required",
+            title="Child Tool Approval Required",
             description=text,
             color=discord.Color.orange(),
         )
@@ -863,9 +868,7 @@ class TurnstoneBot:
         # Store child_ws_id in footer so the button click routes to the child.
         embed.set_footer(text=f"{child_ws_id}|{cycle_id}|{owner_id}")
         msg = await thread.send(embed=embed, view=ApprovalView(self)._view)
-        call_ids = frozenset(
-            str(it.get("call_id", "")) for it in items if it.get("call_id")
-        )
+        call_ids = frozenset(str(it.get("call_id", "")) for it in items if it.get("call_id"))
         self._pending_approval_msgs[(child_ws_id, cycle_id)] = (msg, call_ids)
         log.info("discord.child_approval_request", child_ws_id=child_ws_id)
 

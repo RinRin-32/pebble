@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests._helpers import wait_until
 from pebble.core.watch import (
     WatchRunner,
     build_watch_reminder,
@@ -20,6 +19,7 @@ from pebble.core.watch import (
     parse_duration,
     validate_condition,
 )
+from tests._helpers import wait_until
 
 # ---------------------------------------------------------------------------
 # parse_duration

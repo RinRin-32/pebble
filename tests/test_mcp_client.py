@@ -17,7 +17,6 @@ import anyio
 import mcp.types as mcp_types
 import pytest
 
-from tests.conftest import _drain_background, _run_on_loop, _seed_static_state
 from pebble.core.mcp_client import (
     _MAX_RESOURCES_PER_SERVER,
     MCPClientManager,
@@ -27,6 +26,7 @@ from pebble.core.mcp_client import (
     load_mcp_config,
 )
 from pebble.core.tools import INTERACTIVE_TOOLS, TOOLS, merge_mcp_tools
+from tests.conftest import _drain_background, _run_on_loop, _seed_static_state
 
 # ---------------------------------------------------------------------------
 # Helpers

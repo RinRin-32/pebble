@@ -9,8 +9,8 @@ write path.
 
 from __future__ import annotations
 
-from tests._session_helpers import make_session
 from pebble.prompts import INTERACTIVE_CONSENT_CLIENT_TYPES, ClientType
+from tests._session_helpers import make_session
 
 
 def test_web_is_interactive() -> None:

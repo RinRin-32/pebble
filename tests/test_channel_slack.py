@@ -1119,9 +1119,7 @@ class TestChannelCLI:
             ),
             patch("pebble.core.storage._registry.init_storage"),
             patch("pebble.core.storage._registry.get_storage", return_value=storage),
-            patch(
-                "pebble.channels._http.create_channel_app", side_effect=_fake_create_channel_app
-            ),
+            patch("pebble.channels._http.create_channel_app", side_effect=_fake_create_channel_app),
             patch("pebble.channels._http._get_service_id", return_value="channel-test"),
             patch("asyncio.gather", side_effect=_fake_gather),
             patch("uvicorn.Config", return_value=MagicMock()),
@@ -1202,9 +1200,7 @@ class TestChannelCLI:
             ),
             patch("pebble.core.storage._registry.init_storage"),
             patch("pebble.core.storage._registry.get_storage", return_value=storage),
-            patch(
-                "pebble.channels._http.create_channel_app", side_effect=_fake_create_channel_app
-            ),
+            patch("pebble.channels._http.create_channel_app", side_effect=_fake_create_channel_app),
             patch("pebble.channels._http._get_service_id", return_value="channel-test"),
             patch("asyncio.gather", side_effect=_fake_gather),
             patch("uvicorn.Config", return_value=MagicMock()),

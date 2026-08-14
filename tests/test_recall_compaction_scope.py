@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import json
 
-from tests._session_helpers import make_session
 from pebble.core.metacognition import NUDGE_COMPACTION_RESUME
 from pebble.core.session import COMPACTION_SOURCE
+from tests._session_helpers import make_session
 
 NEEDLE = "quillfeather"
 
@@ -143,9 +143,7 @@ class TestRecallExecScope:
             return rows
 
         monkeypatch.setattr("pebble.core.session.search_history", fake_search_history)
-        monkeypatch.setattr(
-            "pebble.core.session.get_compaction_checkpoint", lambda ws: checkpoint
-        )
+        monkeypatch.setattr("pebble.core.session.get_compaction_checkpoint", lambda ws: checkpoint)
         item = session._prepare_recall("c1", {"query": "x"})
         _, output = session._exec_recall(item)
         return calls, output

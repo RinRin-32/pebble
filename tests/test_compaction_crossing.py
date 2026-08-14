@@ -30,9 +30,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._session_helpers import make_session
 from pebble.core.session import COMPACTION_SOURCE, COMPACTION_SUMMARY_LABEL
 from pebble.core.trajectory import turns_from_dicts
+from tests._session_helpers import make_session
 
 
 @pytest.fixture

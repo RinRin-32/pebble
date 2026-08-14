@@ -14,8 +14,8 @@ plus the ``MCPTokenStore`` encrypt/decrypt wrappers over the same rows.
 
 from __future__ import annotations
 
-from tests.conftest import make_mcp_token_cipher
 from pebble.core.mcp_crypto import MCPTokenStore
+from tests.conftest import make_mcp_token_cipher
 
 ISS = "https://login.example.test/tenant-1/v2.0"
 

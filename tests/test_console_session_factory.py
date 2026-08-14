@@ -26,8 +26,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests._coord_test_helpers import _FakeConfigStore
 from pebble.console.session_factory import build_console_session_factory
+from tests._coord_test_helpers import _FakeConfigStore
 
 
 class _StopBeforeChatSessionError(Exception):

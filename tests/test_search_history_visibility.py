@@ -28,8 +28,8 @@ from __future__ import annotations
 
 import pytest
 
-from tests._session_helpers import make_session
 from pebble.core.auth import WorkstreamProjectVisibility
+from tests._session_helpers import make_session
 
 NEEDLE = "zebrafinch"
 

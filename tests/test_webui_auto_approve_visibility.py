@@ -26,8 +26,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import resolve_when_pending
 from pebble.server import WebUI
+from tests.conftest import resolve_when_pending
 
 
 @pytest.fixture(autouse=True)

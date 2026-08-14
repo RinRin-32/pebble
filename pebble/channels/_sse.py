@@ -21,6 +21,7 @@ from pebble.sdk.events import ServerEvent
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from typing import Any
 
 log = get_logger(__name__)
 

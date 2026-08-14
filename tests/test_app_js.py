@@ -373,9 +373,7 @@ def test_operator_nudge_labels_use_shared_helper() -> None:
     assert 'tool_error: "tool error"' in utils
     assert 'skill_hint: "skill hint"' in utils
     app = (root / "pebble/shared_static/interactive.js").read_text(encoding="utf-8")
-    coord = (root / "pebble/console/static/coordinator/coordinator.js").read_text(
-        encoding="utf-8"
-    )
+    coord = (root / "pebble/console/static/coordinator/coordinator.js").read_text(encoding="utf-8")
     assert "operatorSourceLabel(source)" in app, "interactive pane must use the shared label helper"
     assert "operatorSourceLabel(source)" in coord, "coord pane must use the shared label helper"
 

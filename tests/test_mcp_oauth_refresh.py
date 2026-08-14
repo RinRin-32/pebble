@@ -25,10 +25,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from tests.conftest import make_mcp_token_cipher
 from pebble.core.mcp_crypto import MCPTokenStore
 from pebble.core.mcp_oauth import get_user_access_token
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import make_mcp_token_cipher
 
 # Generous CI ceiling — cancel/drain is sub-millisecond on a healthy loop.
 _CANCEL_WAIT_S = 5.0

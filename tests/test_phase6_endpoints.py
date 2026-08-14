@@ -19,17 +19,17 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
+from pebble.console.server import (
+    cluster_ws_live_bulk,
+    coordinator_metrics,
+)
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests._coord_test_helpers import (
     _AuthMiddleware,
     _build_mgr,
     _fake_registry,
     _FakeConfigStore,
 )
-from pebble.console.server import (
-    cluster_ws_live_bulk,
-    coordinator_metrics,
-)
-from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture

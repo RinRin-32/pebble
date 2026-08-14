@@ -28,11 +28,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._helpers import patch_session_storage
 from pebble.core.session import ChatSession
 from pebble.core.storage import get_storage
 from pebble.core.trajectory import dicts_from_turns
 from pebble.core.watch import WatchRunner
+from tests._helpers import patch_session_storage
 
 
 class _NullUI:

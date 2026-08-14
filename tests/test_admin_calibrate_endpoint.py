@@ -29,7 +29,6 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from tests._coord_test_helpers import _AuthMiddleware
 from pebble.console.server import (
     admin_calibrate_model_definition,
     admin_detect_model,
@@ -37,6 +36,7 @@ from pebble.console.server import (
 from pebble.core.model_registry import ModelConfig, ModelRegistry
 from pebble.core.rerank_calibrate import CalibrationResult
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests._coord_test_helpers import _AuthMiddleware
 
 
 @pytest.fixture

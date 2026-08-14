@@ -33,7 +33,6 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from tests._coord_test_helpers import _AuthMiddleware
 from pebble.console.server import (
     _maybe_bootstrap_coord_subsystem,
     _refresh_coord_registry,
@@ -44,6 +43,7 @@ from pebble.console.server import (
 )
 from pebble.core.model_registry import ModelConfig, ModelRegistry
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests._coord_test_helpers import _AuthMiddleware
 
 
 def _bootstrap_app(**overrides: Any) -> Any:

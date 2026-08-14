@@ -151,9 +151,7 @@ class TestPoolTransportOwnerLifecycle:
         key = ("user-1", "pool-srv")
 
         with (
-            patch(
-                "pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]
-            ),
+            patch("pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]),
             patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
@@ -228,9 +226,7 @@ class TestPoolTransportOwnerLifecycle:
             return asyncio.get_running_loop().time() - t0, exc
 
         with (
-            patch(
-                "pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]
-            ),
+            patch("pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]),
             patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):
@@ -348,9 +344,7 @@ class TestPoolTransportOwnerLifecycle:
         key = ("user-1", "pool-srv")
 
         with (
-            patch(
-                "pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]
-            ),
+            patch("pebble.core.mcp_client.streamablehttp_client", patches["streamablehttp_client"]),
             patch("pebble.core.mcp_client.ClientSession", patches["ClientSession"]),
             patch.object(mgr, "_tcp_probe", new=AsyncMock()),
         ):

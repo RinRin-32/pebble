@@ -19,7 +19,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Mount, Route
 from starlette.testclient import TestClient
 
-from tests.conftest import make_oidc_test_config as _make_oidc_config
 from pebble.console.server import (
     admin_delete_oidc_identity,
     admin_list_oidc_identities,
@@ -34,6 +33,7 @@ from pebble.core.auth import (
 )
 from pebble.core.oidc import OIDCConfig, OIDCError, OIDCKeyNotFoundError
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import make_oidc_test_config as _make_oidc_config
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -764,8 +764,8 @@ class TestOIDCCallbackCapture:
         """Client wired like ``authorize_client`` plus a real MCPTokenStore."""
         import dataclasses
 
-        from tests.conftest import make_mcp_token_cipher
         from pebble.core.mcp_crypto import MCPTokenStore
+        from tests.conftest import make_mcp_token_cipher
 
         cfg = dataclasses.replace(oidc_config, capture_user_credential=capture)
         app = Starlette(
@@ -1122,8 +1122,8 @@ class TestAdminOIDCIdentities:
         credential AND purge the user's already-minted oauth_obo cache rows —
         deleting only the credential leaves live cached bearers authorizing
         dispatch until TTL. The response/audit report what was actually cut."""
-        from tests.conftest import make_mcp_token_cipher
         from pebble.core.mcp_crypto import MCPTokenStore
+        from tests.conftest import make_mcp_token_cipher
 
         issuer = "https://idp.example.com"
         store = MCPTokenStore(storage, make_mcp_token_cipher(), node_id="test")

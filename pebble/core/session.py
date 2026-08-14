@@ -16901,6 +16901,7 @@ class ChatSession:
             return call_id, msg
 
         import base64
+
         audio_b64 = base64.b64encode(result.audio_bytes).decode()
         media_type = result.media_type or "audio/mpeg"
         # Truncate to stay within Discord's 8MB file limit — 4MB for b64 text.
@@ -16914,15 +16915,12 @@ class ChatSession:
         # string would flood the context window and derail the agent (it starts
         # trying to "open_preview" its own audio). So report the payload to the
         # channel, but return a short confirmation to the model.
-        channel_output = (
-            f"TTS_AUDIO:{media_type}:{audio_b64}:END_AUDIO\n"
-            f"Text: \"{text[:200]}\""
-        )
+        channel_output = f'TTS_AUDIO:{media_type}:{audio_b64}:END_AUDIO\nText: "{text[:200]}"'
         self._report_tool_result(call_id, "tts", channel_output)
         model_output = (
             f"Spoken audio generated and delivered to the channel as a file "
             f"({len(result.audio_bytes)} bytes, {media_type}). "
-            f"Text: \"{text[:200]}\""
+            f'Text: "{text[:200]}"'
         )
         return call_id, model_output
 
@@ -17022,11 +17020,12 @@ class ChatSession:
                 if note is None:
                     out = f"No note titled {item['title']!r}."
                 else:
-                    out = (
-                        f"# {note.title}\nkind: {note.kind}"
-                        f"{f' | tags: {', '.join(note.tags)}' if note.tags else ''}\n\n"
-                        f"{note.body.strip()}"
-                    )
+                    # Built as a separate local rather than nested inside the
+                    # f-string: reusing the outer quote character inside an
+                    # f-string is a 3.12+ syntax, and this project supports
+                    # 3.11, where it is a SyntaxError at import time.
+                    tag_suffix = f" | tags: {', '.join(note.tags)}" if note.tags else ""
+                    out = f"# {note.title}\nkind: {note.kind}{tag_suffix}\n\n{note.body.strip()}"
             elif action == "links":
                 if not item["title"]:
                     return _fail("Error: title is required for links")
@@ -17046,7 +17045,9 @@ class ChatSession:
                 if not drifted:
                     out = f"No stale findings — every measured note matches HEAD ({head})."
                 else:
-                    lines = [f"{len(drifted)} finding(s) measured against older code (HEAD is {head}):"]
+                    lines = [
+                        f"{len(drifted)} finding(s) measured against older code (HEAD is {head}):"
+                    ]
                     lines += [f"  [[{n.title}]] measured at {c}" for n, c in drifted[:15]]
                     lines.append("Re-run their experiments before relying on them.")
                     out = "\n".join(lines)
@@ -17061,17 +17062,21 @@ class ChatSession:
                         "Error: no repo bound. Call bind_repo first — an experiment "
                         "has to run against a real checkout to mean anything."
                     )
-                res = kb.run_experiment(
-                    item["command"], cwd=cwd, wrap=self._nix_env_dir()
-                )
+                res = kb.run_experiment(item["command"], cwd=cwd, wrap=self._nix_env_dir())
                 note = kb.experiment_note(
-                    item["title"], item["hypothesis"], res,
-                    repo_id=self._bound_repo_id(), ws_id=self._ws_id,
-                    tags=item["tags"], links=item["links"],
+                    item["title"],
+                    item["hypothesis"],
+                    res,
+                    repo_id=self._bound_repo_id(),
+                    ws_id=self._ws_id,
+                    tags=item["tags"],
+                    links=item["links"],
                 )
                 path = kb.write_note(note)
                 self._sync_kb_index()
-                status = "TIMED OUT" if res.timed_out else ("ok" if res.ok else f"exit {res.exit_code}")
+                status = (
+                    "TIMED OUT" if res.timed_out else ("ok" if res.ok else f"exit {res.exit_code}")
+                )
                 out = (
                     f"Experiment [[{item['title']}]] recorded ({path.name}).\n"
                     f"{status} in {res.duration_s}s at commit {res.commit or 'unknown'}.\n\n"
@@ -17549,9 +17554,7 @@ class ChatSession:
             parts.append(f"\n```diff\n{diff}\n```")
         output = "\n".join(parts)
 
-        self._report_tool_result(
-            call_id, "dispatch_agent", output, is_error=bool(result.error)
-        )
+        self._report_tool_result(call_id, "dispatch_agent", output, is_error=bool(result.error))
         return call_id, output
 
     # -- Watch tool ----------------------------------------------------------

@@ -29,11 +29,14 @@ import re
 import shutil
 import subprocess
 import time
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pebble.core.log import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 log = get_logger(__name__)
 
@@ -125,7 +128,11 @@ def _mirror_lock(mirror: Path, *, timeout: int = 120) -> Iterator[None]:
     # each other -- reintroducing the concurrent `git worktree add` race
     # this lock exists to prevent.
     lock_path = mirror / "turnstone-worktree.lock"
-    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+    # noqa rationale: the fd must OUTLIVE this statement -- the flock is held
+    # for the body of the enclosing contextmanager and released by its
+    # finally.  A `with` block here would close the fd immediately and drop
+    # the lock, defeating the point.
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)  # noqa: SIM115
     try:
         deadline = time.monotonic() + timeout
         while True:

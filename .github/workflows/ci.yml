@@ -31,7 +31,7 @@ jobs:
           python-version: "3.14"
       - run: pip install mypy
       - run: pip install -e ".[all]"
-      - run: mypy turnstone/
+      - run: mypy pebble/
 
   test:
     runs-on: ubuntu-latest
@@ -57,7 +57,7 @@ jobs:
       # -v lists each test id as it starts (pytest prints the nodeid at
       # logstart), so a hang names the culprit on the last line instead of
       # riding the job timeout with only a trail of "..." dots.
-      - run: pytest tests/ -m "not live" --cov=turnstone --cov-report=term-missing --cov-report=xml -v
+      - run: pytest tests/ -m "not live" --cov=pebble --cov-report=term-missing --cov-report=xml -v
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -92,7 +92,7 @@ jobs:
       - run: pip install -e ".[test]"
       - run: pytest tests/ -m "not live" --storage-backend=postgresql -v
         env:
-          TURNSTONE_TEST_PG_URL: postgresql+psycopg://postgres:postgres@localhost:5432/turnstone_test
+          PEBBLE_TEST_PG_URL: postgresql+psycopg://postgres:postgres@localhost:5432/turnstone_test
 
   wheel-completeness:
     runs-on: ubuntu-latest
@@ -105,7 +105,7 @@ jobs:
       - run: python -m build --wheel
       - name: Check all data files are in wheel
         run: |
-          SOURCE=$(find turnstone -type f \
+          SOURCE=$(find pebble -type f \
             ! -name '*.py' ! -name '*.pyc' ! -path '*__pycache__*' \
             | sort)
           WHEEL=$(python -m zipfile -l dist/*.whl \
@@ -141,7 +141,7 @@ jobs:
         run: |
           python -m venv /tmp/smoke
           /tmp/smoke/bin/pip install dist/*.whl
-          /tmp/smoke/bin/turnstone --help
+          /tmp/smoke/bin/pebble --help
           /tmp/smoke/bin/pebble-server --help
           /tmp/smoke/bin/pebble-console --help
           /tmp/smoke/bin/pebble-admin --help

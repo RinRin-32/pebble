@@ -7422,8 +7422,13 @@ async def admin_set_user_capabilities(request: Request) -> JSONResponse:
     audit_uid, ip = _audit_context(request)
     storage.set_user_capabilities(user_id, caps, granted_by=audit_uid)
     record_audit(
-        storage, audit_uid, "user.capabilities.set", "user", user_id,
-        {"capabilities": caps}, ip,
+        storage,
+        audit_uid,
+        "user.capabilities.set",
+        "user",
+        user_id,
+        {"capabilities": caps},
+        ip,
     )
     return JSONResponse({"capabilities": storage.list_user_capabilities(user_id)})
 
@@ -14374,10 +14379,15 @@ def _seed_config_from_env(config_store: Any, storage: Any) -> None:
     for key in SETTINGS:
         suffix = key.replace(".", "_").upper()
         # PEBBLE_* is canonical; TURNSTONE_* still honoured so an existing
-        # .env keeps seeding config after the rename.
-        env_val = os.environ.get("PEBBLE_" + suffix)
+        # .env keeps seeding config after the rename.  The name that actually
+        # matched is kept for the log line -- "seeded from PEBBLE_X" vs
+        # "from TURNSTONE_X" is the difference between a clear audit trail and
+        # a guess about which spelling won.
+        env_name = "PEBBLE_" + suffix
+        env_val = os.environ.get(env_name)
         if env_val is None:
-            env_val = os.environ.get("TURNSTONE_" + suffix)
+            env_name = "TURNSTONE_" + suffix
+            env_val = os.environ.get(env_name)
         if env_val is None:
             continue
         # Only seed if not already stored (check raw storage to avoid
@@ -15462,7 +15472,9 @@ def main() -> None:
                 # advertise an ACME URL nodes can't reach.
                 log.info("TLS enabled")
         except ImportError:
-            log.warning("TLS enabled but lacme not installed — pip install pebble-orchestrator[tls]")
+            log.warning(
+                "TLS enabled but lacme not installed — pip install pebble-orchestrator[tls]"
+            )
             tls_mgr = None
         except Exception:
             log.warning("TLS initialization failed", exc_info=True)

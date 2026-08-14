@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests._session_helpers import as_stream, mock_completion_result
 from pebble.core import perception
 from pebble.core.attachments import Attachment
 from pebble.core.memory import (
@@ -20,6 +19,7 @@ from pebble.core.trajectory import (
     materialize_attachments,
     turn_to_dict,
 )
+from tests._session_helpers import as_stream, mock_completion_result
 
 PNG_1x1 = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"

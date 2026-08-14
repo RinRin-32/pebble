@@ -21,8 +21,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests._helpers import patch_session_storage
 from pebble.core.session import _WATCH_QUEUE_SOFT_CAP, ChatSession
+from tests._helpers import patch_session_storage
 
 
 class _NullUI:

@@ -31,9 +31,9 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from tests._coord_test_helpers import _AuthMiddleware, _FakeConfigStore
 from pebble.console.server import list_available_models
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests._coord_test_helpers import _AuthMiddleware, _FakeConfigStore
 
 
 @pytest.fixture

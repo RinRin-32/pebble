@@ -12,10 +12,10 @@ the call always returns and never leaks the background child.
 import threading
 import time
 
+from pebble.core.trajectory import EffectStatus
 from tests._proc_helpers import kill_pid as _kill_pid
 from tests._proc_helpers import pid_alive as _pid_alive
 from tests._session_helpers import NullUI, make_session
-from pebble.core.trajectory import EffectStatus
 
 
 def _run_in_thread(fn, timeout):

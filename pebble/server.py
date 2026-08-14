@@ -5047,9 +5047,7 @@ def main() -> None:
     # Initialize storage backend
     from pebble.core.storage import init_storage
 
-    db_backend = getattr(args, "db_backend", None) or os.environ.get(
-        "PEBBLE_DB_BACKEND", "sqlite"
-    )
+    db_backend = getattr(args, "db_backend", None) or os.environ.get("PEBBLE_DB_BACKEND", "sqlite")
     db_url = getattr(args, "db_url", None) or os.environ.get("PEBBLE_DB_URL", "")
     db_path = getattr(args, "db_path", None) or os.environ.get("PEBBLE_DB_PATH", "")
     db_pool_size = int(

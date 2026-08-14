@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.conftest import _seed_static_state
 from pebble.core.mcp_client import MCPClientManager
+from tests.conftest import _seed_static_state
 
 # ---------------------------------------------------------------------------
 # Helpers

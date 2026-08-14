@@ -660,9 +660,7 @@ def test_send_post_abort_machinery_is_gone() -> None:
         encoding="utf-8"
     )
     conversation = (_ROOT / "pebble/shared_static/conversation.js").read_text(encoding="utf-8")
-    composer_queue = (_ROOT / "pebble/shared_static/composer_queue.js").read_text(
-        encoding="utf-8"
-    )
+    composer_queue = (_ROOT / "pebble/shared_static/composer_queue.js").read_text(encoding="utf-8")
     for name, src in (
         ("interactive.js", interactive),
         ("coordinator.js", coordinator),
@@ -698,9 +696,7 @@ def test_deferred_send_settle_protocol_pins() -> None:
     coordinator = (_ROOT / "pebble/console/static/coordinator/coordinator.js").read_text(
         encoding="utf-8"
     )
-    composer_queue = (_ROOT / "pebble/shared_static/composer_queue.js").read_text(
-        encoding="utf-8"
-    )
+    composer_queue = (_ROOT / "pebble/shared_static/composer_queue.js").read_text(encoding="utf-8")
     # Controller: bind() stores the options on its own dataset state...
     assert "function bind(el, msgId, opts)" in composer_queue
     assert 'el.dataset.deferred = "1"' in composer_queue

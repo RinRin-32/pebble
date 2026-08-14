@@ -30,9 +30,9 @@ def _alias_legacy_env(environ: "os._Environ[str] | dict[str, str]" = os.environ)
     """
     for key, value in list(environ.items()):
         if key.startswith(LEGACY_ENV_PREFIX):
-            environ.setdefault(ENV_PREFIX + key[len(LEGACY_ENV_PREFIX):], value)
+            environ.setdefault(ENV_PREFIX + key[len(LEGACY_ENV_PREFIX) :], value)
         elif key.startswith(ENV_PREFIX):
-            environ.setdefault(LEGACY_ENV_PREFIX + key[len(ENV_PREFIX):], value)
+            environ.setdefault(LEGACY_ENV_PREFIX + key[len(ENV_PREFIX) :], value)
 
 
 _alias_legacy_env()

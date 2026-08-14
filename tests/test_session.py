@@ -11,13 +11,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._session_helpers import (
-    FakeAnthropicBlock,
-    as_stream,
-    mock_completion_result,
-    scripted_anthropic_client,
-    scripted_chat_client,
-)
 from pebble.core.session import _IMAGE_EXTENSIONS, _IMAGE_SIZE_CAP, ChatSession
 from pebble.core.trajectory import (
     Turn,
@@ -25,6 +18,13 @@ from pebble.core.trajectory import (
     turn_from_dict,
     turn_to_dict,
     turns_from_dicts,
+)
+from tests._session_helpers import (
+    FakeAnthropicBlock,
+    as_stream,
+    mock_completion_result,
+    scripted_anthropic_client,
+    scripted_chat_client,
 )
 
 

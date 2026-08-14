@@ -19,8 +19,8 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from tests.test_session import _make_session
 from pebble.core.session import _format_mcp_dispatch_error
+from tests.test_session import _make_session
 
 # ---------------------------------------------------------------------------
 # Unit tests for the helper

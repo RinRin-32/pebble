@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
-from tests._session_helpers import as_stream
-from tests._session_helpers import mock_completion_result as _mock_result
 from pebble.core.judge import IntentJudge, IntentVerdict, JudgeConfig, evaluate_heuristic
 from pebble.core.trajectory import Role
+from tests._session_helpers import as_stream
+from tests._session_helpers import mock_completion_result as _mock_result
 
 # ---------------------------------------------------------------------------
 # Helpers

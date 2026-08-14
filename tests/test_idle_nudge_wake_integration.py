@@ -28,14 +28,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._helpers import wait_until as _wait_until
-from tests.test_session_manager import FakeStorage
 from pebble.core import session_worker
 from pebble.core.idle_nudge_watcher import IdleNudgeWatcher, wake_workstream_if_pending
 from pebble.core.session import ChatSession
 from pebble.core.session_manager import SessionManager
 from pebble.core.trajectory import dicts_from_turns, turn_from_dict
 from pebble.core.workstream import Workstream, WorkstreamKind, WorkstreamState
+from tests._helpers import wait_until as _wait_until
+from tests.test_session_manager import FakeStorage
 
 # ---------------------------------------------------------------------------
 # Minimal fake adapter / UI for this integration test.  Storage reuses
@@ -581,8 +581,8 @@ def test_wake_delivery_contains_generation_cancelled(tmp_db):
     closure, and ``session_worker._runner`` catches only ``Exception``,
     so an escape would land in ``threading.excepthook`` as stderr noise
     on every close-vs-wake race."""
-    from tests._helpers import make_chat_session
     from pebble.core.session import GenerationCancelled
+    from tests._helpers import make_chat_session
 
     session = make_chat_session()
     session._nudge_queue.enqueue("idle_children", "kids waiting", "any")

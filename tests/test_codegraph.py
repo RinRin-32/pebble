@@ -9,11 +9,14 @@ one. Fixtures are named after the shape they encode.
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from pebble.core import codegraph as cg
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _mk_index(root: Path, nodes: list[dict], edges: list[dict]) -> Path:
@@ -35,8 +38,7 @@ def _mk_index(root: Path, nodes: list[dict], edges: list[dict]) -> Path:
         nodes,
     )
     conn.executemany(
-        "INSERT INTO edges (id,source,target,kind,line) "
-        "VALUES (:id,:source,:target,:kind,:line)",
+        "INSERT INTO edges (id,source,target,kind,line) VALUES (:id,:source,:target,:kind,:line)",
         edges,
     )
     conn.commit()
@@ -95,12 +97,30 @@ class TestAudit:
         db = _mk_index(
             repo,
             [
-                {"id": "a", "kind": "function", "name": "__init__", "qualified_name": "__init__",
-                 "file_path": "test_nll.py", "language": "python"},
-                {"id": "b", "kind": "function", "name": "index", "qualified_name": "index",
-                 "file_path": "cifar_server.py", "language": "python"},
-                {"id": "c", "kind": "method", "name": "index", "qualified_name": "L::index",
-                 "file_path": "other.py", "language": "python"},
+                {
+                    "id": "a",
+                    "kind": "function",
+                    "name": "__init__",
+                    "qualified_name": "__init__",
+                    "file_path": "test_nll.py",
+                    "language": "python",
+                },
+                {
+                    "id": "b",
+                    "kind": "function",
+                    "name": "index",
+                    "qualified_name": "index",
+                    "file_path": "cifar_server.py",
+                    "language": "python",
+                },
+                {
+                    "id": "c",
+                    "kind": "method",
+                    "name": "index",
+                    "qualified_name": "L::index",
+                    "file_path": "other.py",
+                    "language": "python",
+                },
             ],
             [{"id": 1, "source": "a", "target": "b", "kind": "calls", "line": 1}],
         )
@@ -118,14 +138,30 @@ class TestAudit:
         db = _mk_index(
             repo,
             [
-                {"id": "a", "kind": "method", "name": "confirm_selection",
-                 "qualified_name": "M::confirm_selection", "file_path": "memorymap.py",
-                 "language": "python"},
-                {"id": "b", "kind": "method", "name": "update",
-                 "qualified_name": "DecisionBoundaryVisualizer::update",
-                 "file_path": "decisionboundary.py", "language": "python"},
-                {"id": "c", "kind": "method", "name": "update", "qualified_name": "Other::update",
-                 "file_path": "other.py", "language": "python"},
+                {
+                    "id": "a",
+                    "kind": "method",
+                    "name": "confirm_selection",
+                    "qualified_name": "M::confirm_selection",
+                    "file_path": "memorymap.py",
+                    "language": "python",
+                },
+                {
+                    "id": "b",
+                    "kind": "method",
+                    "name": "update",
+                    "qualified_name": "DecisionBoundaryVisualizer::update",
+                    "file_path": "decisionboundary.py",
+                    "language": "python",
+                },
+                {
+                    "id": "c",
+                    "kind": "method",
+                    "name": "update",
+                    "qualified_name": "Other::update",
+                    "file_path": "other.py",
+                    "language": "python",
+                },
             ],
             [{"id": 1, "source": "a", "target": "b", "kind": "calls", "line": 1}],
         )
@@ -137,12 +173,30 @@ class TestAudit:
         db = _mk_index(
             repo,
             [
-                {"id": "a", "kind": "file", "name": "a", "qualified_name": "a",
-                 "file_path": "a.py", "language": "python"},
-                {"id": "b", "kind": "function", "name": "index", "qualified_name": "index",
-                 "file_path": "b.py", "language": "python"},
-                {"id": "c", "kind": "function", "name": "index", "qualified_name": "c::index",
-                 "file_path": "c.py", "language": "python"},
+                {
+                    "id": "a",
+                    "kind": "file",
+                    "name": "a",
+                    "qualified_name": "a",
+                    "file_path": "a.py",
+                    "language": "python",
+                },
+                {
+                    "id": "b",
+                    "kind": "function",
+                    "name": "index",
+                    "qualified_name": "index",
+                    "file_path": "b.py",
+                    "language": "python",
+                },
+                {
+                    "id": "c",
+                    "kind": "function",
+                    "name": "index",
+                    "qualified_name": "c::index",
+                    "file_path": "c.py",
+                    "language": "python",
+                },
             ],
             [{"id": 1, "source": "a", "target": "b", "kind": "contains", "line": 1}],
         )
@@ -154,10 +208,22 @@ class TestAudit:
         db = _mk_index(
             repo,
             [
-                {"id": "a", "kind": "function", "name": "caller", "qualified_name": "caller",
-                 "file_path": "a.py", "language": "python"},
-                {"id": "b", "kind": "function", "name": "unique_name",
-                 "qualified_name": "unique_name", "file_path": "b.py", "language": "python"},
+                {
+                    "id": "a",
+                    "kind": "function",
+                    "name": "caller",
+                    "qualified_name": "caller",
+                    "file_path": "a.py",
+                    "language": "python",
+                },
+                {
+                    "id": "b",
+                    "kind": "function",
+                    "name": "unique_name",
+                    "qualified_name": "unique_name",
+                    "file_path": "b.py",
+                    "language": "python",
+                },
             ],
             [{"id": 1, "source": "a", "target": "b", "kind": "calls", "line": 1}],
         )
@@ -171,9 +237,14 @@ class TestAudit:
         db = _mk_index(
             repo,
             [
-                {"id": "a", "kind": "function", "name": "print_group",
-                 "qualified_name": "print_group", "file_path": "validate.py",
-                 "language": "python"},
+                {
+                    "id": "a",
+                    "kind": "function",
+                    "name": "print_group",
+                    "qualified_name": "print_group",
+                    "file_path": "validate.py",
+                    "language": "python",
+                },
             ],
             [{"id": 1, "source": "a", "target": "a", "kind": "calls", "line": 1}],
         )
@@ -192,12 +263,30 @@ class TestPrune:
         return _mk_index(
             repo,
             [
-                {"id": "a", "kind": "function", "name": "caller", "qualified_name": "caller",
-                 "file_path": "a.py", "language": "python"},
-                {"id": "b", "kind": "function", "name": "index", "qualified_name": "index",
-                 "file_path": "b.py", "language": "python"},
-                {"id": "c", "kind": "function", "name": "index", "qualified_name": "c::index",
-                 "file_path": "c.py", "language": "python"},
+                {
+                    "id": "a",
+                    "kind": "function",
+                    "name": "caller",
+                    "qualified_name": "caller",
+                    "file_path": "a.py",
+                    "language": "python",
+                },
+                {
+                    "id": "b",
+                    "kind": "function",
+                    "name": "index",
+                    "qualified_name": "index",
+                    "file_path": "b.py",
+                    "language": "python",
+                },
+                {
+                    "id": "c",
+                    "kind": "function",
+                    "name": "index",
+                    "qualified_name": "c::index",
+                    "file_path": "c.py",
+                    "language": "python",
+                },
             ],
             [{"id": 1, "source": "a", "target": "b", "kind": "calls", "line": 1}],
         )

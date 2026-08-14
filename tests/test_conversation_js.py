@@ -13,9 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_CONVERSATION_JS = (
-    Path(__file__).resolve().parent.parent / "pebble/shared_static/conversation.js"
-)
+_CONVERSATION_JS = Path(__file__).resolve().parent.parent / "pebble/shared_static/conversation.js"
 
 
 def _body() -> str:

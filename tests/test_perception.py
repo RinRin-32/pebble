@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tests._session_helpers import as_stream, mock_completion_result
 from pebble.core import perception
+from tests._session_helpers import as_stream, mock_completion_result
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

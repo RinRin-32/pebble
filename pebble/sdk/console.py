@@ -320,7 +320,9 @@ class AsyncTurnstoneConsole(_BaseClient):
             body["ws_id"] = ws_id
         # Coordinator workstreams hit the console's direct endpoint,
         # not the node route proxy.
-        endpoint = "/v1/api/workstreams/new" if kind == "coordinator" else "/v1/api/route/workstreams/new"
+        endpoint = (
+            "/v1/api/workstreams/new" if kind == "coordinator" else "/v1/api/route/workstreams/new"
+        )
         return await self._request("POST", endpoint, json_body=body)
 
     # -- routing proxy: attachments -----------------------------------------
@@ -505,9 +507,7 @@ class AsyncTurnstoneConsole(_BaseClient):
             body["cycle_id"] = cycle_id
         if call_id:
             body["call_id"] = call_id
-        return await self._request(
-            "POST", f"/v1/api/workstreams/{ws_id}/approve", json_body=body
-        )
+        return await self._request("POST", f"/v1/api/workstreams/{ws_id}/approve", json_body=body)
 
     async def route_close(self, ws_id: str) -> dict[str, Any]:
         """Close a workstream via the routing proxy."""

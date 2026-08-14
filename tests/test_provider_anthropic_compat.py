@@ -20,9 +20,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._session_helpers import make_session as _make_session
 from pebble.core.providers._anthropic import AnthropicProvider
 from pebble.core.providers._protocol import ModelCapabilities
+from tests._session_helpers import make_session as _make_session
 
 # ---------------------------------------------------------------------------
 # Helpers

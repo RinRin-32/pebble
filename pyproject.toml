@@ -41,7 +41,7 @@ dependencies = [
     "structlog>=24.1",
     "PyJWT>=2.8",
     "bcrypt>=4.0",
-    "cryptography>=48.0.1",  # GHSA-537c-gmf6-5ccf: PyPI wheels <48.0.1 bundle a vulnerable statically-linked OpenSSL (2026-06-09 secadv)
+    "cryptography>=50.0.0",  # GHSA-537c-gmf6-5ccf: wheels <48.0.1 bundle a vulnerable statically-linked OpenSSL; PYSEC-2026-3552: PKCS#7 decrypt leaked a Bleichenbacher oracle before 50.0.0
     "lacme>=1.0.5",
     "python-frontmatter>=1.0",
     "pypdfium2>=4",  # PDF text-extract + rasterize for models without native PDF input (core/pdf.py)
@@ -148,7 +148,7 @@ check_untyped_defs = true
 no_implicit_optional = true
 
 [tool.coverage.run]
-source = ["turnstone"]
+source = ["pebble"]
 branch = true
 omit = ["pebble/*/static/*"]
 

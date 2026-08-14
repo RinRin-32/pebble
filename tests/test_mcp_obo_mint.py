@@ -43,11 +43,11 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from tests.conftest import make_mcp_token_cipher
 from pebble.core.mcp_crypto import MCPTokenStore
 from pebble.core.mcp_oauth import get_obo_access_token_classified
 from pebble.core.oidc import OIDCConfig
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import make_mcp_token_cipher
 
 USER = "user-1"
 SERVER = "srv-obo"

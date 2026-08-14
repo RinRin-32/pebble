@@ -26,8 +26,8 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.conftest import _free_port, _popen_mcp_server, _wait_session_live, _wait_tcp_ready
 from pebble.core.mcp_client import MCPClientManager
+from tests.conftest import _free_port, _popen_mcp_server, _wait_session_live, _wait_tcp_ready
 
 if TYPE_CHECKING:
     import subprocess

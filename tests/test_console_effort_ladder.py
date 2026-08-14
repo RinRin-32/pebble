@@ -14,8 +14,8 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from tests._coord_test_helpers import _AuthMiddleware
 from pebble.console.server import admin_effort_ladder
+from tests._coord_test_helpers import _AuthMiddleware
 
 
 def _make_client() -> TestClient:

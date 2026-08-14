@@ -23,7 +23,6 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.conftest import make_mcp_token_cipher
 from pebble.core.mcp_client import (
     _PENDING_CONSENT_PERSIST_CODES,
     MCPClientManager,
@@ -31,6 +30,7 @@ from pebble.core.mcp_client import (
 )
 from pebble.core.mcp_crypto import MCPTokenStore
 from pebble.core.mcp_oauth import TokenLookupResult
+from tests.conftest import make_mcp_token_cipher
 
 # ---------------------------------------------------------------------------
 # Helper-level unit tests (cheap, no event loop)

@@ -18,6 +18,7 @@ without writing anything to disk.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -80,10 +81,8 @@ def save_config(cfg: ClientConfig, path: Path = CONFIG_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     body = f"[client]\nurl = {_quote(cfg.url)}\ntoken = {_quote(cfg.token)}\n"
     path.write_text(body, encoding="utf-8")
-    try:
+    with contextlib.suppress(OSError):
         path.chmod(0o600)
-    except OSError:
-        pass
 
 
 def _client(cfg: ClientConfig) -> Any:
@@ -178,7 +177,7 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
     _require(cfg)
     brief = (
         f"Bind this workstream to the repository named {args.repo} by calling "
-        f"bind_repo with repo=\"{args.repo}\". Then call setup_env with "
+        f'bind_repo with repo="{args.repo}". Then call setup_env with '
         f'action="use". Then use dispatch_agent to carry out this task:\n\n'
         f"{args.task}\n\nReport the resulting diff."
     )
@@ -196,7 +195,7 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
     _emit({"ws_id": ws_id}, args.json)
     if not args.json:
         print(f"Dispatched to {ws_id[:12]} (persona: {args.persona or 'dispatcher'})")
-        print(f"  follow:  pebble-client ws list")
+        print("  follow:  pebble-client ws list")
         print(f"  approve: pebble-client approve {ws_id[:12]}")
     return 0
 
@@ -214,9 +213,7 @@ def cmd_approve(args: argparse.Namespace) -> int:
     cfg = load_config()
     _require(cfg)
     with _client(cfg) as client:
-        client.route_approve(
-            ws_id=args.ws_id, approved=not args.reject, always=args.always
-        )
+        client.route_approve(ws_id=args.ws_id, approved=not args.reject, always=args.always)
     print(f"{'Rejected' if args.reject else 'Approved'} {args.ws_id[:12]}")
     return 0
 

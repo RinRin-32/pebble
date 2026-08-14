@@ -31,13 +31,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from tests._wire_capture import RecordingClient
 from pebble.core.lowering import repair_wire_messages
 from pebble.core.providers._anthropic import AnthropicProvider
 from pebble.core.providers._google import GoogleProvider
 from pebble.core.providers._openai_chat import OpenAIChatCompletionsProvider
 from pebble.core.providers._openai_responses import OpenAIResponsesProvider
 from pebble.core.providers._protocol import ModelCapabilities
+from tests._wire_capture import RecordingClient
 
 if TYPE_CHECKING:
     from pebble.core.providers._protocol import LLMProvider

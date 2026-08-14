@@ -25,8 +25,8 @@ import json
 
 import pytest
 
-from tests._session_helpers import make_session
 from pebble.core.trajectory import turns_from_dicts
+from tests._session_helpers import make_session
 
 
 def _marker_meta(watermark: int | None) -> str | None:

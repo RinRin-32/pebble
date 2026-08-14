@@ -14,11 +14,13 @@ an unidentified caller.  "We could not check" must never read as "allow".
 
 from __future__ import annotations
 
-from typing import Any
-
-import pytest
+from typing import TYPE_CHECKING, Any
 
 from pebble.core.access import CAPABILITY_CODE_DISPATCH, can_dispatch_code
+from pebble.core.session import ChatSession
+
+if TYPE_CHECKING:
+    import pytest
 
 
 class _Store:
@@ -69,16 +71,18 @@ class _FakeConfig:
 
 
 class _FakeSession:
-    """Just enough of ChatSession to exercise the real helper."""
+    """Just enough of ChatSession to exercise the real helper.
+
+    The method is borrowed from the real class rather than reimplemented, so
+    these tests exercise the code that actually ships.
+    """
 
     def __init__(self, config: Any, user_id: str = "u", acting: str = "") -> None:
         self._config_store = config
         self._user_id = user_id
         self._acting_user_id = acting
 
-    from pebble.core.session import ChatSession as _CS
-
-    _code_dispatch_denied = _CS._code_dispatch_denied
+    _code_dispatch_denied = ChatSession._code_dispatch_denied
 
 
 def _session(config: Any, **kw: Any) -> Any:
@@ -102,15 +106,11 @@ class TestSessionHelper:
 
     def test_enabled_and_granted_allows(self, monkeypatch: pytest.MonkeyPatch) -> None:
         store = _Store({"u": [CAPABILITY_CODE_DISPATCH]})
-        monkeypatch.setattr(
-            "pebble.core.storage._registry.get_storage", lambda: store
-        )
+        monkeypatch.setattr("pebble.core.storage._registry.get_storage", lambda: store)
         assert _session(_FakeConfig(True), user_id="u")._code_dispatch_denied() == ""
 
     def test_enabled_without_grant_denies(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "pebble.core.storage._registry.get_storage", lambda: _Store()
-        )
+        monkeypatch.setattr("pebble.core.storage._registry.get_storage", lambda: _Store())
         denial = _session(_FakeConfig(True), user_id="u")._code_dispatch_denied()
         assert denial and "Code dispatch" in denial
 
@@ -121,15 +121,11 @@ class TestSessionHelper:
         monkeypatch.setattr("pebble.core.storage._registry.get_storage", boom)
         assert _session(_FakeConfig(True), user_id="u")._code_dispatch_denied() != ""
 
-    def test_acting_user_wins_over_session_user(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_acting_user_wins_over_session_user(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # On Discord the session is owned by the gateway while authority comes
         # from the linked member, so the grant must be read against the actor.
         store = _Store({"member": [CAPABILITY_CODE_DISPATCH]})
-        monkeypatch.setattr(
-            "pebble.core.storage._registry.get_storage", lambda: store
-        )
+        monkeypatch.setattr("pebble.core.storage._registry.get_storage", lambda: store)
         allowed = _session(_FakeConfig(True), user_id="gateway", acting="member")
         assert allowed._code_dispatch_denied() == ""
         denied = _session(_FakeConfig(True), user_id="member", acting="gateway")

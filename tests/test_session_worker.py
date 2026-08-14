@@ -26,10 +26,10 @@ import queue
 import threading
 from typing import Any
 
-from tests._helpers import wait_until as _wait_until
 from pebble.core import session_worker
 from pebble.core.nudge_queue import USER_DRAIN, NudgeQueue
 from pebble.core.workstream import Workstream, WorkstreamState
+from tests._helpers import wait_until as _wait_until
 
 
 class _SendSession:

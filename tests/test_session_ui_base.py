@@ -23,8 +23,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import resolve_when_pending
 from pebble.core.session_ui_base import SessionUIBase
+from tests.conftest import resolve_when_pending
 
 
 class _ConcreteUI(SessionUIBase):

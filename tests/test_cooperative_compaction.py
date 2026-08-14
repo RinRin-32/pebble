@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._session_helpers import make_session
 from pebble.core.session import (
     COMPACTION_SOURCE,
     COMPACTION_SUMMARY_LABEL,
@@ -29,6 +28,7 @@ from pebble.core.session import (
     _is_ctx_overflow,
 )
 from pebble.core.trajectory import dicts_from_turns, turns_from_dicts
+from tests._session_helpers import make_session
 
 
 @pytest.fixture

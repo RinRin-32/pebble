@@ -123,8 +123,7 @@ def test_coordinator_js_approval_keyboard_shortcuts():
     from pathlib import Path
 
     body = (
-        Path(__file__).resolve().parent.parent
-        / "pebble/console/static/coordinator/coordinator.js"
+        Path(__file__).resolve().parent.parent / "pebble/console/static/coordinator/coordinator.js"
     ).read_text(encoding="utf-8")
     assert 'root.addEventListener("keydown"' in body, (
         "the approval shortcuts must be a pane-owned keydown on root"
@@ -652,8 +651,7 @@ def test_coord_child_links_open_interactive_pane():
     from pathlib import Path
 
     coord_js = (
-        Path(__file__).resolve().parent.parent
-        / "pebble/console/static/coordinator/coordinator.js"
+        Path(__file__).resolve().parent.parent / "pebble/console/static/coordinator/coordinator.js"
     ).read_text(encoding="utf-8")
     # Delegated handler, gated on the pane host so standalone keeps the href nav.
     assert '.closest(".ws-link, .coord-ws-link")' in coord_js
@@ -676,8 +674,7 @@ def test_coordinator_js_gates_send_on_cross_user_busy():
     from pathlib import Path
 
     coord_js = (
-        Path(__file__).resolve().parent.parent
-        / "pebble/console/static/coordinator/coordinator.js"
+        Path(__file__).resolve().parent.parent / "pebble/console/static/coordinator/coordinator.js"
     ).read_text(encoding="utf-8")
     # tracks the acting user from state_change, clears on settle
     assert "actingUserId = ev.acting_user_id;" in coord_js

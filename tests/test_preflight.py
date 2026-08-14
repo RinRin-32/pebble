@@ -6,12 +6,14 @@ development, so the tests assert the *diagnosis*, not just a boolean.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from pebble.core import preflight
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pytest
 
 
 class TestWorkspaceCheck:
@@ -127,9 +129,7 @@ class TestReport:
     def test_symbols_distinguish_severity(self) -> None:
         assert preflight.Check("a", True, "").symbol == "✓"
         assert preflight.Check("a", False, "").symbol == "✗"
-        assert (
-            preflight.Check("a", False, "", severity=preflight.SEVERITY_OPTIONAL).symbol == "!"
-        )
+        assert preflight.Check("a", False, "", severity=preflight.SEVERITY_OPTIONAL).symbol == "!"
 
     def test_run_all_returns_checks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PEBBLE_DB_URL", "")

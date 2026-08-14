@@ -407,9 +407,7 @@ class MessageCog:
                 acting_user_id=mention_acting_user or "",
             )
             attachment_ids = await self._upload_discord_attachments(ws_id, message)
-            await self.ts.router.send_message(
-                ws_id, mention_text, attachment_ids=attachment_ids
-            )
+            await self.ts.router.send_message(ws_id, mention_text, attachment_ids=attachment_ids)
             log.info(
                 "discord.mention_session_started",
                 channel_id=channel.id,
@@ -596,15 +594,13 @@ class MessageCog:
         # Rate-limit /global-link the same way as /link.
         if not self._allow_link_attempt(str(interaction.user.id)):
             await interaction.response.send_message(
-                f"Too many attempts. Try again later.",
+                "Too many attempts. Try again later.",
                 ephemeral=True,
             )
             return
 
         token_hash = hash_token(token)
-        token_record = await asyncio.to_thread(
-            self.ts.storage.get_api_token_by_hash, token_hash
-        )
+        token_record = await asyncio.to_thread(self.ts.storage.get_api_token_by_hash, token_hash)
 
         if token_record is None:
             await interaction.response.send_message(
@@ -640,9 +636,7 @@ class MessageCog:
             linked_by=str(interaction.user),
         )
 
-    async def _upload_discord_attachments(
-        self, ws_id: str, message: discord.Message
-    ) -> list[str]:
+    async def _upload_discord_attachments(self, ws_id: str, message: discord.Message) -> list[str]:
         """Upload Discord message attachments and return attachment IDs."""
         attachment_ids: list[str] = []
         for att in message.attachments:
@@ -665,14 +659,16 @@ class MessageCog:
             except Exception:
                 log.debug("discord.attachment_upload_failed", ws_id=ws_id, filename=filename)
                 continue
-            aid = resp.attachment_id if hasattr(resp, "attachment_id") else resp.get("attachment_id", "")
+            aid = (
+                resp.attachment_id
+                if hasattr(resp, "attachment_id")
+                else resp.get("attachment_id", "")
+            )
             if aid:
                 attachment_ids.append(aid)
         return attachment_ids
 
-    async def _enrich_message(
-        self, message: discord.Message, text: str
-    ) -> str:
+    async def _enrich_message(self, message: discord.Message, text: str) -> str:
         """Append content from replied-to and linked messages."""
         import re
 
@@ -685,10 +681,8 @@ class MessageCog:
             except Exception:
                 pass
 
-        links = re.findall(
-            r"https://discord\.com/channels/(\d+)/(\d+)/(\d+)", text
-        )
-        for guild_id, ch_id, msg_id in links:
+        links = re.findall(r"https://discord\.com/channels/(\d+)/(\d+)/(\d+)", text)
+        for _guild_id, ch_id, msg_id in links:
             try:
                 ch = self.bot.get_channel(int(ch_id))
                 if ch is None:
@@ -699,23 +693,17 @@ class MessageCog:
             except Exception:
                 continue
 
-        text = re.sub(
-            r"https://discord\.com/channels/\d+/\d+/\d+", "", text
-        ).strip()
+        text = re.sub(r"https://discord\.com/channels/\d+/\d+/\d+", "", text).strip()
         return text
 
     async def _check_guild_access(self, guild_id: int | None) -> bool:
         """Return True if the guild has a global link (any member can use the bot)."""
         if guild_id is None:
             return False
-        entry = await asyncio.to_thread(
-            self.ts.storage.get_channel_user, "guild", str(guild_id)
-        )
+        entry = await asyncio.to_thread(self.ts.storage.get_channel_user, "guild", str(guild_id))
         return entry is not None
 
-    async def _resolve_acting_user(
-        self, guild_id: int | None, author_id: int
-    ) -> str | None:
+    async def _resolve_acting_user(self, guild_id: int | None, author_id: int) -> str | None:
         """The turnstone user a Discord action acts as: the member's own
         ``/link`` first, else the server's ``/global-link`` user, else None.
 
@@ -785,9 +773,7 @@ class MessageCog:
         """Create a new thread and workstream with an initial message."""
         import discord
 
-        acting_user_id = await self._resolve_acting_user(
-            interaction.guild_id, interaction.user.id
-        )
+        acting_user_id = await self._resolve_acting_user(interaction.guild_id, interaction.user.id)
         if acting_user_id is None:
             await interaction.response.send_message(
                 "Your Discord account is not linked. Use `/link` first, "
@@ -870,9 +856,7 @@ class MessageCog:
         """Create a thread + workstream for orchestrator-style tasks."""
         import discord
 
-        acting_user_id = await self._resolve_acting_user(
-            interaction.guild_id, interaction.user.id
-        )
+        acting_user_id = await self._resolve_acting_user(interaction.guild_id, interaction.user.id)
         if acting_user_id is None:
             await interaction.response.send_message(
                 "Your Discord account is not linked. Use `/link` first, "
@@ -954,9 +938,7 @@ class MessageCog:
             return []
         # Show only personas the acting user may use (empty allow-list = all;
         # the kind default is always usable).
-        acting_user_id = await self._resolve_acting_user(
-            interaction.guild_id, interaction.user.id
-        )
+        acting_user_id = await self._resolve_acting_user(interaction.guild_id, interaction.user.id)
         allowed = await self._allowed_persona_names(acting_user_id)
         choices: list[app_commands.Choice[str]] = []
         for p in personas:
@@ -985,9 +967,7 @@ class MessageCog:
         """
         if not acting_user_id:
             return None
-        ids = await asyncio.to_thread(
-            self.ts.storage.list_user_allowed_personas, acting_user_id
-        )
+        ids = await asyncio.to_thread(self.ts.storage.list_user_allowed_personas, acting_user_id)
         if not ids:
             return None
         rows = await asyncio.to_thread(self.ts.storage.list_personas, True)
@@ -1002,9 +982,7 @@ class MessageCog:
         """The acting user's allowed model aliases, or None if unrestricted."""
         if not acting_user_id:
             return None
-        aliases = await asyncio.to_thread(
-            self.ts.storage.list_user_allowed_models, acting_user_id
-        )
+        aliases = await asyncio.to_thread(self.ts.storage.list_user_allowed_models, acting_user_id)
         return set(aliases) if aliases else None
 
     async def _autocomplete_model(
@@ -1017,9 +995,7 @@ class MessageCog:
             data = await self.ts.router.list_models(cached=True)
         except Exception:
             return []
-        acting_user_id = await self._resolve_acting_user(
-            interaction.guild_id, interaction.user.id
-        )
+        acting_user_id = await self._resolve_acting_user(interaction.guild_id, interaction.user.id)
         allowed = await self._allowed_model_aliases(acting_user_id)
         choices: list[app_commands.Choice[str]] = []
         for m in data.get("models", []):
@@ -1136,9 +1112,7 @@ class MessageCog:
             )
             return
 
-        acting_user_id = await self._resolve_acting_user(
-            interaction.guild_id, interaction.user.id
-        )
+        acting_user_id = await self._resolve_acting_user(interaction.guild_id, interaction.user.id)
         persona = await self._effective_persona(interaction.guild_id, persona)
         access_err = await self._precheck_access(acting_user_id, model, persona)
         if access_err:
@@ -1172,7 +1146,6 @@ class MessageCog:
 
     async def _cmd_stop_session(self, interaction: discord.Interaction) -> None:
         """Stop a channel-wide session."""
-        import discord
 
         channel = interaction.channel
         if channel is None or channel.id not in self.ts._channel_sessions:
@@ -1254,7 +1227,6 @@ class MessageCog:
 
     async def _cmd_list_persona(self, interaction: discord.Interaction) -> None:
         """List available personas."""
-        import discord
 
         await interaction.response.defer(ephemeral=True)
         try:
@@ -1265,9 +1237,7 @@ class MessageCog:
 
         # Scope to what the linked user may actually use (empty allow-list =
         # all; kind defaults always included).
-        acting_user_id = await self._resolve_acting_user(
-            interaction.guild_id, interaction.user.id
-        )
+        acting_user_id = await self._resolve_acting_user(interaction.guild_id, interaction.user.id)
         allowed = await self._allowed_persona_names(acting_user_id)
         if allowed is not None:
             personas = [p for p in personas if p.get("name") in allowed]
@@ -1305,9 +1275,7 @@ class MessageCog:
             return
         await interaction.response.defer(ephemeral=True)
 
-        acting_user_id = await self._resolve_acting_user(
-            interaction.guild_id, interaction.user.id
-        )
+        acting_user_id = await self._resolve_acting_user(interaction.guild_id, interaction.user.id)
         if acting_user_id is None:
             await interaction.followup.send(
                 "Your Discord account is not linked. Use `/link` first, "

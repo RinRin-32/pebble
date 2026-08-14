@@ -34,7 +34,6 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from tests.conftest import _run_on_loop, make_mcp_token_cipher, stop_loop_thread
 from pebble.core.mcp_client import (
     MCPClientManager,
     _AuthCapture,
@@ -42,6 +41,7 @@ from pebble.core.mcp_client import (
 )
 from pebble.core.mcp_crypto import MCPTokenStore
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import _run_on_loop, make_mcp_token_cipher, stop_loop_thread
 
 # ---------------------------------------------------------------------------
 # Fixtures and helpers (mirror conventions in test_mcp_user_pool.py)

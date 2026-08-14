@@ -100,7 +100,7 @@ class TestToolsMetadata:
             # failed, phase done) without spawning a child purely to
             # ship a message.  Routing logic is session-kind-agnostic.
             "notify",
-                    "kb",
+            "kb",
         }
 
     def test_auto_approve_sets_match(self):

@@ -591,9 +591,7 @@ class TestPreflightHelpers:
         assert out["backend"] == "postgresql"
 
     def test_resolve_db_config_env_fallback(self) -> None:
-        out = _resolve_db_config(
-            [], {"PEBBLE_DB_BACKEND": "postgresql", "PEBBLE_DB_URL": "u"}
-        )
+        out = _resolve_db_config([], {"PEBBLE_DB_BACKEND": "postgresql", "PEBBLE_DB_URL": "u"})
         assert out["backend"] == "postgresql" and out["url"] == "u"
 
     def test_parse_config_extracts_db_ssl(self, tmp_path: Path) -> None:
@@ -618,9 +616,7 @@ class TestPreflightHelpers:
         assert out["sslcert"] == "/env/client.crt"  # env fallback
 
     def test_relevant_env_redacts_secrets(self) -> None:
-        out = _relevant_env(
-            {"PEBBLE_JWT_SECRET": "supersecret", "PEBBLE_HOST_IP": "10.0.0.1"}
-        )
+        out = _relevant_env({"PEBBLE_JWT_SECRET": "supersecret", "PEBBLE_HOST_IP": "10.0.0.1"})
         assert out["PEBBLE_JWT_SECRET"] == "set (hidden)"
         assert out["PEBBLE_HOST_IP"] == "10.0.0.1"
 
@@ -808,9 +804,7 @@ class TestResolveDoctorBrain:
             "pebble.core.config_store.ConfigStore",
             lambda **kw: MagicMock(get=lambda *a, **k: ""),
         )
-        monkeypatch.setattr(
-            "pebble.core.model_registry.load_model_registry", lambda **kw: registry
-        )
+        monkeypatch.setattr("pebble.core.model_registry.load_model_registry", lambda **kw: registry)
 
     def test_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         self._patch_resolution(monkeypatch, "openai-compatible")

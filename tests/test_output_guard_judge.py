@@ -7,8 +7,6 @@ import time
 from typing import Any
 from unittest.mock import MagicMock
 
-from tests._session_helpers import as_stream
-from tests._session_helpers import mock_completion_result as _mock_result
 from pebble.core import fence
 from pebble.core.judge import JudgeConfig
 from pebble.core.output_guard_judge import (
@@ -18,6 +16,8 @@ from pebble.core.output_guard_judge import (
     _extract_json,
 )
 from pebble.core.providers._protocol import ModelCapabilities
+from tests._session_helpers import as_stream
+from tests._session_helpers import mock_completion_result as _mock_result
 
 
 def _make_provider(

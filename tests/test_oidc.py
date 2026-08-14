@@ -16,7 +16,6 @@ import httpx
 import jwt as pyjwt
 import pytest
 
-from tests.conftest import make_oidc_test_config as _make_config
 from pebble.core.oidc import (
     OIDCError,
     OIDCKeyNotFoundError,
@@ -34,6 +33,7 @@ from pebble.core.oidc import (
     validate_id_token,
     validate_issuer_url,
 )
+from tests.conftest import make_oidc_test_config as _make_config
 
 # ---------------------------------------------------------------------------
 # Helpers

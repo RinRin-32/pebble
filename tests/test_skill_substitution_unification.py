@@ -21,8 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from tests._session_helpers import make_session
 from pebble.core.storage._registry import get_storage
+from tests._session_helpers import make_session
 
 if TYPE_CHECKING:
     import pytest
@@ -73,9 +73,7 @@ class TestRenderSkillBodySharedPath:
     def test_env_vars_resolve(self, tmp_db: str) -> None:
         session = make_session(reasoning_effort="high")
         try:
-            out = session._render_skill_body(
-                "id ${PEBBLE_SESSION_ID} effort ${PEBBLE_EFFORT}"
-            )
+            out = session._render_skill_body("id ${PEBBLE_SESSION_ID} effort ${PEBBLE_EFFORT}")
             assert out == f"id {session._ws_id} effort high"
         finally:
             session.close()
@@ -138,9 +136,7 @@ class TestRenderSkillBodySharedPath:
         # step.  The env vars that DO have values still resolve.
         session = make_session(reasoning_effort="high")
         try:
-            out = session._render_skill_body(
-                "dir ${PEBBLE_SKILL_DIR} effort ${PEBBLE_EFFORT}"
-            )
+            out = session._render_skill_body("dir ${PEBBLE_SKILL_DIR} effort ${PEBBLE_EFFORT}")
             assert out == "dir ${PEBBLE_SKILL_DIR} effort high"
         finally:
             session.close()

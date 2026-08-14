@@ -15,7 +15,6 @@ from unittest.mock import MagicMock
 import pytest
 
 import pebble.core.model_turn as model_turn_mod
-from tests._session_helpers import as_stream
 from pebble.core.model_turn import (
     ModelLane,
     finalize_provider_blocks,
@@ -32,6 +31,7 @@ from pebble.core.providers._protocol import (
     UsageInfo,
 )
 from pebble.core.trajectory import Role, ToolCall, Turn
+from tests._session_helpers import as_stream
 
 
 class _FakeProvider:

@@ -204,9 +204,7 @@ def prune(db_path: str | Path, *, dry_run: bool = True) -> AuditResult:
     if dry_run or not result.suspects:
         return result
     with _connect(db_path) as conn:
-        conn.executemany(
-            "DELETE FROM edges WHERE id = ?", [(s.edge_id,) for s in result.suspects]
-        )
+        conn.executemany("DELETE FROM edges WHERE id = ?", [(s.edge_id,) for s in result.suspects])
         conn.commit()
     result.pruned = len(result.suspects)
     log.info("codegraph.pruned_edges", db=str(db_path), pruned=result.pruned)
@@ -235,8 +233,12 @@ def index_worktree(worktree: str | Path, *, timeout: int = 300) -> tuple[bool, s
     try:
         proc = subprocess.run(  # noqa: S603 - fixed binary, argv list
             ["codegraph", "init", "."],
-            cwd=str(root), capture_output=True, text=True,
-            errors="replace", timeout=timeout, check=False,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=timeout,
+            check=False,
         )
     except FileNotFoundError:
         return False, "codegraph is not installed on this node"

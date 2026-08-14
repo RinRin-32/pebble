@@ -86,12 +86,6 @@ from pebble.core.storage._schema import (
     prompt_policies as prompt_policies_t,
 )
 from pebble.core.storage._utils import (
-    repo_insert_values as _repo_insert_values,
-)
-from pebble.core.storage._utils import (
-    repo_row_to_dict as _repo_row_to_dict,
-)
-from pebble.core.storage._utils import (
     COMPACTION_SOURCE as _COMPACTION_SOURCE,
 )
 from pebble.core.storage._utils import (
@@ -174,6 +168,12 @@ from pebble.core.storage._utils import (
 )
 from pebble.core.storage._utils import (
     recover_trajectory as _recover_trajectory,
+)
+from pebble.core.storage._utils import (
+    repo_insert_values as _repo_insert_values,
+)
+from pebble.core.storage._utils import (
+    repo_row_to_dict as _repo_row_to_dict,
 )
 from pebble.core.storage._utils import (
     row_to_dict as _row_to_dict,
@@ -1738,12 +1738,9 @@ class PostgreSQLBackend:
             )
             conn.commit()
 
-
     # -- Knowledge-base graph index (derived from the markdown vault) --------
 
-    def replace_kb_index(
-        self, notes: list[dict[str, Any]], links: list[dict[str, Any]]
-    ) -> None:
+    def replace_kb_index(self, notes: list[dict[str, Any]], links: list[dict[str, Any]]) -> None:
         """Atomically rebuild the note/link index.
 
         The vault files are authoritative; this index is derived, so a full
@@ -1770,7 +1767,6 @@ class PostgreSQLBackend:
             ).fetchall()
             return [r[0] for r in rows]
 
-
     def kb_overview(self) -> list[dict[str, Any]]:
         """Notes with their inbound/outbound link counts, for the admin panel.
 
@@ -1781,21 +1777,23 @@ class PostgreSQLBackend:
         with self._conn() as conn:
             rows = conn.execute(
                 sa.select(
-                    kb_notes.c.note_id, kb_notes.c.title, kb_notes.c.kind,
-                    kb_notes.c.summary, kb_notes.c.tags, kb_notes.c.repo_id,
+                    kb_notes.c.note_id,
+                    kb_notes.c.title,
+                    kb_notes.c.kind,
+                    kb_notes.c.summary,
+                    kb_notes.c.tags,
+                    kb_notes.c.repo_id,
                     kb_notes.c.updated,
                 ).order_by(kb_notes.c.title)
             ).fetchall()
             out_counts = dict(
                 conn.execute(
-                    sa.select(kb_links.c.from_note, sa.func.count())
-                    .group_by(kb_links.c.from_note)
+                    sa.select(kb_links.c.from_note, sa.func.count()).group_by(kb_links.c.from_note)
                 ).fetchall()
             )
             in_counts = dict(
                 conn.execute(
-                    sa.select(kb_links.c.to_title, sa.func.count())
-                    .group_by(kb_links.c.to_title)
+                    sa.select(kb_links.c.to_title, sa.func.count()).group_by(kb_links.c.to_title)
                 ).fetchall()
             )
             titles = {r[1] for r in rows}
@@ -1807,8 +1805,13 @@ class PostgreSQLBackend:
             )
         notes = [
             {
-                "note_id": r[0], "title": r[1], "kind": r[2], "summary": r[3],
-                "tags": r[4], "repo_id": r[5], "updated": r[6],
+                "note_id": r[0],
+                "title": r[1],
+                "kind": r[2],
+                "summary": r[3],
+                "tags": r[4],
+                "repo_id": r[5],
+                "updated": r[6],
                 "links_out": out_counts.get(r[0], 0),
                 "links_in": in_counts.get(r[1], 0),
             }
@@ -1820,9 +1823,9 @@ class PostgreSQLBackend:
         """Workstreams bound to a repo — the coding work, ongoing or finished."""
         with self._conn() as conn:
             cfg_rows = conn.execute(
-                sa.select(workstream_config.c.ws_id, workstream_config.c.key,
-                          workstream_config.c.value)
-                .where(workstream_config.c.key.in_(["repo_id", "nix_env", "model_alias"]))
+                sa.select(
+                    workstream_config.c.ws_id, workstream_config.c.key, workstream_config.c.value
+                ).where(workstream_config.c.key.in_(["repo_id", "nix_env", "model_alias"]))
             ).fetchall()
             bound: dict[str, dict[str, str]] = {}
             for ws_id, key, value in cfg_rows:
@@ -1832,8 +1835,12 @@ class PostgreSQLBackend:
                 return []
             rows = conn.execute(
                 sa.select(
-                    workstreams.c.ws_id, workstreams.c.name, workstreams.c.state,
-                    workstreams.c.persona, workstreams.c.kind, workstreams.c.node_id,
+                    workstreams.c.ws_id,
+                    workstreams.c.name,
+                    workstreams.c.state,
+                    workstreams.c.persona,
+                    workstreams.c.kind,
+                    workstreams.c.node_id,
                     workstreams.c.updated,
                 )
                 .where(workstreams.c.ws_id.in_(ids))
@@ -1842,15 +1849,19 @@ class PostgreSQLBackend:
             ).fetchall()
         return [
             {
-                "ws_id": r[0], "name": r[1], "state": r[2], "persona": r[3],
-                "kind": r[4], "node_id": r[5], "updated": r[6],
+                "ws_id": r[0],
+                "name": r[1],
+                "state": r[2],
+                "persona": r[3],
+                "kind": r[4],
+                "node_id": r[5],
+                "updated": r[6],
                 "repo": bound.get(r[0], {}).get("repo_id", ""),
                 "env": bound.get(r[0], {}).get("nix_env", ""),
                 "model": bound.get(r[0], {}).get("model_alias", ""),
             }
             for r in rows
         ]
-
 
     def list_user_capabilities(self, user_id: str) -> list[str]:
         """Capability keys granted to a user."""
@@ -1869,15 +1880,17 @@ class PostgreSQLBackend:
         now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
         clean = sorted({c.strip() for c in capabilities if c and c.strip()})
         with self._conn() as conn:
-            conn.execute(
-                sa.delete(user_capabilities).where(user_capabilities.c.user_id == user_id)
-            )
+            conn.execute(sa.delete(user_capabilities).where(user_capabilities.c.user_id == user_id))
             if clean:
                 conn.execute(
                     sa.insert(user_capabilities),
                     [
-                        {"user_id": user_id, "capability": c,
-                         "granted_by": granted_by, "created": now}
+                        {
+                            "user_id": user_id,
+                            "capability": c,
+                            "granted_by": granted_by,
+                            "created": now,
+                        }
                         for c in clean
                     ],
                 )

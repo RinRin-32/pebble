@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests._session_helpers import scripted_chat_client
 from pebble.core.model_registry import (
     ModelConfig,
     ModelRegistry,
@@ -17,6 +16,7 @@ from pebble.core.model_registry import (
     load_model_registry,
 )
 from pebble.core.trajectory import Turn
+from tests._session_helpers import scripted_chat_client
 
 # ---------------------------------------------------------------------------
 # ModelConfig

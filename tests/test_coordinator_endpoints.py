@@ -22,17 +22,6 @@ from starlette.middleware import Middleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-# ---------------------------------------------------------------------------
-# Auth injection middleware
-# ---------------------------------------------------------------------------
-from tests._coord_test_helpers import (
-    _AuthMiddleware,
-    _build_mgr,
-    _build_mgr_with_factory,
-    _fake_registry,
-    _FakeConfigStore,
-    _seed_children,
-)
 from pebble.console.coordinator_ui import ConsoleCoordinatorUI
 from pebble.console.server import (
     _audit_cancel_coordinator,
@@ -73,6 +62,18 @@ from pebble.core.session_routes import (
     make_set_title_handler,
 )
 from pebble.core.workstream import WorkstreamKind
+
+# ---------------------------------------------------------------------------
+# Auth injection middleware
+# ---------------------------------------------------------------------------
+from tests._coord_test_helpers import (
+    _AuthMiddleware,
+    _build_mgr,
+    _build_mgr_with_factory,
+    _fake_registry,
+    _FakeConfigStore,
+    _seed_children,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures

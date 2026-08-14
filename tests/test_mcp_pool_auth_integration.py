@@ -38,11 +38,11 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from tests.conftest import make_mcp_token_cipher, serve_until_exit, stop_loop_thread
 from pebble.core.mcp_client import MCPClientManager
 from pebble.core.mcp_crypto import MCPTokenStore
 from pebble.core.mcp_oauth import TokenLookupResult
 from pebble.core.storage._sqlite import SQLiteBackend
+from tests.conftest import make_mcp_token_cipher, serve_until_exit, stop_loop_thread
 
 if TYPE_CHECKING:
     from collections.abc import Callable

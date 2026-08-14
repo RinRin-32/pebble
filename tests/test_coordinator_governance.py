@@ -20,6 +20,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
+from pebble.console.server import (
+    coordinator_restrict,
+    coordinator_trust,
+)
+from pebble.core.auth import AuthResult
+from pebble.core.storage._sqlite import SQLiteBackend
 from tests._coord_test_helpers import (
     _AuthMiddleware,
     _build_mgr,
@@ -27,12 +33,6 @@ from tests._coord_test_helpers import (
     _FakeConfigStore,
     _seed_children,
 )
-from pebble.console.server import (
-    coordinator_restrict,
-    coordinator_trust,
-)
-from pebble.core.auth import AuthResult
-from pebble.core.storage._sqlite import SQLiteBackend
 
 
 @pytest.fixture

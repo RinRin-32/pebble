@@ -149,8 +149,7 @@ def test_classic_scripts_use_the_bridge_only_at_handler_time() -> None:
     ``TurnstoneHatch`` use — every reference must sit inside a function
     body (indented)."""
     classic = [
-        _ROOT / "pebble/console/static" / name
-        for name in ("admin.js", "governance.js", "app.js")
+        _ROOT / "pebble/console/static" / name for name in ("admin.js", "governance.js", "app.js")
     ]
     classic.append(_ROOT / "pebble/ui/static/app.js")
     for path in classic:

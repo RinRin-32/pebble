@@ -12,8 +12,8 @@
 #     --inference-routes deploy/openshell/routes.yaml \
 #     ...
 #
-# Then start turnstone with:
-#   python3 -m turnstone.server --base-url https://inference.local
+# Then start pebble with:
+#   python3 -m pebble.server --base-url https://inference.local
 #
 # CUSTOMIZE: uncomment one of the provider blocks below.
 

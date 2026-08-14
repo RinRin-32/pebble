@@ -49,7 +49,9 @@ def _check_workspace() -> Check:
     root = Path(os.environ.get("PEBBLE_WORKSPACE") or "/workspace")
     if not root.is_dir():
         return Check(
-            "workspace", False, f"{root} does not exist",
+            "workspace",
+            False,
+            f"{root} does not exist",
             "Mount it: the compose node services bind ${WORKSPACE_MOUNT:-workspace}:/workspace",
         )
     probe = root / ".preflight-write-test"
@@ -58,7 +60,9 @@ def _check_workspace() -> Check:
         probe.unlink()
     except OSError as exc:
         return Check(
-            "workspace", False, f"{root} is not writable ({exc})",
+            "workspace",
+            False,
+            f"{root} is not writable ({exc})",
             "Check ownership — the container runs as uid 1000",
         )
     # A volume, not just an image directory: without the mount, worktrees are
@@ -71,7 +75,9 @@ def _check_workspace() -> Check:
         mounted = True
     if not mounted:
         return Check(
-            "workspace", False, f"{root} exists but is NOT a mount",
+            "workspace",
+            False,
+            f"{root} exists but is NOT a mount",
             "Worktrees would be node-local. Add the volume to every node service.",
         )
     return Check("workspace", True, f"{root} writable and mounted")
@@ -83,7 +89,9 @@ def _check_nix() -> Check:
     if nixenv.is_available():
         return Check("nix", True, f"{nixenv.nix_binary()}", severity=SEVERITY_OPTIONAL)
     return Check(
-        "nix", False, "no nix binary; per-repo toolchains unavailable",
+        "nix",
+        False,
+        "no nix binary; per-repo toolchains unavailable",
         "The nix-store volume was not seeded. Check: docker compose logs nix-init",
         severity=SEVERITY_OPTIONAL,
     )
@@ -98,7 +106,9 @@ def _check_agents() -> Check:
         detail = ", ".join(found) + (f" (absent: {', '.join(missing)})" if missing else "")
         return Check("agent CLIs", True, detail)
     return Check(
-        "agent CLIs", False, "none installed; dispatch_agent cannot run",
+        "agent CLIs",
+        False,
+        "none installed; dispatch_agent cannot run",
         "Rebuild the image — the CLIs are installed there via npm",
     )
 
@@ -107,8 +117,11 @@ def _check_codegraph() -> Check:
     if shutil.which("codegraph"):
         return Check("codegraph", True, "installed", severity=SEVERITY_OPTIONAL)
     return Check(
-        "codegraph", False, "absent; agents will grep instead of querying a graph",
-        "Rebuild the image", severity=SEVERITY_OPTIONAL,
+        "codegraph",
+        False,
+        "absent; agents will grep instead of querying a graph",
+        "Rebuild the image",
+        severity=SEVERITY_OPTIONAL,
     )
 
 
@@ -121,12 +134,16 @@ def _check_claude_auth() -> Check:
             creds.read_text()
         except OSError:
             return Check(
-                "claude auth", False, f"{creds} exists but is unreadable",
+                "claude auth",
+                False,
+                f"{creds} exists but is unreadable",
                 "The mount must be readable by uid 1000",
             )
         return Check("claude auth", True, f"subscription login at {creds}")
     return Check(
-        "claude auth", False, "no API key and no mounted login",
+        "claude auth",
+        False,
+        "no API key and no mounted login",
         "Set ANTHROPIC_API_KEY in .env, or bind-mount ~/.claude "
         "(see compose.override.yaml.example)",
         severity=SEVERITY_OPTIONAL,
@@ -134,8 +151,11 @@ def _check_claude_auth() -> Check:
 
 
 def _check_opencode_auth() -> Check:
-    keys = [k for k in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
-            if (os.environ.get(k) or "").strip()]
+    keys = [
+        k
+        for k in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+        if (os.environ.get(k) or "").strip()
+    ]
     share = Path.home() / ".local" / "share" / "opencode"
     auth = share / "auth.json"
     if share.is_dir() and not os.access(share, os.W_OK):
@@ -143,7 +163,9 @@ def _check_opencode_auth() -> Check:
         # cannot create its own state beside the credential file and dies with
         # EACCES on startup.
         return Check(
-            "opencode auth", False, f"{share} is not writable by the runtime user",
+            "opencode auth",
+            False,
+            f"{share} is not writable by the runtime user",
             "The image pre-creates this directory; a bind mount over a missing "
             "parent recreates it as root. Mount the auth.json file, not the directory.",
         )
@@ -152,7 +174,9 @@ def _check_opencode_auth() -> Check:
     if keys:
         return Check("opencode auth", True, f"env keys: {', '.join(keys)}")
     return Check(
-        "opencode auth", False, "no provider key and no mounted login",
+        "opencode auth",
+        False,
+        "no provider key and no mounted login",
         "Set OPENROUTER_API_KEY in .env, or mount ~/.local/share/opencode/auth.json",
         severity=SEVERITY_OPTIONAL,
     )
@@ -164,13 +188,15 @@ def _check_worktree_debt() -> Check:
     if not root.is_dir():
         return Check("worktree debt", True, "no worktrees yet", severity=SEVERITY_OPTIONAL)
     trees = [p for p in root.iterdir() if p.is_dir()]
-    total_mb = sum(
-        f.stat().st_size for p in trees for f in p.rglob("*") if f.is_file()
-    ) / (1024 * 1024)
+    total_mb = sum(f.stat().st_size for p in trees for f in p.rglob("*") if f.is_file()) / (
+        1024 * 1024
+    )
     detail = f"{len(trees)} worktree(s), {total_mb:.0f} MB"
     if len(trees) > 50 or total_mb > 5000:
         return Check(
-            "worktree debt", False, detail,
+            "worktree debt",
+            False,
+            detail,
             "Reap finished ones: workspace.reap_orphaned_worktrees(active_ws_ids). "
             "Worktrees with uncommitted changes are kept unless force=True.",
             severity=SEVERITY_OPTIONAL,
@@ -185,7 +211,9 @@ def _check_path() -> Check:
     missing = [p for p in ("/usr/bin", "/bin") if p not in entries]
     if missing:
         return Check(
-            "PATH", False, f"missing {', '.join(missing)}",
+            "PATH",
+            False,
+            f"missing {', '.join(missing)}",
             "run_agent repairs this for children, but the server's own PATH is short",
             severity=SEVERITY_OPTIONAL,
         )
@@ -222,7 +250,9 @@ def _check_storage() -> list[Check]:
     if storage is None:
         return [
             Check(
-                "database", False, "no reachable backend",
+                "database",
+                False,
+                "no reachable backend",
                 "Check PEBBLE_DB_URL / that postgres is up",
             )
         ]
@@ -230,7 +260,8 @@ def _check_storage() -> list[Check]:
         repos = storage.list_repos()
         out.append(
             Check(
-                "repos registered", bool(repos),
+                "repos registered",
+                bool(repos),
                 ", ".join(r["name"] for r in repos) if repos else "none",
                 "bind_repo needs a registered repo; add one via storage.create_repo",
                 severity=SEVERITY_OPTIONAL,
@@ -242,7 +273,8 @@ def _check_storage() -> list[Check]:
         models = storage.list_model_definitions(enabled_only=True)
         out.append(
             Check(
-                "models configured", bool(models),
+                "models configured",
+                bool(models),
                 ", ".join(m["alias"] for m in models[:5]) if models else "none",
                 "Add a model backend in the console UI",
             )
