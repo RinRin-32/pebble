@@ -160,6 +160,11 @@ def _isolate_overhead(s, system_tokens: int = 0) -> None:
     tools (same isolation pattern as TestRemainingTokenBudget)."""
     s._system_tokens = system_tokens
     s._tools = []
+    # Emptying ``_tools`` is not sufficient on its own: when tool search is
+    # active ``_get_active_tools()`` serves the ToolSearchManager's own
+    # catalog and never consults ``_tools``, so the tool-def estimate stayed
+    # at ~8k tokens and swamped these deliberately small context windows.
+    s._tool_search = None
 
 
 class TestCarryBudget:

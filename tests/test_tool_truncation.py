@@ -86,9 +86,21 @@ class TestTruncateOutput:
 # ---------------------------------------------------------------------------
 
 
+def _isolate_tool_defs(s) -> None:
+    """Zero the tool-definition contribution to the prompt estimate.
+
+    # Emptying ``_tools`` is not sufficient on its own: when tool search is
+    # active ``_get_active_tools()`` serves the ToolSearchManager's own
+    # catalog and never consults ``_tools``, so the tool-def estimate stayed
+    # at ~8k tokens and swamped these deliberately small context windows.
+    """
+    s._tools = []
+    s._tool_search = None
+
+
 class TestRemainingTokenBudget:
     def test_empty_session(self, session):
-        session._tools = []  # isolate the budget formula from the tool-def estimate
+        _isolate_tool_defs(session)
         session._system_tokens = 500
         session._msg_tokens = []
         budget = session._remaining_token_budget()
@@ -96,7 +108,7 @@ class TestRemainingTokenBudget:
         assert budget == 8000
 
     def test_partially_full(self, session):
-        session._tools = []  # isolate the budget formula from the tool-def estimate
+        _isolate_tool_defs(session)
         session._system_tokens = 500
         session._msg_tokens = [2000, 3000]
         budget = session._remaining_token_budget()
@@ -125,7 +137,7 @@ class TestRemainingTokenBudget:
             context_window=32_768,
             max_tokens=32_768,
         )
-        s._tools = []  # isolate the budget formula from the tool-def estimate
+        _isolate_tool_defs(s)
         s._system_tokens = 500
         s._msg_tokens = [1000]
         budget = s._remaining_token_budget()
@@ -150,6 +162,10 @@ class TestContextOverflowRecovery:
     def test_openai_context_length_error_triggers_compact(self, session):
         session.messages = turns_from_dicts([{"role": "user", "content": "hi"}])
         session._msg_tokens = [1]
+        # Without this the tool defs alone read as ~86% of the 10k window, so a
+        # PROACTIVE compaction fires too and the assertion below sees two calls
+        # instead of the single overflow-triggered one this test is about.
+        _isolate_tool_defs(session)
 
         call_count = 0
 
@@ -183,6 +199,10 @@ class TestContextOverflowRecovery:
     def test_anthropic_prompt_too_long_triggers_compact(self, session):
         session.messages = turns_from_dicts([{"role": "user", "content": "hi"}])
         session._msg_tokens = [1]
+        # Without this the tool defs alone read as ~86% of the 10k window, so a
+        # PROACTIVE compaction fires too and the assertion below sees two calls
+        # instead of the single overflow-triggered one this test is about.
+        _isolate_tool_defs(session)
 
         call_count = 0
 

@@ -284,7 +284,12 @@ def test_interactive_and_coordinator_tool_sets_overlap_only_on_dual_kind():
     # sessions where it doesn't apply.  ``notify`` joined in 1.6.0 so
     # coords can post status updates at narrative beats without spawning
     # a child purely to ship a message.
-    dual_kind = {"memory", "skills", "notify"}
+    # ``kb`` joined in 1.8.0: the vault is shared research, and both kinds have
+    # a real use for it -- an interactive session records what an experiment
+    # measured, and a coordinator reads that before deciding how to fan work
+    # out.  Declared ``interactive`` + ``coordinator`` in tools.py metadata, so
+    # this overlap is intentional rather than a leak.
+    dual_kind = {"memory", "skills", "notify", "kb"}
 
     overlap = interactive_names & coord_names
     assert overlap == dual_kind, (

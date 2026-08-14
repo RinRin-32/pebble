@@ -62,6 +62,7 @@ class TestEstimatedPromptTokens:
         ``TestProactiveToolDefFallback``.
         """
         session._tools = []
+        session._tool_search = None  # see _get_active_tools: tools live in the manager
         session._last_usage = None
         session._system_tokens = 500
         session._msg_tokens = [100, 200]
@@ -949,6 +950,7 @@ class TestProactiveToolDefFallback:
 
     def test_fallback_equals_bare_sum_without_tools(self, session):
         session._tools = []
+        session._tool_search = None  # see _get_active_tools: tools live in the manager
         session._last_usage = None
         session._system_tokens = 100
         session._msg_tokens = [10, 20]

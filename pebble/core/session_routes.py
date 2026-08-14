@@ -2802,7 +2802,13 @@ def make_create_handler(
 
                 _stm = _get_storage()
                 if _stm is not None:
-                    _requested_model = (body.get("model") or "").strip()
+                    # The body is untrusted and not yet sanitised here: a
+                    # non-string ``model`` (the endpoint collapses those to
+                    # None further down) would otherwise raise AttributeError
+                    # on .strip() and surface as a 500 for any client that
+                    # sends one.
+                    _raw_model = body.get("model")
+                    _requested_model = _raw_model.strip() if isinstance(_raw_model, str) else ""
                     _eff_model, _model_err = resolve_allowed_model(
                         _stm, enforcement_uid, _requested_model, ""
                     )
