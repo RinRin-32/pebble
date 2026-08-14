@@ -10,6 +10,69 @@ cost)` — so turnstone normalizes them and stays agent-agnostic.
 
 ---
 
+## 0. Setup (start here)
+
+`docker compose up -d` brings up the cluster, but dispatch has extra runtime
+requirements that a bare clone does not satisfy. **Two setup files are
+gitignored**, so a fresh clone has neither:
+
+```bash
+cp compose.override.yaml.example compose.override.yaml   # host agent logins
+cp .env.example .env 2>/dev/null || touch .env           # keys and settings
+docker compose up -d
+```
+
+Then check what you actually got — every capability reports itself, with the
+fix attached:
+
+```bash
+docker compose exec node-1 /app/.venv/bin/python -m turnstone.core.preflight
+```
+
+```
+  ✓ workspace          /workspace writable and mounted
+  ✓ agent CLIs         claude, opencode (absent: codex)
+  ✓ claude auth        subscription login at /home/turnstone/.claude/.credentials.json
+  ✓ opencode auth      login at /home/turnstone/.local/share/opencode/auth.json
+  ✓ nix                /nix/var/nix/profiles/default/bin/nix
+  ✓ codegraph          installed
+  ✓ PATH               system directories present
+  ✓ repos registered   bobthesumo, kokoro-go
+  ✓ models configured  deepseek-v4-or
+```
+
+A `!` line is an optional capability that is off — dispatch degrades rather than
+breaking (no Nix means the base image's runtimes; no codegraph means the agent
+greps). A `✗` line means dispatch will not work, and names the fix.
+
+**What the stack needs, and why each one bites:**
+
+| requirement | provided by | symptom when missing |
+|---|---|---|
+| shared `/workspace` volume | `compose.yaml` | worktrees are node-local; dispatch silently stops being clustered |
+| seeded `/nix` store | the `nix-init` one-shot service | `nix is not installed on this node` |
+| agent CLIs | the image (`npm i -g`) | `<agent> is not installed on this node` |
+| codegraph | the image, wired via `codegraph install` | agents grep instead of querying the graph |
+| agent credentials | `compose.override.yaml` **or** `.env` keys | `EACCES` from Bun, or `Not logged in` |
+| registered repos | `storage.create_repo(...)` | `no repo named X` |
+| a model backend | console UI → Models | dispatch has nothing to call |
+
+`nix-init` seeds the Nix store volume once and exits; nodes wait for it via
+`depends_on: service_completed_successfully`. That ordering is not cosmetic — a
+shared volume cannot be seeded by mounting it over an image's `/nix`, because
+Docker copies image content into a fresh volume and several nodes doing that
+concurrently collide with `mkdir ... file exists`.
+
+**To browse the knowledge vault in Obsidian**, point the workspace at a host
+directory in `.env` and open `<that dir>/kb` as a vault:
+
+```dotenv
+WORKSPACE_MOUNT=/home/you/turnstone-workspace
+```
+
+Changing it starts a **fresh volume** — existing checkouts and notes do not
+carry over.
+
 ## 1. How it fits together
 
 ```
@@ -324,3 +387,35 @@ a **fresh volume**, so existing checkouts and notes don't carry over.
 iterative-research path), `links` (outgoing/backlinks/dangling), and `graph`
 (hubs, orphans, and the **frontier**: notes that are linked to but not yet
 written, i.e. where research should go next).
+
+## 9. Research loop (measured experiments)
+
+The `kb` tool records **measured facts, not claimed ones**:
+
+```
+kb(action="search", query="worktree cost")        # always look first
+kb(action="experiment",
+   title="Flake eval cost from worktree",
+   hypothesis="Evaluating from the worktree is slower than a small env dir",
+   command="time nix develop path:. --command true",
+   links=["Worktree isolation"])
+kb(action="stale")                                # findings whose code moved
+```
+
+`experiment` **runs** the command in the bound worktree — inside the provisioned
+Nix env, so it sees the same toolchain a dispatched agent would — and captures
+the real output, exit code and duration. Because the tool does the running, a
+recorded number cannot be one an agent invented after the fact. That is the
+whole reason it is a tool action rather than prose written afterwards.
+
+Each note records the **repo and exact commit** it was measured at, which gives
+findings an expiry date. `kb(action="stale")` reads that back and lists notes
+measured against code that has since moved, so the vault cannot quietly
+accumulate confident claims about code that changed underneath them.
+
+Notes render as ordinary Obsidian markdown — Hypothesis / Method / Result /
+Verdict, linked with `[[wikilinks]]`. **The Verdict is deliberately left blank**:
+the measurement is evidence, the verdict is knowledge, and only a reader can
+supply it. `kb(action="graph")` surfaces hubs, orphans, and the *frontier* —
+notes that are linked to but not yet written, i.e. where research should go next.
+

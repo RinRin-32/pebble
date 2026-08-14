@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import time
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -43,6 +45,10 @@ _UNSAFE_SLUG = re.compile(r"[^a-z0-9]+")
 
 MAX_TITLE = 120
 MAX_BODY = 200_000
+# Captured output is evidence, not a log: enough to justify a verdict, bounded
+# so one chatty test run cannot swamp the vault.
+MAX_CAPTURE = 8_000
+EXPERIMENT_TIMEOUT = 900
 
 
 class KnowledgeError(RuntimeError):
@@ -158,6 +164,149 @@ def parse_note(text: str, *, fallback_title: str = "") -> Note:
         repo_id=meta.get("repo_id", ""),
         links=extract_links(body),
     )
+
+
+@dataclass
+class ExperimentResult:
+    """What actually happened when the command ran."""
+
+    command: str
+    exit_code: int
+    duration_s: float
+    output: str
+    commit: str = ""
+    timed_out: bool = False
+
+    @property
+    def ok(self) -> bool:
+        return self.exit_code == 0 and not self.timed_out
+
+
+def commit_of(worktree: str | Path) -> str:
+    """Short HEAD sha of *worktree*, or "" when it isn't a git checkout.
+
+    Recorded on every experiment so a finding can later be told apart from the
+    code it was measured against — the difference between durable knowledge and
+    a claim with no expiry date.
+    """
+    try:
+        proc = subprocess.run(  # noqa: S603 - fixed binary, argv list
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(worktree), capture_output=True, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def run_experiment(
+    command: str,
+    *,
+    cwd: str | Path,
+    wrap: str = "",
+    timeout: int = EXPERIMENT_TIMEOUT,
+) -> ExperimentResult:
+    """Execute *command* and capture what it actually did.
+
+    The KB records measured facts, not claimed ones: because this runs the
+    command itself, a recorded result cannot be a number an agent made up.  That
+    is the whole reason experiments are a tool action rather than free-form
+    prose the agent writes after the fact.
+
+    ``wrap`` is a provisioned Nix env dir, so an experiment sees the same
+    toolchain a dispatched agent would.
+    """
+    # ``bash -c``, never ``-lc``: a LOGIN shell re-reads profile files and
+    # rebuilds PATH from scratch, discarding the toolchain ``nix develop`` just
+    # put there.  That reset previously made a wrapped `go build` report
+    # "go: command not found" while the env was in fact provisioned correctly.
+    argv = ["bash", "-c", command]
+    if wrap:
+        from turnstone.core.nixenv import wrap_command
+
+        argv = wrap_command(argv, wrap)
+    start = time.monotonic()
+    timed_out = False
+    try:
+        proc = subprocess.run(  # noqa: S603 - argv list; command is operator/agent supplied
+            argv, cwd=str(cwd), capture_output=True, text=True,
+            errors="replace", timeout=timeout, check=False,
+        )
+        code, out = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        code = 124
+        out = (exc.stdout or b"").decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        out += f"\n[timed out after {timeout}s]"
+    except OSError as exc:
+        code, out = 127, f"failed to run: {exc}"
+    duration = round(time.monotonic() - start, 2)
+    if len(out) > MAX_CAPTURE:
+        out = out[:MAX_CAPTURE] + f"\n... [output truncated at {MAX_CAPTURE} bytes]"
+    return ExperimentResult(
+        command=command, exit_code=code, duration_s=duration,
+        output=out.strip(), commit=commit_of(cwd), timed_out=timed_out,
+    )
+
+
+def experiment_note(
+    title: str,
+    hypothesis: str,
+    result: ExperimentResult,
+    *,
+    repo_id: str = "",
+    ws_id: str = "",
+    tags: list[str] | None = None,
+    links: list[str] | None = None,
+) -> Note:
+    """Render an experiment into a durable, provenance-carrying note."""
+    linked = "".join(f"\n- [[{t}]]" for t in (links or []))
+    status = "TIMED OUT" if result.timed_out else ("ok" if result.ok else f"exit {result.exit_code}")
+    body = (
+        f"## Hypothesis\n\n{hypothesis.strip() or '(none stated)'}\n\n"
+        f"## Method\n\n```\n{result.command}\n```\n\n"
+        f"Measured at commit `{result.commit or 'unknown'}` in {result.duration_s}s "
+        f"({status}).\n\n"
+        f"## Result\n\n```\n{result.output or '(no output)'}\n```\n\n"
+        f"## Verdict\n\n_Fill this in — what does the result mean for the codebase?_\n"
+        + (f"\n## Related\n{linked}\n" if linked else "")
+    )
+    return Note(
+        title=title,
+        body=body,
+        kind="experiment",
+        summary=f"{status} in {result.duration_s}s at {result.commit or 'unknown'}",
+        tags=sorted({*(tags or []), "experiment"}),
+        ws_id=ws_id,
+        repo_id=repo_id,
+    )
+
+
+def stale_notes(current_commit: str, *, repo_id: str = "") -> list[tuple[Note, str]]:
+    """Notes measured against a commit that is no longer HEAD.
+
+    A finding about code has an expiry date; without this the vault quietly
+    accumulates confident statements about code that has since changed.
+    """
+    if not current_commit:
+        return []
+    out: list[tuple[Note, str]] = []
+    for note in list_notes():
+        recorded = _recorded_commit(note)
+        if not recorded or recorded == current_commit:
+            continue
+        if repo_id and note.repo_id and note.repo_id != repo_id:
+            continue
+        out.append((note, recorded))
+    return out
+
+
+_COMMIT_RE = re.compile(r"Measured at commit `([0-9a-f]+)`")
+
+
+def _recorded_commit(note: Note) -> str:
+    match = _COMMIT_RE.search(note.body)
+    return match.group(1) if match else ""
 
 
 def note_path(title: str) -> Path:

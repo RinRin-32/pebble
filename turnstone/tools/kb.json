@@ -1,17 +1,26 @@
 {
   "name": "kb",
-  "description": "Read and write the persistent graph knowledge base — a growing set of linked notes that survives across sessions. Use it to record research findings, architecture decisions, and what you learn about a codebase, then link notes together with [[Wikilinks]] so related knowledge connects up over time. Search it BEFORE researching something from scratch: a prior session may have already answered it. Actions: 'search' (find notes), 'read' (one note), 'write' (create/replace), 'append' (add to an existing note — preferred for iterative research), 'links' (a note's outgoing links, backlinks and dangling targets), 'graph' (whole-vault shape: hubs, orphans, and the frontier of not-yet-written notes).",
+  "description": "Read and write the persistent graph knowledge base \u2014 linked notes that survive across sessions and grow as you investigate a codebase. ALWAYS search before researching something from scratch: a prior session may already have answered it, with evidence. Actions: 'search', 'read', 'write', 'append' (grow an existing note \u2014 preferred for iterative research), 'links' (outgoing/backlinks/dangling), 'graph' (hubs, orphans, and the frontier of unwritten notes), 'experiment' (RUN a command in the bound repo and record the measured result with provenance \u2014 use this instead of writing down numbers you did not measure), and 'stale' (findings measured against code that has since changed).",
   "parameters": {
     "type": "object",
     "properties": {
       "action": {
         "type": "string",
         "description": "What to do.",
-        "enum": ["search", "read", "write", "append", "links", "graph"]
+        "enum": [
+          "search",
+          "read",
+          "write",
+          "append",
+          "links",
+          "graph",
+          "experiment",
+          "stale"
+        ]
       },
       "title": {
         "type": "string",
-        "description": "Note title — the wikilink identity. Required for read/write/append/links.",
+        "description": "Note title \u2014 the wikilink identity. Required for read/write/append/links.",
         "default": ""
       },
       "content": {
@@ -36,12 +45,34 @@
       },
       "tags": {
         "type": "array",
-        "items": {"type": "string"},
+        "items": {
+          "type": "string"
+        },
         "description": "Optional tags for grouping.",
+        "default": []
+      },
+      "hypothesis": {
+        "type": "string",
+        "description": "For action='experiment': what you expect to find and why. Recorded alongside the result so a later reader can judge whether the experiment answered it.",
+        "default": ""
+      },
+      "command": {
+        "type": "string",
+        "description": "For action='experiment': the shell command to RUN in the bound repo's worktree. Its real output, exit code and duration are captured \u2014 you cannot record a result you did not measure.",
+        "default": ""
+      },
+      "links": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Titles of related notes to link from an experiment, so findings connect instead of accumulating in isolation.",
         "default": []
       }
     },
-    "required": ["action"]
+    "required": [
+      "action"
+    ]
   },
   "interactive": true,
   "coordinator": true,
