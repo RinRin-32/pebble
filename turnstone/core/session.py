@@ -9838,6 +9838,7 @@ class ChatSession:
             "bind_repo": self._prepare_bind_repo,
             "dispatch_agent": self._prepare_dispatch_agent,
             "kb": self._prepare_kb,
+            "setup_env": self._prepare_setup_env,
             "watch": self._prepare_watch,
             "read_resource": self._prepare_read_resource,
             "use_prompt": self._prepare_use_prompt,
@@ -17142,6 +17143,108 @@ class ChatSession:
         self._report_tool_result(call_id, "bind_repo", out)
         return call_id, out
 
+    def _prepare_setup_env(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        action = (args.get("action") or "detect").strip().lower()
+        if action not in {"detect", "provision", "status", "teardown"}:
+            return {
+                "call_id": call_id,
+                "func_name": "setup_env",
+                "header": f"✗ setup_env: unknown action {action!r}",
+                "preview": "",
+                "needs_approval": False,
+                "error": "Error: action must be detect, provision, status or teardown",
+            }
+        extra = args.get("packages")
+        return {
+            "call_id": call_id,
+            "func_name": "setup_env",
+            "header": f"\U0001f4e6 setup_env: {action}",
+            "preview": "",
+            # Provisioning downloads toolchains and writes into the worktree;
+            # detect/status are read-only.
+            "needs_approval": action == "provision" and not self.skip_permissions,
+            "execute": self._exec_setup_env,
+            "action": action,
+            "packages": [str(p) for p in extra] if isinstance(extra, list) else [],
+        }
+
+    def _exec_setup_env(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Detect and provision the repo's toolchain via Nix."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        action = item["action"]
+        from pathlib import Path
+
+        from turnstone.core import nixenv
+
+        def _fail(msg: str) -> tuple[str, str]:
+            self._report_tool_result(call_id, "setup_env", msg, is_error=True)
+            return call_id, msg
+
+        cwd = self._workspace_cwd()
+        if not cwd:
+            return _fail(
+                "Error: no repo bound. Call bind_repo first — the toolchain is "
+                "provisioned for a checked-out worktree."
+            )
+        if not nixenv.is_available():
+            return _fail(
+                "Error: nix is not installed on this node, so per-repo toolchains "
+                "are unavailable. The base image's runtimes are all you have."
+            )
+
+        cfg_key = "nix_env_dir"
+        try:
+            if action == "status":
+                active = (load_workstream_config(self._ws_id) or {}).get(cfg_key, "")
+                out = (
+                    f"Provisioned environment: {active}"
+                    if active
+                    else "No environment provisioned; dispatch uses the base image only."
+                )
+            elif action == "detect":
+                spec = nixenv.detect(Path(cwd))
+                if spec.repo_flake:
+                    out = "Repo declares its own flake.nix — that will be used as-is."
+                else:
+                    out = (
+                        f"Markers found: {', '.join(spec.markers) or '(none)'}\n"
+                        f"Would provision: {', '.join(spec.packages)}"
+                    )
+            elif action == "teardown":
+                removed = nixenv.teardown(self._ws_id)
+                cfg = load_workstream_config(self._ws_id) or {}
+                cfg.pop(cfg_key, None)
+                save_workstream_config(self._ws_id, cfg)
+                out = "Environment removed." if removed else "No environment to remove."
+            else:  # provision
+                info = nixenv.provision(self._ws_id, Path(cwd))
+                cfg = load_workstream_config(self._ws_id) or {}
+                cfg[cfg_key] = str(info.env_dir)
+                save_workstream_config(self._ws_id, cfg)
+                src = "the repo's own flake.nix" if info.repo_flake else ", ".join(info.packages)
+                out = (
+                    f"Environment ready ({src}).\n"
+                    f"dispatch_agent and bash now run inside it.\n"
+                    f"Flake written to {info.flake_path} — tune it and re-provision if needed."
+                )
+        except nixenv.NixEnvError as exc:
+            return _fail(f"Error: {exc}")
+        except Exception as exc:
+            log.warning("setup_env.failed", action=action, exc_info=True)
+            return _fail(f"Error: setup_env {action} failed: {exc}")
+
+        out = self._truncate_output(out)
+        self._report_tool_result(call_id, "setup_env", out)
+        return call_id, out
+
+    def _nix_env_dir(self) -> str:
+        """Provisioned Nix env for this workstream, if any."""
+        try:
+            return (load_workstream_config(self._ws_id) or {}).get("nix_env_dir", "") or ""
+        except Exception:
+            return ""
+
     def _prepare_dispatch_agent(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
         task = (args.get("task") or "").strip()
         if not task:
@@ -17224,6 +17327,9 @@ class ChatSession:
             except Exception:
                 log.debug("dispatch.stream_failed", exc_info=True)
 
+        # Run inside the provisioned toolchain when there is one, so the agent
+        # can build and test rather than only edit.
+        env_dir = self._nix_env_dir()
         result = run_agent(
             adapter,
             item["task"],
@@ -17232,6 +17338,7 @@ class ChatSession:
             session_id=session_id,
             timeout=timeout,
             on_event=_on_event,
+            wrap=env_dir or "",
         )
 
         if result.session_id:

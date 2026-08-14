@@ -212,3 +212,21 @@ class TestConcurrency:
         for i, files in enumerate(listings):
             assert f"only_{i}.txt" in files
             assert not files & {f"only_{j}.txt" for j in range(6) if j != i}
+
+
+class TestBaseRefFallback:
+    """A registered default_branch can disagree with the remote's real HEAD."""
+
+    def test_default_branch_reads_mirror_head(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        assert workspace.default_branch("repo1") == "main"
+
+    def test_bad_base_ref_falls_back(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        # 'master' does not exist here (the fixture uses 'main'); rather than
+        # failing with "invalid reference", fall back to the mirror's HEAD.
+        info = workspace.create_worktree("repo1", "wsfallback", base_ref="master")
+        assert (info.path / "calc.py").is_file()
+
+    def test_default_branch_missing_mirror(self) -> None:
+        assert workspace.default_branch("nosuchrepo") == ""

@@ -60,6 +60,17 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 WORKDIR /data
 RUN chown turnstone:turnstone /data
 
+# Nix — per-repo toolchains for dispatched agents (turnstone/core/nixenv.py).
+# Copied from the official image rather than run through the installer: no
+# daemon, no systemd, and no user-namespace requirements, which is what makes it
+# work as an unprivileged user inside a container. /nix is a shared volume in
+# compose, so one download warms the store for every node.
+COPY --from=nixos/nix:latest /nix /nix
+RUN mkdir -p /etc/nix \
+    && printf 'experimental-features = nix-command flakes\nsandbox = false\nbuild-users-group =\n' > /etc/nix/nix.conf \
+    && chown -R turnstone:turnstone /nix
+ENV PATH="/nix/var/nix/profiles/default/bin:${PATH}"
+
 # Workspace mount point — bind-mount a host directory here
 RUN mkdir -p /workspace && chown turnstone:turnstone /workspace
 

@@ -164,25 +164,56 @@ as the declarative alternatives. The recognized trap is that a workflow needing
 a specific CUDA version or custom build tool ends up
 [fighting the sandbox instead of using it](https://blog.arcjet.com/from-devcontainers-to-vms-parallel-dev-environments-for-ai-agents/).
 
-A sane ladder, cheapest first:
+**Turnstone uses Nix** (`setup_env`), because it is the one option that
+materializes a toolchain *into the container the agent already runs in* — no
+Docker socket, no docker-in-docker, no sibling container. Everything else on the
+ladder (per-repo image, repo-declared devcontainer) requires re-plumbing how
+dispatch runs; Nix is a tool call.
 
-1. **Fat base image** *(where turnstone is today)* — add runtimes to the
-   `Dockerfile`. Fine for 1–3 languages; becomes a slow, bloated image beyond
-   that, and every repo pays for every other repo's dependencies.
-2. **Per-repo image** — add an `image` column to `repos` and run dispatch in
-   that image. Each repo pays only for itself. This is the natural next step and
-   the schema is already close.
-3. **Honor the repo's `.devcontainer/devcontainer.json`** — the repo declares
-   its own toolchain, which is what makes this scale across many repos without
-   turnstone knowing anything about them. Requires running the agent in a
-   sibling container (Docker socket) rather than in-process.
-4. **Nix/Devbox per worktree** — declarative and no Docker-in-Docker, at the
-   cost of every repo needing a Nix expression.
+```
+bind_repo(repo="kokoro-go")
+setup_env(action="detect")     # -> go, gopls, python312, uv, gnumake
+setup_env(action="provision")  # materializes it; writes flake.nix into the worktree
+dispatch_agent(task="fix the failing test")   # now runs inside that toolchain
+```
 
-Steps 2–4 all require dispatch to run in a *separate container* from the node,
-which is the real architectural fork. Until then, prefer repos whose tests run
-on the base image, and treat the agent's ability to *verify* its work as the
-constraint that decides whether a repo is dispatchable.
+Detection reads the repo's markers (`go.mod`, `Cargo.toml`, `pyproject.toml`,
+`package.json`, …) and every match contributes, because real repos are polyglot
+— Kokoro-go carries `go.mod` *and* `pyproject.toml`. A repo's own `flake.nix`
+wins outright. A repo with no markers at all still gets a Python interpreter,
+which is the common case rather than an edge one.
+
+**Two directories, for a measured reason.** The generated `flake.nix` is written
+into the worktree so the agent can read and tune it and you can adopt it into
+the repo, but Nix *evaluates* a tiny copy under `/workspace/envs/<ws_id>/`. A
+flake reference copies its directory into the Nix store and redoes that whenever
+the contents change: evaluating from the worktree measured **16.9s per command**
+after each agent edit, versus **0.27s** from the small env dir. The agent edits
+constantly, so that gap is the whole design.
+
+`path:` references are used rather than plain paths because a flake inside a git
+repo is evaluated from the *git tree*, so a generated file that was never
+committed is invisible to it (Nix fails and suggests `git add -N`). `path:`
+reads the filesystem directly, so nothing is staged and the generated flake
+stays out of review diffs.
+
+Remaining rungs, if Nix ever stops being enough:
+
+1. **Per-repo image** — an `image` column on `repos`.
+2. **Repo-declared `.devcontainer/`** — scales without turnstone knowing the repo.
+3. Both require dispatch to run in a **sibling container**, which is the real
+   architectural fork.
+
+### Nix operational notes
+
+* `/nix` ships **in the image**, not a shared volume. A shared named volume was
+  tried and removed: Docker populates a fresh volume by copying image content,
+  and six nodes doing that concurrently collide with
+  `mkdir ... file exists`.
+* Consequence: toolchains downloaded at runtime live in the container layer and
+  are re-fetched after a rebuild. The store is warm within a container's life.
+* The image is ~2.9 GB with Nix included.
+* First provision of an uncached toolchain takes minutes; afterwards it is ~1s.
 
 ## 7. Troubleshooting
 
@@ -194,6 +225,9 @@ constraint that decides whether a repo is dispatchable.
 | `could not lock config file` | Concurrent worktree creation. Fixed with `--no-track` + an flock on the mirror; if it recurs, a stale `turnstone-worktree.lock` in the mirror. |
 | Diff full of `__pycache__` / `node_modules` | Build artifacts are excluded via the mirror's `info/exclude`; add patterns to `_LOCAL_EXCLUDES` in `workspace.py`. |
 | Agent edits nothing | Check the diff *and* the stat — it may have only run commands. |
+| `go: command not found` during dispatch | No toolchain provisioned. Run `setup_env(action="provision")`. |
+| `invalid reference: main` | The repo's real default branch differs from the registered one. `create_worktree` now falls back to the mirror's HEAD automatically. |
+| `nix is not installed on this node` | Image built without the Nix layer; rebuild. |
 
 ## 8. Knowledge base
 
