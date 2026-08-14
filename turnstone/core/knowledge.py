@@ -241,6 +241,16 @@ def run_experiment(
     except OSError as exc:
         code, out = 127, f"failed to run: {exc}"
     duration = round(time.monotonic() - start, 2)
+    # Captured output becomes a PERMANENT note. A command that echoes a token,
+    # a connection string, or an Authorization header would otherwise write that
+    # secret into the vault forever, where it survives the process, the
+    # container, and any later credential rotation.
+    try:
+        from turnstone.core.output_guard import redact_credentials
+
+        out = redact_credentials(out)
+    except Exception:
+        log.debug("kb.redact_failed", exc_info=True)
     if len(out) > MAX_CAPTURE:
         out = out[:MAX_CAPTURE] + f"\n... [output truncated at {MAX_CAPTURE} bytes]"
     return ExperimentResult(

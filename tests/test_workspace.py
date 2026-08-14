@@ -243,3 +243,60 @@ class TestBaseRefFallback:
 
     def test_default_branch_missing_mirror(self) -> None:
         assert workspace.default_branch("nosuchrepo") == ""
+
+
+class TestReaping:
+    """Worktrees were never removed, so every bind leaked one forever.
+
+    Reaping must not become data loss: an unreviewed diff is a result, not
+    garbage.
+    """
+
+    def test_clean_worktree_is_reaped(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsclean")
+        ok, detail = workspace.reap_worktree("repo1", "wsclean")
+        assert ok is True and detail == "removed"
+        assert not info.path.exists()
+
+    def test_dirty_worktree_survives(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsdirty")
+        (info.path / "calc.py").write_text("unreviewed agent work\n")
+        ok, detail = workspace.reap_worktree("repo1", "wsdirty")
+        assert ok is False and "uncommitted" in detail
+        assert info.path.exists(), "an unreviewed diff must not be deleted"
+
+    def test_force_reaps_dirty(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsforce")
+        (info.path / "calc.py").write_text("changed\n")
+        ok, _ = workspace.reap_worktree("repo1", "wsforce", force=True)
+        assert ok is True and not info.path.exists()
+
+    def test_untracked_file_counts_as_dirty(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsuntracked")
+        (info.path / "brand_new.py").write_text("x = 1\n")
+        # A newly created module is exactly the kind of result worth keeping.
+        assert workspace.is_dirty("wsuntracked") is True
+        assert workspace.reap_worktree("repo1", "wsuntracked")[0] is False
+
+    def test_missing_worktree(self) -> None:
+        assert workspace.reap_worktree("repo1", "ghost") == (False, "no worktree")
+
+    def test_orphans_reaped_active_kept(self, origin: Path) -> None:
+        workspace.ensure_mirror("repo1", str(origin))
+        live = workspace.create_worktree("repo1", "wslive")
+        workspace.create_worktree("repo1", "wsdead")
+        results = dict(workspace.reap_orphaned_worktrees({"wslive"}))
+        assert results.get("wsdead") == "removed"
+        assert "wslive" not in results
+        assert live.path.exists(), "an active workstream's tree must survive GC"
+
+    def test_repo_recovered_from_git_metadata(self, origin: Path) -> None:
+        # Recovering the repo from the worktree itself means GC still works for
+        # workstreams whose database rows are gone.
+        workspace.ensure_mirror("repo1", str(origin))
+        info = workspace.create_worktree("repo1", "wsmeta")
+        assert workspace._repo_of_worktree(info.path) == "repo1"

@@ -307,6 +307,81 @@ def remove_worktree(repo_id: str, ws_id: str) -> bool:
     return True
 
 
+def is_dirty(ws_id: str) -> bool:
+    """Whether a worktree holds uncommitted work.
+
+    Consulted before reaping: a worktree can contain a diff nobody has reviewed
+    yet, and deleting that is data loss, not cleanup.
+    """
+    wt = worktree_path(ws_id)
+    if not wt.exists():
+        return False
+    try:
+        out = _git("status", "--porcelain", cwd=wt, timeout=_DIFF_TIMEOUT)
+    except WorkspaceError:
+        # Unreadable status means unknown, and unknown must not be deleted.
+        return True
+    return bool(out.strip())
+
+
+def reap_worktree(repo_id: str, ws_id: str, *, force: bool = False) -> tuple[bool, str]:
+    """Remove a finished workstream's worktree, refusing to discard live work.
+
+    Worktrees were previously never removed at all, so every workstream that
+    bound a repo left one behind forever.  Reaping is therefore worth doing —
+    but a worktree with uncommitted changes is a result the operator may not
+    have looked at yet, so it survives unless ``force``.
+    """
+    wt = worktree_path(ws_id)
+    if not wt.exists():
+        return False, "no worktree"
+    if not force and is_dirty(ws_id):
+        return False, "kept: uncommitted changes"
+    removed = remove_worktree(repo_id, ws_id)
+    return removed, "removed" if removed else "no worktree"
+
+
+def reap_orphaned_worktrees(
+    active_ws_ids: set[str], *, force: bool = False
+) -> list[tuple[str, str]]:
+    """Reap worktrees whose workstream no longer exists.
+
+    The repo a worktree came from is recovered from its own git metadata rather
+    than the database, so this still works for rows that were deleted outright.
+    """
+    root = workspace_root() / "ws"
+    if not root.is_dir():
+        return []
+    out: list[tuple[str, str]] = []
+    for path in sorted(root.iterdir()):
+        if not path.is_dir() or path.name in active_ws_ids:
+            continue
+        repo_id = _repo_of_worktree(path)
+        if not repo_id:
+            out.append((path.name, "kept: unknown repo"))
+            continue
+        ok, detail = reap_worktree(repo_id, path.name, force=force)
+        out.append((path.name, detail if ok else detail))
+    return out
+
+
+def _repo_of_worktree(worktree: Path) -> str:
+    """Recover the mirror a worktree belongs to, from its .git pointer."""
+    pointer = worktree / ".git"
+    try:
+        if pointer.is_file():
+            text = pointer.read_text(encoding="utf-8", errors="replace").strip()
+            if text.startswith("gitdir:"):
+                # <root>/repos/<repo_id>.git/worktrees/<ws_id>
+                parts = Path(text.split(":", 1)[1].strip()).parts
+                for part in parts:
+                    if part.endswith(".git"):
+                        return part[:-4]
+    except OSError:
+        return ""
+    return ""
+
+
 def worktree_diff(ws_id: str, *, max_bytes: int = 200_000) -> str:
     """Unified diff of everything the agent changed, including new files.
 
