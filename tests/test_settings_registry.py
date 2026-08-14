@@ -55,11 +55,16 @@ class TestValidateKey:
         assert "judge.smart_approvals" in SETTINGS
 
     def test_confidence_threshold_is_smart_approval_bar(self):
-        """Default bumped to the Smart Approvals auto-approve bar (0.95),
-        still clamped to [0, 1]."""
+        """The Smart Approvals auto-approve bar, still clamped to [0, 1].
+
+        Lowered from 0.95 to 0.8 after measuring the judge's actual verdict
+        distribution: near-certain verdicts were rare enough that the higher
+        bar auto-approved almost nothing, which is the same as the feature
+        being off.
+        """
         defn = validate_key("judge.confidence_threshold")
         assert defn.type == "float"
-        assert defn.default == 0.95
+        assert defn.default == 0.8
         assert defn.min_value == 0.0
         assert defn.max_value == 1.0
 
