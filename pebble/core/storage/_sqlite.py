@@ -1937,6 +1937,7 @@ class SQLiteBackend:
                     kb_notes.c.summary,
                     kb_notes.c.tags,
                     kb_notes.c.repo_id,
+                    kb_notes.c.color,
                     kb_notes.c.updated,
                 ).order_by(kb_notes.c.title)
             ).fetchall()
@@ -1972,7 +1973,8 @@ class SQLiteBackend:
                 "summary": r[3],
                 "tags": r[4],
                 "repo_id": r[5],
-                "updated": r[6],
+                "color": r[6],
+                "updated": r[7],
                 "links_out": out_counts.get(r[0], 0),
                 "links_in": in_counts.get(r[1], 0),
             }

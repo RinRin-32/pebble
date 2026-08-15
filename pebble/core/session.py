@@ -11156,12 +11156,23 @@ class ChatSession:
         write-gate.
 
         Otherwise: coord sessions default to ``coordinator`` (the only scope
-        they can write); interactive sessions default to ``global``.
+        they can write); interactive sessions default to ``user`` when the
+        session has an authenticated user, and ``global`` only when it does not.
+
+        ``user`` rather than ``global`` because ``global`` is readable by every
+        session on the instance — including, under a Discord ``/global-link``,
+        every member of that server.  A fact learned while working for one
+        person should not become everyone's by default; sharing it is a
+        deliberate act (``scope="global"``), which is the right way round.  An
+        unauthenticated session has no user to attach to, so it keeps the old
+        behaviour.
         """
         if self._project_id and self._project_writable:
             return "project"
         if self._kind == WorkstreamKind.COORDINATOR:
             return "coordinator"
+        if self._acting_user_id or self._user_id:
+            return "user"
         return "global"
 
     def _implicit_scope_walk(self) -> tuple[str, ...]:
@@ -16973,6 +16984,7 @@ class ChatSession:
             "content": args.get("content") or "",
             "kind": (args.get("kind") or "note").strip() or "note",
             "summary": (args.get("summary") or "").strip(),
+            "color": (args.get("color") or "").strip(),
             "tags": [str(t) for t in tags] if isinstance(tags, list) else [],
             "hypothesis": args.get("hypothesis") or "",
             "command": (args.get("command") or "").strip(),
@@ -17100,6 +17112,7 @@ class ChatSession:
                     tags=item["tags"],
                     ws_id=self._ws_id,
                     repo_id=self._bound_repo_id(),
+                    color=kb.clean_color(item.get("color", "")),
                 )
                 path = kb.write_note(note, append=(action == "append"))
                 links = kb.extract_links(item["content"])

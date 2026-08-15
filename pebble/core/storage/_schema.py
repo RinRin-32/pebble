@@ -574,6 +574,9 @@ kb_notes = sa.Table(
     sa.Column("tags", sa.Text, nullable=False, server_default="[]"),
     sa.Column("ws_id", sa.Text, nullable=False, server_default=""),
     sa.Column("repo_id", sa.Text, nullable=False, server_default=""),
+    # Optional display colour ("#rgb"/"#rrggbb") chosen by whoever wrote the
+    # note; empty means the graph picks a palette hue for the repo.
+    sa.Column("color", sa.Text, nullable=False, server_default=""),
     sa.Column("created", sa.Text, nullable=False),
     sa.Column("updated", sa.Text, nullable=False),
 )

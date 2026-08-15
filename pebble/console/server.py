@@ -7676,8 +7676,13 @@ async def admin_knowledge(request: Request) -> JSONResponse:
     except Exception:
         by_id = {}
     edges = payload.get("edges", [])
+    from pebble.core.knowledge import clean_color
+
     for note in notes:
         note["repo_id"] = by_id.get(note.get("repo_id", ""), note.get("repo_id", ""))
+        # Re-validate on the way out: the column is written by tools, and this
+        # value lands in an SVG style attribute in the browser.
+        note["color"] = clean_color(note.get("color", ""))
     payload["notes"] = notes
     payload["edges"] = edges
     return JSONResponse(

@@ -68,6 +68,11 @@
         },
         "description": "Titles of related notes to link from an experiment, so findings connect instead of accumulating in isolation.",
         "default": []
+      },
+      "color": {
+        "type": "string",
+        "description": "Optional display colour for this note and its repo in the console graph, as hex (#rgb or #rrggbb). Leave empty to let the graph pick a hue per codebase.",
+        "default": ""
       }
     },
     "required": [

@@ -270,3 +270,49 @@ class TestTransportSecurity:
     def test_blank_is_not_a_wildcard(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PEBBLE_MCP_ALLOWED_HOSTS", "   ")
         assert kb_mcp._transport_security().enable_dns_rebinding_protection is True
+
+
+class TestNoteColour:
+    """Callers can pin how a note and its codebase look in the graph.
+
+    The value is interpolated into an SVG ``style`` attribute, so the
+    interesting cases are the ones that are not colours.
+    """
+
+    def test_a_valid_hex_is_kept(self, vault: Path) -> None:
+        out = _call("kb_write", {"title": "Tinted", "body": "x", "color": "#4ade80"})
+        assert out["color"] == "#4ade80"
+        assert "color: " in (vault / "tinted.md").read_text()
+
+    def test_short_hex_is_kept(self, vault: Path) -> None:
+        assert (
+            _call("kb_write", {"title": "Short", "body": "x", "color": "#0f0"})["color"] == "#0f0"
+        )
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "red",  # a name, not hex — not accepted rather than guessed at
+            "#12",
+            "#gggggg",
+            "url(javascript:alert(1))",
+            "#fff; fill:url(#x)",  # the reason this is validated, not escaped
+            "expression(alert(1))",
+        ],
+    )
+    def test_anything_that_is_not_hex_is_dropped(self, vault: Path, bad: str) -> None:
+        out = _call(
+            "kb_write", {"title": "Bad " + str(abs(hash(bad)))[:6], "body": "x", "color": bad}
+        )
+        # Reported back as empty, so the caller can see it did not take.
+        assert out["color"] == ""
+
+    def test_absent_colour_is_fine(self, vault: Path) -> None:
+        assert _call("kb_write", {"title": "Plain", "body": "x"})["color"] == ""
+
+    def test_colour_survives_a_read(self, vault: Path) -> None:
+        _call("kb_write", {"title": "Round trip", "body": "x", "color": "#a78bfa"})
+        from pebble.core.knowledge import read_note
+
+        note = read_note("Round trip")
+        assert note is not None and note.color == "#a78bfa"

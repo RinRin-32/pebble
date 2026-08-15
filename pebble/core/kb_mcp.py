@@ -254,7 +254,9 @@ def build_server() -> Any:
             "notes as [[Wiki Links]] — a link to a note that does not exist yet is "
             "useful on purpose, it marks the research frontier. Set repo to the "
             "codebase this is about so findings from different projects stay "
-            "distinguishable."
+            "distinguishable. Pass color as a hex value (#rgb or #rrggbb) to pin how this "
+            "note and its repo appear in the console graph; leave it empty and the graph "
+            "picks a hue per codebase."
         )
     )
     def kb_write(
@@ -265,8 +267,15 @@ def build_server() -> Any:
         tags: list[str] | None = None,
         repo: str = "",
         append: bool = False,
+        color: str = "",
     ) -> dict[str, Any]:
-        from pebble.core.knowledge import KnowledgeError, Note, extract_links, write_note
+        from pebble.core.knowledge import (
+            KnowledgeError,
+            Note,
+            clean_color,
+            extract_links,
+            write_note,
+        )
 
         if not (title or "").strip():
             return {"ok": False, "error": "title is required"}
@@ -282,6 +291,7 @@ def build_server() -> Any:
             # Attribution: a note should say which hand wrote it.
             ws_id=f"mcp:{current_user() or 'unknown'}",
             links=extract_links(body or ""),
+            color=clean_color(color),
         )
         try:
             path = write_note(note, append=bool(append))
@@ -294,6 +304,9 @@ def build_server() -> Any:
             "path": str(path),
             "appended": bool(append),
             "links": note.links,
+            # Echo what was stored: an invalid colour is dropped, and silently
+            # ignoring it would leave the caller thinking it took.
+            "color": note.color,
         }
 
     @mcp.tool(

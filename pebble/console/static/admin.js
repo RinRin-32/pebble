@@ -8755,7 +8755,16 @@ function loadCodingJobs() {
 // nothing calls Math.random — so hitting Refresh redraws the same picture
 // instead of shuffling the map out from under whoever is reading it.
 
-const _KB_MAX_NODES = 60; // beyond this the picture stops being readable
+const _KB_MAX_NODES = 60;
+
+// Colours arrive from whoever wrote the note. The server validates them, and
+// so does this — the value is interpolated into an SVG style attribute, and
+// one careless path is all it takes.
+const _KB_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+function _kbSafeColor(v) {
+  return _KB_COLOR_RE.test(String(v || "").trim()) ? String(v).trim() : "";
+} // beyond this the picture stops being readable
 
 function _kbBuildGraph(notes, edges) {
   const byTitle = {};
@@ -8769,6 +8778,7 @@ function _kbBuildGraph(notes, edges) {
       kind: notes[i].kind || "note",
       summary: notes[i].summary || "",
       repo: notes[i].repo_id || "",
+      color: _kbSafeColor(notes[i].color || ""),
       dangling: false,
       deg: 0,
     };
@@ -8918,7 +8928,17 @@ function _kbGraphSvg(notes, edges) {
   ];
   const hueOf = {};
   clusters.keys.forEach(function (k, i) {
-    hueOf[k] = PALETTE[i % PALETTE.length];
+    // An explicit colour on any note in the cluster wins — most common one, so
+    // a single mislabelled note cannot repaint a whole codebase. The palette
+    // is the fallback, not the rule.
+    const votes = {};
+    (clusters.groups[k] || []).forEach(function (nd) {
+      if (nd.color) votes[nd.color] = (votes[nd.color] || 0) + 1;
+    });
+    const chosen = Object.keys(votes).sort(function (a, b) {
+      return votes[b] - votes[a] || a.localeCompare(b);
+    })[0];
+    hueOf[k] = chosen || PALETTE[i % PALETTE.length];
   });
 
   // Cluster captions, drawn under the nodes so they never sit on a label.
@@ -8959,7 +8979,8 @@ function _kbGraphSvg(notes, edges) {
     const label = nd.title.length > 20 ? nd.title.slice(0, 19) + "…" : nd.title;
     const cls = nd.dangling ? "kb-node kb-node--frontier" : (nd.deg ? "kb-node" : "kb-node kb-node--orphan");
     const hue = hueOf[nd.cluster] || "";
-    const fill = nd.dangling || !nd.deg ? "" : ' style="fill:' + hue + '"';
+    const own = nd.color || hue;
+    const fill = nd.dangling || !nd.deg ? "" : ' style="fill:' + own + '"';
     // Label only what stays readable. Below the threshold the titles overlap
     // into an unreadable smear — the node is still hoverable and clickable,
     // which is the affordance that actually matters.
