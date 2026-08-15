@@ -1114,6 +1114,15 @@
   opacity: 1;
   box-shadow: 0 0 6px var(--cyan-glow);
 }
+.kind-btn--disp.active {
+  background: color-mix(in srgb, var(--green) 15%, transparent);
+  color: var(--green);
+}
+.kind-btn--disp.active .kind-led {
+  background: var(--green);
+  opacity: 1;
+  box-shadow: 0 0 6px var(--green-glow);
+}
 /* kind tag in the saved-sessions table — shares the rail chip base
    (.row .tag above); only no-wrap + the INT colour differ. */
 .kind-tag {

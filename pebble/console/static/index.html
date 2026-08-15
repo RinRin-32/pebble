@@ -139,6 +139,22 @@
               <span class="kind-led" aria-hidden="true"></span>
               Interactive
             </button>
+            <!-- Dispatcher is not a third KIND — it is an interactive session
+             pinned to the `dispatcher` persona, which can bind a repo and
+             delegate to a coding agent but structurally cannot edit files
+             itself.  Hidden when that persona is not available to this user. -->
+            <button
+              type="button"
+              id="kind-dispatcher"
+              class="kind-btn kind-btn--disp"
+              role="radio"
+              aria-checked="false"
+              tabindex="-1"
+              hidden
+            >
+              <span class="kind-led" aria-hidden="true"></span>
+              Dispatcher
+            </button>
           </div>
           <!-- Composer DOM is built by shared_static/composer.js into this
            mount — stacked layout (textarea above, options toggle +

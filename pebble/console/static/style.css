@@ -3865,3 +3865,14 @@ h3.skill-spec-heading {
   margin-left: auto;
   font-style: italic;
 }
+
+/* Column templates for the Agents panels.  .admin-row is display:grid with the
+   columns set per panel — without a rule here the grid falls back to a single
+   implicit column and every cell stacks vertically, which is what these two
+   panels were doing. */
+#admin-coding-jobs .admin-row {
+  grid-template-columns: 1.4fr 1fr 1fr 110px 110px 90px;
+}
+#admin-knowledge .admin-row {
+  grid-template-columns: 1.4fr 100px 1fr 130px 1.6fr;
+}

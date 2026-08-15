@@ -1081,21 +1081,31 @@ function _hasInteractivePermission() {
 // the submit endpoint + redirect differ.
 let _launcherKind = "coordinator";
 
+// The launcher MODE is not the same thing as the workstream KIND. "dispatcher"
+// creates an *interactive* workstream pinned to the `dispatcher` persona — the
+// one that can bind a repo and delegate to a coding agent but structurally
+// cannot edit files itself. Keeping the two apart means the create path stays
+// exactly the interactive one; only the preselected persona differs.
+let _launcherMode = "coordinator";
+const _DISPATCHER_PERSONA = "dispatcher";
+
 // Sentinel value for the project picker's "+ New project…" row — selecting it
 // prompts for a name, creates, then re-selects the new project (see
 // _applyLauncherFields' onChange branch).
 const _PROJECT_NEW = "__new__";
 
-function _setLauncherKind(kind, focus) {
-  _launcherKind = kind;
+function _setLauncherKind(mode, focus) {
+  _launcherMode = mode;
+  _launcherKind = mode === "dispatcher" ? "interactive" : mode;
   const map = {
     "kind-coordinator": "coordinator",
     "kind-interactive": "interactive",
+    "kind-dispatcher": "dispatcher",
   };
   Object.keys(map).forEach(function (id) {
     const btn = document.getElementById(id);
     if (!btn) return;
-    const on = map[id] === kind;
+    const on = map[id] === mode;
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
     btn.tabIndex = on ? 0 : -1; // roving tabindex — the radiogroup is one tab stop
@@ -1115,9 +1125,11 @@ function _applyLauncherFields() {
   if (!_homeCoordComposer) return;
   const interactive = _launcherKind === "interactive";
   _homeCoordComposer.setPlaceholder(
-    interactive
-      ? "What do you want to work on?"
-      : "What should this coordinator orchestrate?",
+    _launcherMode === "dispatcher"
+      ? "What should be built? The dispatcher binds a repo and delegates to a coding agent."
+      : interactive
+        ? "What do you want to work on?"
+        : "What should this coordinator orchestrate?",
   );
   _homeCoordComposer.setOptionFieldVisible("node_strategy", interactive);
   const specific =
@@ -1179,6 +1191,12 @@ function _wireLauncherToggle() {
       _setLauncherKind("interactive");
     });
   }
+  const dispBtn = document.getElementById("kind-dispatcher");
+  if (dispBtn) {
+    dispBtn.addEventListener("click", function () {
+      _setLauncherKind("dispatcher");
+    });
+  }
   if (group) {
     // WAI-ARIA radiogroup contract: arrow keys move the selection (+ focus).
     group.addEventListener("keydown", function (e) {
@@ -1190,17 +1208,25 @@ function _wireLauncherToggle() {
       }
       e.preventDefault();
       const back = e.key === "ArrowLeft" || e.key === "ArrowUp";
-      const next = back
-        ? _launcherKind === "interactive"
-          ? "coordinator"
-          : "interactive"
-        : _launcherKind === "coordinator"
-          ? "interactive"
-          : "coordinator";
+      const order = [
+        ["kind-coordinator", "coordinator"],
+        ["kind-interactive", "interactive"],
+        ["kind-dispatcher", "dispatcher"],
+      ].filter(function (pair) {
+        const el = document.getElementById(pair[0]);
+        return el && !el.hidden && el.style.display !== "none";
+      });
+      if (!order.length) return;
+      let at = order.findIndex(function (pair) {
+        return pair[1] === _launcherMode;
+      });
+      if (at < 0) at = 0;
+      const step = back ? -1 : 1;
+      const next = order[(at + step + order.length) % order.length][1];
       _setLauncherKind(next, true);
     });
   }
-  _setLauncherKind(_launcherKind); // seed the initial roving-tabindex state
+  _setLauncherKind(_launcherMode); // seed the initial roving-tabindex state
 }
 
 // POST /v1/api/cluster/workstreams/new — the console picks a node and PROXIES
@@ -1508,6 +1534,17 @@ function _populateHomePersonaDropdown() {
     choices.some(function (c) {
       return c.value === previous;
     });
+  const dispatcherAvailable = choices.some(function (c) {
+    return c.value === _DISPATCHER_PERSONA;
+  });
+  // Only offer the mode when the persona actually exists for this user —
+  // a button that silently starts an ordinary session would be a lie.
+  const dispBtn = document.getElementById("kind-dispatcher");
+  if (dispBtn) dispBtn.hidden = !dispatcherAvailable;
+  if (_launcherMode === "dispatcher" && dispatcherAvailable) {
+    _homeCoordComposer.setOptionValue("persona", _DISPATCHER_PERSONA);
+    return;
+  }
   if (stillValid) {
     _homeCoordComposer.setOptionValue("persona", previous);
   } else {
@@ -1794,6 +1831,10 @@ function _refreshHomeComposerVisibility() {
   const intBtn = document.getElementById("kind-interactive");
   if (coordBtn) coordBtn.style.display = canCoord ? "" : "none";
   if (intBtn) intBtn.style.display = canInt ? "" : "none";
+  // Dispatcher creates an interactive workstream, so it rides the same
+  // permission; persona availability is handled in the persona populate.
+  const dispToggle = document.getElementById("kind-dispatcher");
+  if (dispToggle) dispToggle.style.display = canInt ? "" : "none";
   // Hide the toggle when only one kind is available.
   const kinds = document.getElementById("launcher-kinds");
   if (kinds) kinds.style.display = canCoord && canInt ? "" : "none";
