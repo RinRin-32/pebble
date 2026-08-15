@@ -1937,6 +1937,7 @@ class SQLiteBackend:
                     kb_notes.c.summary,
                     kb_notes.c.tags,
                     kb_notes.c.repo_id,
+                    kb_notes.c.color,
                     kb_notes.c.updated,
                 ).order_by(kb_notes.c.title)
             ).fetchall()
@@ -1972,7 +1973,8 @@ class SQLiteBackend:
                 "summary": r[3],
                 "tags": r[4],
                 "repo_id": r[5],
-                "updated": r[6],
+                "color": r[6],
+                "updated": r[7],
                 "links_out": out_counts.get(r[0], 0),
                 "links_in": in_counts.get(r[1], 0),
             }
@@ -5797,13 +5799,31 @@ class SQLiteBackend:
             return result.rowcount > 0
 
     def delete_model_definition(self, definition_id: str) -> bool:
+        """Delete a model, and the per-user grants that pointed at it.
 
+        Without the cleanup the allow-list rows outlive the model, and the
+        "no explicit model, coerce to a permitted one" path can select an
+        alias the registry cannot build — which surfaces as a 503 naming a
+        model the user never chose.  The grant means nothing once the model is
+        gone, so it goes with it.
+        """
         with self._conn() as conn:
+            alias_row = conn.execute(
+                sa.select(model_definitions.c.alias).where(
+                    model_definitions.c.definition_id == definition_id
+                )
+            ).fetchone()
             result = conn.execute(
                 sa.delete(model_definitions).where(
                     model_definitions.c.definition_id == definition_id
                 )
             )
+            if alias_row and alias_row[0]:
+                conn.execute(
+                    sa.delete(user_allowed_models).where(
+                        user_allowed_models.c.alias == alias_row[0]
+                    )
+                )
             conn.commit()
             return result.rowcount > 0
 

@@ -38,9 +38,14 @@ from tests._session_helpers import make_session
 @pytest.fixture
 def session(tmp_db, mock_openai_client):
     """Small-window session: context_window=10_000, compact_max_tokens=100 so
-    the summary output reserve is tiny and the carry budget is easy to compute
-    (reserve=100, margin=500, spare=9_400, budget=min(2_500, 9_400)=2_500
-    tokens → 10_000 chars at the uncalibrated 4.0 chars/token)."""
+    the summary output reserve is tiny.
+
+    The carry budget is deliberately NOT asserted as a literal here. It nets
+    off the tool-definition overhead, and the real tool catalog is tens of
+    thousands of characters — so at this window size the budget tracks the
+    size of every shipped tool description, and editing one moves it. Tests
+    below size their fixtures off ``_carry_budget_chars`` for that reason.
+    """
     return make_session(
         client=mock_openai_client,
         context_window=10_000,
@@ -221,9 +226,17 @@ class TestCarryBudget:
 
 class TestContinuationHintCarry:
     def test_long_ask_crosses_verbatim(self, session):
-        """A 3_000-char user message is within the 10_000-char carry budget and
-        must cross whole — the old fixed clip kept 400 chars of it."""
-        ask = "spec line\n" * 300  # 3_000 chars
+        """A user message that fits the carry budget must cross whole — the
+        old fixed clip kept 400 chars of it however long the ask was.
+
+        Sized off the live budget rather than a literal: the budget nets off
+        tool-definition overhead, so a hardcoded length silently measures the
+        byte size of the whole tool catalog and fails when any unrelated tool
+        description grows.
+        """
+        lines = (session._carry_budget_chars(1) - 100) // 10
+        ask = "spec line\n" * lines
+        assert len(ask) > 400, "must outrun the old fixed clip to mean anything"
         session.messages = turns_from_dicts(
             [
                 {"role": "user", "content": ask},
@@ -241,7 +254,8 @@ class TestContinuationHintCarry:
     def test_oversize_ask_keeps_head_and_tail_with_marker(self, session):
         head_sentinel = "HEAD-OF-SPEC"
         tail_sentinel = "TAIL-OF-SPEC"
-        ask = head_sentinel + ("x" * 20_000) + tail_sentinel  # over the 10_000 budget
+        # Comfortably over the budget whatever the tool catalog does to it.
+        ask = head_sentinel + ("x" * (session._carry_budget_chars(1) * 4)) + tail_sentinel
         session.messages = turns_from_dicts(
             [
                 {"role": "user", "content": ask},

@@ -303,3 +303,51 @@ class TestReaping:
         workspace.ensure_mirror("repo1", str(origin))
         info = workspace.create_worktree("repo1", "wsmeta")
         assert workspace._repo_of_worktree(info.path) == "repo1"
+
+
+class TestActingUserCredential:
+    """Git runs as whoever asked for the work.
+
+    Cloning a private repo needs the same credential that pushes it. Until
+    this existed only the push path resolved one, so a user could link a
+    working token, watch publish_work use it, and still have bind_repo fail
+    with "could not read Username" on a repo that token can plainly see.
+    """
+
+    def test_no_user_falls_back_to_the_instance_env(self) -> None:
+        from pebble.core.workspace import _git_env, acting_user
+
+        with acting_user(""):
+            assert _git_env.get() is None  # _git() then uses git_env()
+
+    def test_context_is_reset_afterwards(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Leaking one caller's credential into the next operation would push
+        # with the wrong identity.
+        from pebble.core.workspace import _git_env, acting_user
+
+        class _Store:
+            def list_user_capabilities(self, user_id: str) -> list[str]:
+                return []
+
+            def get_user_git_credential(self, user_id: str) -> dict[str, object] | None:
+                return None
+
+        monkeypatch.setenv("PEBBLE_GIT_TOKEN", "instance-token")
+        with acting_user("u1", _Store()):
+            pass
+        assert _git_env.get() is None
+
+    def test_unresolvable_user_does_not_raise(self) -> None:
+        # A storage failure must not take down every git operation; it falls
+        # back to the instance credential.
+        from pebble.core.workspace import acting_user
+
+        class _Broken:
+            def get_user_git_credential(self, user_id: str) -> dict[str, object] | None:
+                raise RuntimeError("db down")
+
+            def list_user_capabilities(self, user_id: str) -> list[str]:
+                raise RuntimeError("db down")
+
+        with acting_user("u1", _Broken()):
+            pass  # no exception

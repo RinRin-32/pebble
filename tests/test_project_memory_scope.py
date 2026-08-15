@@ -219,14 +219,27 @@ class TestProjectDefaultSaveScope:
         s._project_writable = True
         assert s._default_memory_scope() == "project"
 
-    def test_read_only_project_keeps_kind_default(self) -> None:
+    def test_read_only_project_falls_back_to_the_user(self) -> None:
+        # Cannot write the project, so it falls through to the kind default —
+        # which for an authenticated interactive session is the person.
         s = _session(user_id="u1")
         s._project_id = "p1"
         s._project_writable = False
-        assert s._default_memory_scope() == "global"
+        assert s._default_memory_scope() == "user"
 
-    def test_no_project_keeps_kind_default(self) -> None:
-        assert _session(user_id="u1")._default_memory_scope() == "global"
+    def test_no_project_defaults_to_the_user_not_everyone(self) -> None:
+        # "global" is readable by EVERY session on the instance — under a
+        # Discord /global-link that is every member of the server. A fact
+        # learned working for one person should not become everyone's unless
+        # somebody says so.
+        assert _session(user_id="u1")._default_memory_scope() == "user"
+
+    def test_unauthenticated_session_still_defaults_to_global(self) -> None:
+        # No user to attach the memory to; the old behaviour is all that is
+        # left, and it is not a regression because nothing was scoped before.
+        s = _session(user_id="")
+        s._acting_user_id = ""
+        assert s._default_memory_scope() == "global"
 
     def test_coordinator_writable_project_is_default(self) -> None:
         s = _session(user_id="u1", kind=WorkstreamKind.COORDINATOR)

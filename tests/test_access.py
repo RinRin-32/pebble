@@ -138,3 +138,48 @@ class TestAccessStorage:
         assert backend.get_guild_persona("g1") == "scribe"
         backend.set_guild_persona("g1", None)
         assert backend.get_guild_persona("g1") is None
+
+
+class TestStaleAllowListEntries:
+    """A deleted model leaves its allow-list rows behind.
+
+    Observed in practice: a model was removed from the registry, the
+    per-user rows stayed, and the no-explicit-request fallback coerced to the
+    first alias alphabetically — a dead one. Session creation then failed with
+    a 503 naming a model the user had never selected.
+    """
+
+    class _Store:
+        def __init__(self, allowed: list[str]) -> None:
+            self._allowed = allowed
+
+        def list_user_allowed_models(self, user_id: str) -> list[str]:
+            return list(self._allowed)
+
+        def list_user_allowed_personas(self, user_id: str) -> list[str]:
+            return []
+
+    def test_coercion_skips_a_deleted_alias(self) -> None:
+        from pebble.core.access import resolve_allowed_model
+
+        store = self._Store(["aaa-deleted", "zzz-live"])
+        alias, err = resolve_allowed_model(store, "u1", "", "", known_aliases={"zzz-live"})
+        # Alphabetically "aaa-deleted" wins; it must not be chosen.
+        assert alias == "zzz-live" and err is None
+
+    def test_without_known_aliases_it_cannot_tell(self) -> None:
+        # Documents WHY the caller must pass the registry: with no knowledge
+        # of what exists, the dead alias is indistinguishable from a live one.
+        from pebble.core.access import resolve_allowed_model
+
+        alias, _err = resolve_allowed_model(self._Store(["aaa-deleted", "zzz-live"]), "u1", "", "")
+        assert alias == "aaa-deleted"
+
+    def test_all_entries_dead_fails_loudly(self) -> None:
+        from pebble.core.access import resolve_allowed_model
+
+        alias, err = resolve_allowed_model(
+            self._Store(["gone"]), "u1", "", "", known_aliases={"live"}
+        )
+        # Silently falling back to a forbidden model would be worse.
+        assert alias == "" and err

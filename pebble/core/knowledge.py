@@ -74,6 +74,8 @@ class Note:
     repo_id: str = ""
     links: list[str] = field(default_factory=list)
     path: str = ""
+    #: Optional display colour for the graph, "#rgb" or "#rrggbb".
+    color: str = ""
 
 
 def vault_root() -> Path:
@@ -174,6 +176,21 @@ def _yaml_scalar(value: str) -> str:
     return value
 
 
+_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def clean_color(value: str) -> str:
+    """Return *value* if it is a safe hex colour, else "".
+
+    Strict by construction: the colour is rendered into an SVG ``style``
+    attribute, and "escape it and hope" is the wrong posture for a value that
+    lands inside CSS. Anything that is not ``#rgb`` / ``#rrggbb`` is dropped
+    rather than sanitised into something almost-right.
+    """
+    v = (value or "").strip()
+    return v if _COLOR_RE.match(v) else ""
+
+
 def render_note(note: Note) -> str:
     """Serialize a note to frontmatter + markdown body."""
     lines = ["---", f"title: {_yaml_scalar(note.title)}", f"kind: {_yaml_scalar(note.kind)}"]
@@ -185,6 +202,8 @@ def render_note(note: Note) -> str:
         lines.append(f"ws_id: {_yaml_scalar(note.ws_id)}")
     if note.repo_id:
         lines.append(f"repo_id: {_yaml_scalar(note.repo_id)}")
+    if clean_color(note.color):
+        lines.append(f"color: {_yaml_scalar(clean_color(note.color))}")
     lines.append(f"updated: {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}")
     lines.append("---")
     lines.append("")
@@ -224,6 +243,7 @@ def parse_note(text: str, *, fallback_title: str = "") -> Note:
         tags=tags,
         ws_id=meta.get("ws_id", ""),
         repo_id=meta.get("repo_id", ""),
+        color=clean_color(meta.get("color", "")),
         links=extract_links(body),
     )
 
@@ -601,6 +621,7 @@ def sync_index(storage: object) -> int:
             "tags": json.dumps(n.tags),
             "ws_id": n.ws_id,
             "repo_id": n.repo_id,
+            "color": clean_color(n.color),
             "created": now,
             "updated": now,
         }

@@ -29,9 +29,11 @@ import re
 import shutil
 import subprocess
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pebble.core.git_identity import git_env
 from pebble.core.log import get_logger
@@ -83,6 +85,52 @@ def worktree_path(ws_id: str) -> Path:
     return workspace_root() / "ws" / _validate("ws_id", ws_id)
 
 
+#: The credential every git command in this context should use.
+#:
+#: Cloning a private repo needs the SAME credential that pushes it, and until
+#: now only the push path resolved one — a user could link a working token,
+#: watch ``publish_work`` use it, and still have ``bind_repo`` fail with
+#: "could not read Username" on the repo that token can plainly see.
+#:
+#: Carried in a ContextVar rather than threaded through every signature: git
+#: runs from deep inside worktree/mirror helpers that have no business
+#: knowing about users, and the alternative is a user_id argument on a dozen
+#: functions that would only pass it along.
+_git_env: ContextVar[dict[str, str] | None] = ContextVar("workspace_git_env", default=None)
+
+
+@contextmanager
+def acting_user(user_id: str, storage: Any = None) -> Iterator[None]:
+    """Run git in this block as *user_id*.
+
+    The credential is resolved ONCE on entry: ``_git`` is called for status and
+    diff as well as fetch, and a database read plus a decrypt per invocation
+    would be paid on operations that never touch a remote.
+    """
+    env: dict[str, str] | None = None
+    if user_id:
+        try:
+            from pebble.core.access import can_use_instance_push
+            from pebble.core.git_identity import env_for_credential, resolve_for_user
+
+            if storage is None:
+                from pebble.core.storage._registry import get_storage
+
+                storage = get_storage()
+            cred = resolve_for_user(
+                storage, user_id, may_use_instance=can_use_instance_push(storage, user_id)
+            )
+            if cred.ok:
+                env = env_for_credential(cred)
+        except Exception:
+            log.debug("workspace.credential_resolve_failed", exc_info=True)
+    token = _git_env.set(env)
+    try:
+        yield
+    finally:
+        _git_env.reset(token)
+
+
 def _git(*args: str, cwd: Path | None = None, timeout: int = _GIT_TIMEOUT) -> str:
     """Run git with an argument list, raising :class:`WorkspaceError` on failure."""
     cmd = ["git", *args]
@@ -98,7 +146,7 @@ def _git(*args: str, cwd: Path | None = None, timeout: int = _GIT_TIMEOUT) -> st
             # stays disabled either way: with a token the askpass helper
             # answers, without one git must fail fast rather than hang the
             # tool call on a prompt nobody can see.
-            env=git_env(),
+            env=_git_env.get() or git_env(),
         )
     except subprocess.TimeoutExpired as exc:
         raise WorkspaceError(f"git {args[0]} timed out after {timeout}s") from exc
