@@ -52,6 +52,22 @@ MAX_ANSWER_CHARS = 6000
 MAX_CONTEXT_CHARS = 8000
 MAX_QUESTIONS = 3
 
+#: Floors below which a model reply is treated as truncated rather than short.
+#: A question set has to be at least a sentence, and a note that fits in a
+#: tweet is not worth filing.  Both are well under any genuine reply, so they
+#: catch provider truncation without rejecting a terse-but-real one.
+MIN_QUESTION_CHARS = 40
+MIN_NOTE_CHARS = 120
+
+#: Output allowance per call.  Sized for a REASONING reviewer, where thinking
+#: is billed against the same ceiling as the answer: at 1_200 tokens, four of
+#: eight calls on this module's prompt stopped on ``length`` and the replies
+#: that survived were fragments.  At 4_000, none of six truncated, and the
+#: questions themselves only ever run 400-650 chars — the headroom is entirely
+#: for reasoning, so trimming this to "what the answer needs" reopens the bug.
+QUESTION_TOKENS = 4000
+NOTE_TOKENS = 6000
+
 #: How much prior knowledge to put in front of the interviewer.
 MAX_PRIOR_NOTES = 6
 
@@ -167,7 +183,10 @@ def _ask_model(
     turns: list[Turn],
     *,
     attempts: int = 2,
-    max_tokens: int = 1200,
+    max_tokens: int = QUESTION_TOKENS,
+    min_chars: int = 0,
+    sentinel: str = "",
+    require: str = "",
 ) -> tuple[str, str]:
     """One call to the reviewer model, as ``(text, error)``.
 
@@ -176,6 +195,30 @@ def _ask_model(
     retrying.  Collapsing both into one message sent a debugging session after
     configuration that was correct the whole time — the first call after a
     restart had simply failed.
+
+    A reply is rejected when it stops on ``length`` or falls under
+    ``min_chars``, because both mean the same thing: the model ran out of
+    room before it finished saying anything usable.  Measured against
+    deepseek-v4-pro on this module's own prompt, four of eight calls at 1_200
+    tokens stopped on ``length``, two of them returning NO content and two
+    returning fragments (85 and 189 chars — one arrived as literally
+    ``"1. What test"``).  Accepting that asks the engineer half a question,
+    then distils a note from the answer to it.
+
+    ``sentinel`` exempts a protocol word from the length floor, so a
+    deliberately terse control reply (``ENOUGH``) is not mistaken for a
+    truncated one and retried into a fresh round of questions.
+
+    ``require`` is a marker the reply must contain to count as an answer —
+    the write step asks for ``TITLE:``.  A model handed a finished transcript
+    sometimes replies ABOUT the debrief instead of producing the note, and
+    that reply is fluent, long, and passes every other check.
+
+    When every attempt truncates, the longest reply that still clears
+    ``min_chars`` is returned rather than an error: a cut-off note beats no
+    note, and this module's whole contract is that a debrief ends in writing.
+    A reply that never produced ``require`` is not eligible — it is not a
+    short note, it is not a note.
     """
     alias = _reviewer_alias(config_store)
     if not alias:
@@ -201,15 +244,31 @@ def _ask_model(
         # and prompt returns content on one call and nothing on the next, and
         # an interview that dies on a blank response wastes the round trip
         # AND the operator's attention on something a retry fixes.
+        best = ""
         for attempt in range(max(1, attempts)):
             result = model_turn(lane, turns, max_tokens=max_tokens)
             text = (result.content or "").strip()
-            if text:
+            cut = getattr(result, "finish_reason", "") == "length"
+            if text and (sentinel and sentinel in text.upper()[:40]):
                 return text, ""
+            usable = bool(text) and (not require or require in text)
+            if usable and not cut and len(text) >= min_chars:
+                return text, ""
+            if usable and len(text) > len(best) and len(text) >= min_chars:
+                best = text
             if attempt + 1 < attempts:
-                log.info("interview.empty_reply_retrying", alias=alias, attempt=attempt + 1)
+                log.info(
+                    "interview.thin_reply_retrying",
+                    alias=alias,
+                    attempt=attempt + 1,
+                    chars=len(text),
+                    truncated=cut,
+                )
                 time.sleep(1.0 * (attempt + 1))
-        return "", f"{alias} returned nothing after {attempts} attempts"
+        if best:
+            log.warning("interview.using_truncated_reply", alias=alias, chars=len(best))
+            return best, ""
+        return "", f"{alias} returned nothing usable after {attempts} attempts"
     except Exception as exc:
         log.warning("interview.model_call_failed", exc_info=True)
         return "", f"{alias} call failed: {type(exc).__name__}: {exc}"[:200]
@@ -257,7 +316,10 @@ def start(
     )
     transcript = [{"role": "user", "content": opening}]
     reply, err = _ask_model(
-        config_store, storage, _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript)
+        config_store,
+        storage,
+        _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript),
+        min_chars=MIN_QUESTION_CHARS,
     )
     if not reply:
         return {
@@ -309,7 +371,11 @@ def answer(
         return _write_note(storage, config_store, row, transcript, rounds, truncated)
 
     reply, _err = _ask_model(
-        config_store, storage, _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript)
+        config_store,
+        storage,
+        _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript),
+        min_chars=MIN_QUESTION_CHARS,
+        sentinel="ENOUGH",
     )
     if not reply:
         # Questioning failed; go straight to writing rather than stranding an
@@ -339,15 +405,23 @@ def _write_note(
     truncated: bool,
 ) -> dict[str, Any]:
     """Distil the debrief into a note and file it in the vault."""
+    # The instruction is repeated as a final USER turn, not left in the system
+    # prompt alone.  Swapping the system prompt under a transcript that ends
+    # mid-conversation got a conversational reply instead of a note — an
+    # actual filed note read "The conversation appears complete. ... let me
+    # know."  The model answers the last thing it was asked, so the last thing
+    # it is asked has to be the write instruction.
     text, err = _ask_model(
         config_store,
         storage,
-        _turns(_WRITE, transcript),
+        _turns(_WRITE, [*transcript, {"role": "user", "content": _WRITE}]),
         # The last call is the one that must not be lost: everything said so
         # far is only worth something if a note comes out of it.  A note also
         # needs more room than a couple of questions.
         attempts=4,
-        max_tokens=2400,
+        max_tokens=NOTE_TOKENS,
+        min_chars=MIN_NOTE_CHARS,
+        require="TITLE:",
     )
     if not text:
         storage.update_interview(

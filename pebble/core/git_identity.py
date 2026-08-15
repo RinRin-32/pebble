@@ -60,8 +60,24 @@ _ASKPASS_SCRIPT = """#!/bin/sh
 # the prompt would also match "github.com.evil.net", which is a lookalike
 # domain away from handing the token to an attacker.  So the authority is
 # parsed out and compared whole.
+#
+# The scheme is checked BEFORE the host, and only https passes.  The host
+# parse below starts by discarding the scheme, so without this the right host
+# over plaintext -- http://github.com, or git:// -- was answered with the
+# token, putting a PAT on the wire in the clear.  A remote URL is attacker-
+# reachable input: bind_repo takes one.
+#
+# The scheme is cut from the FIRST "://", the same one the host parse uses,
+# so the two cannot disagree.  A substring test for "https://" anywhere in
+# the prompt would pass for http://host/x?y=https:// while the host parse
+# read the http authority -- checking a different URL from the one being
+# answered is how this class of bug survives review.
 host="${PEBBLE_GIT_HOST}"
 [ -n "$host" ] || exit 1
+
+scheme="${1%%://*}"      # everything before the first "://"
+scheme="${scheme##*\\'}"  # drop the prompt text up to the opening quote
+[ "$scheme" = "https" ] || exit 1
 
 url="${1#*://}"      # drop scheme and everything before it
 url="${url%%\\'*}"    # drop the closing quote and trailing prompt text

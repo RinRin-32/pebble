@@ -137,6 +137,48 @@ class TestHostScoping:
         assert proc.returncode != 0 and _TOKEN not in (proc.stdout or "")
 
 
+class TestAskpassScheme:
+    """Only https gets the token — the right host over the wrong scheme is
+    still the token on the wire in the clear.
+
+    Found by debriefing pebble about this very module: the host tests all
+    held the scheme at https while varying the host, so every one of them
+    passed against a helper that answered ``http://github.com``. bind_repo
+    accepts a URL, so the scheme is caller-supplied input.
+    """
+
+    def _ask(self, monkeypatch: pytest.MonkeyPatch, prompt: str) -> tuple[int, str]:
+        env = _env(monkeypatch)
+        path = gi._askpass_path()
+        assert path is not None
+        proc = subprocess.run(  # noqa: S603 - fixed path, list args, no shell
+            [path, prompt], capture_output=True, text=True, env=env
+        )
+        return proc.returncode, (proc.stdout or "").strip()
+
+    @pytest.mark.parametrize(  # type: ignore[misc]
+        "prompt",
+        [
+            "Password for 'http://x-access-token@github.com': ",  # plaintext
+            "Password for 'git://github.com': ",
+            "Password for 'ftp://github.com': ",
+            # The scheme is read from the FIRST "://" — the same one the host
+            # parse uses. A substring test for "https://" anywhere would pass
+            # this while the host parse read the http authority.
+            "Password for 'http://github.com/x?y='https://github.com': ",
+        ],
+    )
+    def test_non_https_gets_nothing(self, monkeypatch: pytest.MonkeyPatch, prompt: str) -> None:
+        code, out = self._ask(monkeypatch, prompt)
+        assert code != 0
+        assert _TOKEN not in out
+
+    def test_https_still_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The guard must not cost the ordinary case.
+        code, out = self._ask(monkeypatch, "Password for 'https://x-access-token@github.com': ")
+        assert code == 0 and out == _TOKEN
+
+
 class TestRedaction:
     def test_token_is_scrubbed_from_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _env(monkeypatch)
