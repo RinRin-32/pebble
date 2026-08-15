@@ -120,18 +120,39 @@ def build_server() -> Any:
             "Search the pebble knowledge vault. Returns matching notes with their "
             "kind, repo, tags and summary — read the full text with kb_read. The "
             "vault holds findings recorded by coding agents and by other sessions, "
-            "so search here before re-deriving something."
+            "so search here before re-deriving something. Pass repo to scope the "
+            "search to one codebase; the vault spans several, and without it you "
+            "get ranked hits from projects you are not working on. Use kb_repos "
+            "to see which codebases have notes."
         )
     )
-    def kb_search(query: str, limit: int = 10) -> dict[str, Any]:
+    def kb_search(query: str, limit: int = 10, repo: str = "") -> dict[str, Any]:
         from pebble.core.knowledge import search_notes
 
         n = max(1, min(int(limit or 10), _MAX_RESULTS))
-        hits = search_notes(query, limit=n)
+        hits = search_notes(query, limit=n, repo=repo or "")
         return {
             "query": query,
+            "repo": repo or "",
             "count": len(hits),
             "results": [{**_note_summary(note), "score": score} for note, score in hits],
+        }
+
+    @mcp.tool(
+        description=(
+            "List the codebases the pebble vault holds notes about, with counts. "
+            "Ask this first when you arrive on a machine or a project: it answers "
+            "'what does pebble already know?' before you spend effort re-deriving "
+            "something that is already written down."
+        )
+    )
+    def kb_repos() -> dict[str, Any]:
+        from pebble.core.knowledge import repos
+
+        found = repos()
+        return {
+            "count": len(found),
+            "repos": [{"repo": name, "notes": n} for name, n in found],
         }
 
     @mcp.tool(

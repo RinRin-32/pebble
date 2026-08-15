@@ -2170,16 +2170,49 @@ class TestTCPProbe:
 
         asyncio.run(_run())
 
-    def test_tcp_probe_default_port_http(self):
-        """Default port 80 used for http:// URLs without explicit port."""
+    def test_tcp_probe_default_port_http(self, monkeypatch):
+        """Default port 80 used for http:// URLs without explicit port.
+
+        Asserts the port that was *chosen*, rather than inferring it from a
+        connection failure. The old version connected to 127.0.0.1:80 and
+        expected ConnectionError, which made it a test of the developer's
+        machine: anyone running a local web server saw it fail, while CI —
+        where nothing listens on 80 — passed. The behaviour under test is the
+        scheme-to-port default, so that is what is checked.
+        """
         mgr = MCPClientManager({})
+        seen: list[tuple[str, int]] = []
+
+        async def fake_open_connection(host, port):
+            seen.append((host, port))
+            raise OSError("refused")
+
+        monkeypatch.setattr(asyncio, "open_connection", fake_open_connection)
 
         async def _run():
-            # Will fail (nothing on port 80), but should not crash on parsing
             with pytest.raises(ConnectionError):
                 await mgr._tcp_probe("srv", "http://127.0.0.1")
 
         asyncio.run(_run())
+        assert seen == [("127.0.0.1", 80)]
+
+    def test_tcp_probe_default_port_https(self, monkeypatch):
+        """https:// with no explicit port defaults to 443, not 80."""
+        mgr = MCPClientManager({})
+        seen: list[tuple[str, int]] = []
+
+        async def fake_open_connection(host, port):
+            seen.append((host, port))
+            raise OSError("refused")
+
+        monkeypatch.setattr(asyncio, "open_connection", fake_open_connection)
+
+        async def _run():
+            with pytest.raises(ConnectionError):
+                await mgr._tcp_probe("srv", "https://127.0.0.1")
+
+        asyncio.run(_run())
+        assert seen == [("127.0.0.1", 443)]
 
     def test_tcp_probe_dns_failure(self):
         """Unresolvable hostname raises ConnectionError."""

@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from pebble.core import kb_mcp
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
@@ -188,3 +190,45 @@ class TestUserScope:
         # Leaking one request's identity into the next would misattribute
         # every note written after it.
         assert kb_mcp.current_user() == ""
+
+
+class TestRepoScoping:
+    """The vault spans codebases as soon as anything writes to it remotely."""
+
+    def _two_repos(self) -> None:
+        _call("kb_write", {"title": "Alpha build", "body": "build notes", "repo": "alpha"})
+        _call("kb_write", {"title": "Beta build", "body": "build notes", "repo": "beta"})
+
+    def test_search_without_repo_spans_everything(self, vault: Path) -> None:
+        self._two_repos()
+        hits = _call("kb_search", {"query": "build"})
+        assert {r["repo"] for r in hits["results"]} == {"alpha", "beta"}
+
+    def test_search_scoped_to_one_repo(self, vault: Path) -> None:
+        # Without this a session working on one project gets ranked hits from
+        # every other one, and the noise grows with the vault's usefulness.
+        self._two_repos()
+        hits = _call("kb_search", {"query": "build", "repo": "alpha"})
+        assert hits["count"] == 1
+        assert hits["results"][0]["repo"] == "alpha"
+
+    def test_repo_match_is_case_insensitive(self, vault: Path) -> None:
+        self._two_repos()
+        assert _call("kb_search", {"query": "build", "repo": "ALPHA"})["count"] == 1
+
+    def test_unknown_repo_returns_nothing_rather_than_everything(self, vault: Path) -> None:
+        # Failing open here would silently hand back another project's notes.
+        self._two_repos()
+        assert _call("kb_search", {"query": "build", "repo": "nonexistent"})["count"] == 0
+
+    def test_repos_lists_what_the_vault_knows(self, vault: Path) -> None:
+        self._two_repos()
+        _call("kb_write", {"title": "Extra alpha", "body": "x", "repo": "alpha"})
+        out = _call("kb_repos", {})
+        assert out["count"] == 2
+        # Most-noted first, so "what do you know most about" reads off the top.
+        assert out["repos"][0] == {"repo": "alpha", "notes": 2}
+
+    def test_untagged_notes_are_not_a_repo(self, vault: Path) -> None:
+        _call("kb_write", {"title": "Loose thought", "body": "no repo"})
+        assert _call("kb_repos", {})["count"] == 0
