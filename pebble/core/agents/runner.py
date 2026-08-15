@@ -27,6 +27,7 @@ from pebble.core.agents.base import (
     AgentEvent,
     AgentResult,
 )
+from pebble.core.git_identity import agent_env
 from pebble.core.log import get_logger
 
 if TYPE_CHECKING:
@@ -103,6 +104,9 @@ def run_agent(
         cmd = wrap_command(cmd, wrap)
     child_env = {**(env or os.environ.copy()), **adapter.env_overrides()}
     child_env["PATH"] = _normalized_path(child_env.get("PATH", ""))
+    # Git identity + credentials, so an agent can commit with a bot author and
+    # push/open a PR without the operator's personal login being mounted in.
+    child_env = agent_env(child_env)
     # An empty ANTHROPIC_API_KEY is worse than an absent one: it can be read as
     # "use key auth" and shadow the OAuth login a subscription relies on.
     if not (child_env.get("ANTHROPIC_API_KEY") or "").strip():

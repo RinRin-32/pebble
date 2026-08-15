@@ -3733,3 +3733,146 @@ h3.skill-spec-heading {
 #pr-tools-picker {
   margin: 2px 0 6px;
 }
+
+/* ---------------------------------------------------------------------------
+   Admin: Coding Jobs + Knowledge panels
+   Lives here rather than inline in index.html — that document links its CSS and
+   has no <style> block, so an inline insertion has nowhere valid to land.
+   --------------------------------------------------------------------------- */
+.admin-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.stat-chip {
+  background: var(--surface-2, #1c2024);
+  border: 1px solid var(--border, #333a42);
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+.stat-chip b {
+  font-variant-numeric: tabular-nums;
+}
+.job-state {
+  font-size: 0.8rem;
+}
+.job-state--active {
+  color: #4ade80;
+}
+.job-state--attention {
+  color: #fbbf24;
+  font-weight: 600;
+}
+.kb-frontier {
+  border-left: 3px solid #fbbf24;
+  padding: 0.5rem 0.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  background: var(--surface-2, #1c2024);
+  border-radius: 0 0.3rem 0.3rem 0;
+}
+.ua-hint {
+  color: var(--muted, #9aa3ad);
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.ua-hint code {
+  font-size: 0.95em;
+}
+
+/* Knowledge graph (admin > Agents > Knowledge).
+   Colours come from the console's own tokens so the graph tracks the theme;
+   only the frontier accent is a literal, because "named but not yet written"
+   is the one thing in this picture that has to stand out. */
+.kb-graph {
+  background: var(--surface-2, #1c2024);
+  border: 1px solid var(--border, #333a42);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.25rem 0.35rem;
+  margin: 0 0 0.75rem;
+}
+.kb-graph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.kb-edge {
+  stroke: var(--border, #333a42);
+  stroke-width: 1.2;
+}
+.kb-edge--frontier {
+  stroke: #fbbf24;
+  stroke-dasharray: 5 4;
+  opacity: 0.75;
+}
+.kb-node circle {
+  fill: var(--accent, #e8853a);
+  stroke: var(--surface-2, #1c2024);
+  stroke-width: 1.5;
+}
+.kb-node text {
+  fill: var(--muted, #9aa3ad);
+  font-size: 10.5px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.kb-node--frontier circle {
+  fill: none;
+  stroke: #fbbf24;
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+}
+.kb-node--frontier text {
+  fill: #fbbf24;
+}
+.kb-node--orphan circle {
+  fill: none;
+  stroke: var(--muted, #9aa3ad);
+  stroke-width: 1.4;
+}
+.kb-node:hover circle {
+  stroke: var(--fg, #e8eaed);
+}
+.kb-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: center;
+  padding: 0.35rem 0.6rem 0.1rem;
+  font-size: 0.75rem;
+  color: var(--muted, #9aa3ad);
+}
+.kb-graph-legend i.kb-swatch {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  background: var(--accent, #e8853a);
+}
+.kb-swatch--frontier {
+  background: none;
+  border: 1.5px dashed #fbbf24;
+}
+.kb-swatch--orphan {
+  background: none;
+  border: 1.5px solid var(--muted, #9aa3ad);
+}
+.kb-graph-note {
+  margin-left: auto;
+  font-style: italic;
+}
+
+/* Column templates for the Agents panels.  .admin-row is display:grid with the
+   columns set per panel — without a rule here the grid falls back to a single
+   implicit column and every cell stacks vertically, which is what these two
+   panels were doing. */
+#admin-coding-jobs .admin-row {
+  grid-template-columns: 1.4fr 1fr 1fr 110px 110px 90px;
+}
+#admin-knowledge .admin-row {
+  grid-template-columns: 1.4fr 100px 1fr 130px 1.6fr;
+}

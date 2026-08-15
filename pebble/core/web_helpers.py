@@ -9,6 +9,8 @@ import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from starlette.middleware import Middleware
     from starlette.requests import Request
     from starlette.responses import JSONResponse
@@ -463,16 +465,43 @@ _ASSET_RE = re.compile(
 )
 
 
-def version_html(html: str) -> str:
-    """Inject ``?v=VERSION`` into ``/static/`` and ``/shared/`` asset URLs.
+def version_html(
+    html: str,
+    *,
+    static_dir: Path | None = None,
+    shared_dir: Path | None = None,
+) -> str:
+    """Inject a cache-busting ``?v=`` into ``/static/`` and ``/shared/`` URLs.
 
-    Vendored libraries with version-bearing directory names are skipped.
-    URLs that already contain a query string are left unchanged.
-    Called once at startup when loading HTML into memory.
+    The stamp is the release version plus a short digest of the asset's own
+    mtime, so editing a file changes its URL.  Versioning on the release alone
+    is not enough: within a release — every development rebuild, and any patch
+    that ships an asset fix without bumping the version — the URL stays
+    identical and a browser keeps serving the copy it already has.  That is a
+    silent failure: the deploy succeeds, the server has the new file, and the
+    user still sees the old one.
+
+    When the directories are not supplied, or a file cannot be stat'd, this
+    falls back to the bare release version — the previous behaviour, which is
+    correct-if-coarse rather than wrong.
+
+    Vendored libraries with version-bearing directory names are skipped, as are
+    URLs that already carry a query string.  Called once at startup.
     """
     from pebble import __version__
 
+    roots = {"/static/": static_dir, "/shared/": shared_dir}
+
     def _repl(m: re.Match[str]) -> str:
-        return f'{m.group("attr")}{m.group("path")}{m.group("file")}?v={__version__}"'
+        path, file = m.group("path"), m.group("file")
+        stamp = __version__
+        root = roots.get(path)
+        if root is not None:
+            try:
+                mtime = (root / file).stat().st_mtime_ns
+                stamp = f"{__version__}-{mtime & 0xFFFFFFF:x}"
+            except OSError:
+                pass
+        return f'{m.group("attr")}{path}{file}?v={stamp}"'
 
     return _ASSET_RE.sub(_repl, html)

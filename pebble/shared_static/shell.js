@@ -56,7 +56,7 @@ function buildShell(caps) {
   home.type = "button";
   home.setAttribute("aria-label", "Home (cluster landing)");
   home.append(make("div", "brand-mark"));
-  home.append(make("span", "brand-name", "turnstone"));
+  home.append(make("span", "brand-name", "pebble"));
   home.append(make("span", "brand-sub", caps.brandSub || "console"));
   home.addEventListener("click", () => {
     if (typeof window.showHome === "function") window.showHome();

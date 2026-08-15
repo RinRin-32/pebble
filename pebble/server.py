@@ -117,7 +117,11 @@ log = get_logger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "ui" / "static"
 _SHARED_DIR = Path(__file__).parent / "shared_static"
-_HTML = _version_html((_STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+_HTML = _version_html(
+    (_STATIC_DIR / "index.html").read_text(encoding="utf-8"),
+    static_dir=_STATIC_DIR,
+    shared_dir=_SHARED_DIR,
+)
 _HTML_ETAG = '"' + hashlib.md5(_HTML.encode()).hexdigest()[:16] + '"'  # noqa: S324
 _VALID_WS_ID = re.compile(r"^[0-9a-f]{32}$")
 

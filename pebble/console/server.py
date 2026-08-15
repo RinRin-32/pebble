@@ -123,7 +123,11 @@ def _load_static() -> None:
     from pebble.core.web_helpers import version_html
 
     global _HTML, _HTML_ETAG
-    _HTML = version_html((_STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+    _HTML = version_html(
+        (_STATIC_DIR / "index.html").read_text(encoding="utf-8"),
+        static_dir=_STATIC_DIR,
+        shared_dir=_SHARED_DIR,
+    )
     _HTML_ETAG = '"' + hashlib.md5(_HTML.encode()).hexdigest()[:16] + '"'  # noqa: S324
 
 
