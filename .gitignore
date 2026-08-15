@@ -19,6 +19,11 @@ docker-compose.override.yml
 .ruff_cache/
 .pytest_cache/
 *.db
+# SQLite writes these alongside the database; *.db alone does not cover them,
+# which is how two of them nearly landed in a commit.
+*.db-shm
+*.db-wal
+*.db-journal
 .plan.md
 .plan-*.md
 .hypothesis/

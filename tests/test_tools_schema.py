@@ -61,8 +61,10 @@ class TestToolsMetadata:
 
     def test_tool_count(self):
         # Grew with the coding-dispatch tools (bind_repo, setup_env,
-        # dispatch_agent), the knowledge base (kb) and tts.
-        assert len(TOOLS) == 36
+        # dispatch_agent), the knowledge base (kb), tts, and publish_work —
+        # the step that gets a dispatch's diff out of the worktree and onto a
+        # branch or a pull request.
+        assert len(TOOLS) == 37
 
     def test_task_agent_tools_count(self):
         assert len(TASK_AGENT_TOOLS) == 15
@@ -162,6 +164,7 @@ class TestToolsMetadata:
             "bind_repo": "repo",
             "setup_env": "action",
             "dispatch_agent": "task",
+            "publish_work": "action",
         }
         assert expected == PRIMARY_KEY_MAP
 
