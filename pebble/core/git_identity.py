@@ -84,9 +84,7 @@ def git_token() -> str:
     systems and the GitHub CLI already use; an operator who exported it should
     not have to learn a second one.
     """
-    return (
-        os.environ.get("PEBBLE_GIT_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
-    ).strip()
+    return (os.environ.get("PEBBLE_GIT_TOKEN") or os.environ.get("GITHUB_TOKEN") or "").strip()
 
 
 def git_host() -> str:

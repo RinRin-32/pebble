@@ -48,9 +48,7 @@ class TestIdentity:
 
 
 class TestCredentials:
-    def test_no_token_means_no_askpass_and_fail_fast(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_token_means_no_askpass_and_fail_fast(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("PEBBLE_GIT_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         env = gi.git_env()
@@ -60,9 +58,7 @@ class TestCredentials:
         # prompt nobody can answer.
         assert env["GIT_TERMINAL_PROMPT"] == "0"
 
-    def test_github_token_is_accepted_as_a_fallback(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_github_token_is_accepted_as_a_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("PEBBLE_GIT_TOKEN", raising=False)
         monkeypatch.setenv("GITHUB_TOKEN", _TOKEN)
         assert gi.git_token() == _TOKEN
@@ -73,9 +69,7 @@ class TestCredentials:
         _env(monkeypatch)
         assert gi.agent_env()["GH_TOKEN"] == _TOKEN
 
-    def test_token_never_lands_in_the_askpass_file(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_token_never_lands_in_the_askpass_file(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # The helper reads the token from the environment when git calls it;
         # writing it into the script would put a secret on disk.
         _env(monkeypatch)
@@ -102,9 +96,7 @@ class TestHostScoping:
         return proc.returncode, (proc.stdout or "").strip()
 
     def test_configured_host_gets_the_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        code, out = self._ask(
-            monkeypatch, "Password for 'https://x-access-token@github.com': "
-        )
+        code, out = self._ask(monkeypatch, "Password for 'https://x-access-token@github.com': ")
         assert code == 0 and out == _TOKEN
 
     def test_username_prompt_gets_the_placeholder_not_the_token(
@@ -126,9 +118,7 @@ class TestHostScoping:
             "Password for 'https://evil.net/github.com': ",  # host in the path
         ],
     )
-    def test_other_hosts_get_nothing(
-        self, monkeypatch: pytest.MonkeyPatch, prompt: str
-    ) -> None:
+    def test_other_hosts_get_nothing(self, monkeypatch: pytest.MonkeyPatch, prompt: str) -> None:
         code, out = self._ask(monkeypatch, prompt)
         assert code != 0
         assert _TOKEN not in out
