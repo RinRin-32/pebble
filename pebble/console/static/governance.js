@@ -888,6 +888,9 @@ function showUserAccessModal(userId) {
     authFetch("/v1/api/admin/users/" + userId + "/capabilities").then(function (r) {
       return r.json();
     }),
+    authFetch("/v1/api/admin/users/" + userId + "/git").then(function (r) {
+      return r.json();
+    }),
   ])
     .then(function (results) {
       const allowedModels = {};
@@ -948,6 +951,41 @@ function showUserAccessModal(userId) {
         }
         setSafeHtml(capsEl, capHtml);
       }
+
+      const gitEl = document.getElementById("ua-git");
+      if (gitEl) {
+        const g = results[3] || {};
+        let gitHtml = "";
+        if (!g.storage_ready) {
+          // Say this up front rather than at submit time: without a key the
+          // token cannot be stored at all.
+          gitHtml +=
+            '<div class="ua-hint">Cannot store tokens \u2014 set ' +
+            "<code>PEBBLE_SECRET_KEY</code> in the server environment first.</div>";
+        }
+        gitHtml += g.linked
+          ? '<div class="ua-git-state">Linked' +
+            (g.login ? " as <b>" + escapeHtml(g.login) + "</b>" : "") +
+            " on " + escapeHtml(g.host || "github.com") +
+            (g.hint ? ' <span class="ua-hint">(ending ' + escapeHtml(g.hint) + ")</span>" : "") +
+            ' <button type="button" class="sh-btn sh-btn--danger" id="ua-git-unlink">Unlink</button></div>'
+          : '<div class="ua-git-state">No token linked \u2014 this user falls back to the ' +
+            "instance token, which needs the push capability above.</div>";
+        setSafeHtml(gitEl, gitHtml);
+        const unlink = document.getElementById("ua-git-unlink");
+        if (unlink) {
+          unlink.addEventListener("click", function () {
+            authFetch("/v1/api/admin/users/" + userId + "/git", { method: "DELETE" })
+              .then(function () {
+                showToast("Git token unlinked");
+                showUserAccessModal(userId);
+              })
+              .catch(function () {
+                showToast("Could not unlink");
+              });
+          });
+        }
+      }
     })
     .catch(function () {
       setSafeHtml(
@@ -980,6 +1018,9 @@ function submitUserAccess() {
   window.TurnstoneHatch.setBusy(shelf, true);
   const models = _uaCollect("ua-model");
   const personas = _uaCollect("ua-persona");
+  const tokenField = document.getElementById("ua-git-token");
+  const gitToken = tokenField ? tokenField.value.trim() : "";
+  if (tokenField) tokenField.value = "";
   Promise.all([
     authFetch("/v1/api/admin/users/" + userId + "/models", {
       method: "PUT",
@@ -996,7 +1037,20 @@ function submitUserAccess() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ capabilities: _uaCollect("ua-capability") }),
     }),
-  ])
+  ]
+    .concat(
+      // Only sent when the field was filled: a blank box means "keep the
+      // token you already have", not "clear it".
+      gitToken
+        ? [
+            authFetch("/v1/api/admin/users/" + userId + "/git", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: gitToken }),
+            }),
+          ]
+        : [],
+    ))
     .then(function (rs) {
       for (let i = 0; i < rs.length; i++) {
         if (!rs[i].ok) throw new Error("save failed");

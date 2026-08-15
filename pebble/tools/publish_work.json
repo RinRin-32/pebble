@@ -1,0 +1,44 @@
+{
+  "name": "publish_work",
+  "description": "Publish this workstream's worktree changes: commit them, push the branch, and optionally open a pull request. Use after dispatch_agent has produced a diff you are satisfied with — this is how work leaves the worktree and becomes reviewable. Never pushes to the default branch; it pushes the workstream's own branch and opens a PR against the default. Actions: 'status' (what is pending, which credential would be used — read-only), 'push' (commit and push the branch), 'pr' (commit, push, and open a pull request).",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "What to do. 'status' is read-only and safe to call first.",
+        "enum": [
+          "status",
+          "push",
+          "pr"
+        ],
+        "default": "status"
+      },
+      "message": {
+        "type": "string",
+        "description": "Commit message. Required for 'push' and 'pr' when there are uncommitted changes. Write it as a real commit message: what changed and why.",
+        "default": ""
+      },
+      "title": {
+        "type": "string",
+        "description": "Pull request title. Defaults to the commit message's first line.",
+        "default": ""
+      },
+      "body": {
+        "type": "string",
+        "description": "Pull request body. Say what was changed, how it was verified, and anything you are unsure about.",
+        "default": ""
+      },
+      "base": {
+        "type": "string",
+        "description": "Branch to open the pull request against. Defaults to the repository's default branch.",
+        "default": ""
+      }
+    },
+    "required": [
+      "action"
+    ]
+  },
+  "interactive": true,
+  "primary_key": "action"
+}

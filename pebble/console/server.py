@@ -7372,7 +7372,7 @@ async def admin_set_user_personas(request: Request) -> JSONResponse:
 
 async def admin_get_user_capabilities(request: Request) -> JSONResponse:
     """GET /v1/api/admin/users/{user_id}/capabilities — feature gates for a user."""
-    from pebble.core.access import CAPABILITY_CODE_DISPATCH
+    from pebble.core.access import CAPABILITY_CODE_DISPATCH, CAPABILITY_CODE_PUSH
     from pebble.core.auth import require_permission
     from pebble.core.web_helpers import require_storage_or_503
 
@@ -7392,7 +7392,15 @@ async def admin_get_user_capabilities(request: Request) -> JSONResponse:
                     "key": CAPABILITY_CODE_DISPATCH,
                     "label": "Code dispatch",
                     "help": "Run coding agents. Spends the operator's agent credentials.",
-                }
+                },
+                {
+                    "key": CAPABILITY_CODE_PUSH,
+                    "label": "Push with instance token",
+                    "help": (
+                        "Push and open PRs using the instance git token. Not needed "
+                        "when the user has linked their own GitHub token below."
+                    ),
+                },
             ],
             # Surfaced so the UI can say plainly whether the grant is currently
             # enforced — a toggle that does nothing is worse than no toggle.
@@ -7435,6 +7443,93 @@ async def admin_set_user_capabilities(request: Request) -> JSONResponse:
         ip,
     )
     return JSONResponse({"capabilities": storage.list_user_capabilities(user_id)})
+
+
+async def admin_get_user_git(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/users/{user_id}/git — is a push credential linked?
+
+    Never returns the token: only whether one is set, its host/login, and a
+    four-character tail so a person can tell which token it is.
+    """
+    from pebble.core.auth import require_permission
+    from pebble.core.secret_cipher import is_configured
+    from pebble.core.web_helpers import require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    row = storage.get_user_git_credential(request.path_params["user_id"])
+    return JSONResponse(
+        {
+            "linked": bool(row),
+            "host": (row or {}).get("host", "github.com"),
+            "login": (row or {}).get("login", ""),
+            "hint": (row or {}).get("token_hint", ""),
+            "updated": (row or {}).get("updated", ""),
+            # Surfaced so the panel can explain why saving is unavailable
+            # rather than failing at submit time.
+            "storage_ready": is_configured(),
+        }
+    )
+
+
+async def admin_set_user_git(request: Request) -> JSONResponse:
+    """PUT /v1/api/admin/users/{user_id}/git — link a push credential.
+
+    DELETE unlinks.  The token is encrypted before it touches the database;
+    with no key configured this refuses rather than storing it in the clear.
+    """
+    from pebble.core.audit import record_audit
+    from pebble.core.auth import require_permission
+    from pebble.core.git_identity import token_hint
+    from pebble.core.secret_cipher import SecretCipherUnavailable, encrypt
+    from pebble.core.web_helpers import read_json_or_400, require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    user_id = request.path_params["user_id"]
+    if storage.get_user(user_id) is None:
+        return JSONResponse({"error": "User not found"}, status_code=404)
+    audit_uid, ip = _audit_context(request)
+
+    if request.method == "DELETE":
+        removed = storage.delete_user_git_credential(user_id)
+        record_audit(storage, audit_uid, "user.git.unlinked", "user", user_id, {}, ip)
+        return JSONResponse({"linked": False, "removed": removed})
+
+    body = await read_json_or_400(request)
+    if isinstance(body, JSONResponse):
+        return body
+    token = str(body.get("token") or "").strip()
+    if not token:
+        return JSONResponse({"error": "token is required"}, status_code=400)
+    host = str(body.get("host") or "github.com").strip() or "github.com"
+    login = str(body.get("login") or "").strip()
+    try:
+        ct = encrypt(token)
+    except SecretCipherUnavailable as exc:
+        return JSONResponse({"error": str(exc)}, status_code=503)
+    storage.set_user_git_credential(
+        user_id, token_ct=ct, token_hint=token_hint(token), host=host, login=login
+    )
+    # The token is never audited — only that one was linked, and to where.
+    record_audit(
+        storage,
+        audit_uid,
+        "user.git.linked",
+        "user",
+        user_id,
+        {"host": host, "login": login},
+        ip,
+    )
+    return JSONResponse({"linked": True, "host": host, "login": login, "hint": token_hint(token)})
 
 
 async def admin_knowledge(request: Request) -> JSONResponse:
@@ -14823,6 +14918,12 @@ def create_app(
                         "/api/admin/users/{user_id}/capabilities",
                         admin_set_user_capabilities,
                         methods=["PUT"],
+                    ),
+                    Route("/api/admin/users/{user_id}/git", admin_get_user_git),
+                    Route(
+                        "/api/admin/users/{user_id}/git",
+                        admin_set_user_git,
+                        methods=["PUT", "DELETE"],
                     ),
                     Route("/api/admin/knowledge", admin_knowledge),
                     Route("/api/admin/coding-jobs", admin_coding_jobs),

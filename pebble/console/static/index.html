@@ -2818,6 +2818,21 @@
               <div id="ua-personas"></div>
               <h3 class="sh-subhead">Capabilities</h3>
               <div id="ua-capabilities"></div>
+              <h3 class="sh-subhead">Git</h3>
+              <div id="ua-git"></div>
+              <input
+                type="password"
+                id="ua-git-token"
+                class="sh-input"
+                placeholder="github_pat_… (leave blank to keep current)"
+                autocomplete="off"
+              />
+              <div class="ua-hint">
+                A fine-grained token with Contents and Pull requests
+                read/write, scoped to the repos this user should reach. Stored
+                encrypted; pushes are attributed to them rather than to the
+                instance bot.
+              </div>
             </div>
             <footer class="sh-foot">
               <div class="sh-foot-meta"></div>

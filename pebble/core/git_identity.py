@@ -27,7 +27,9 @@ from __future__ import annotations
 import os
 import stat
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from pebble.core.log import get_logger
 
@@ -177,6 +179,119 @@ def agent_env(base: dict[str, str] | None = None) -> dict[str, str]:
     if token:
         env.setdefault("GH_TOKEN", token)
     return env
+
+
+@dataclass(frozen=True)
+class ResolvedCredential:
+    """Which token a push will use, and where it came from.
+
+    ``source`` is carried so the caller can say so out loud: "pushing as your
+    linked GitHub account" and "pushing with the instance token" are different
+    enough that a user should not have to guess which happened.
+    """
+
+    token: str
+    host: str
+    login: str
+    source: str  # "user" | "instance" | "none"
+
+    @property
+    def ok(self) -> bool:
+        return bool(self.token)
+
+
+def resolve_for_user(
+    storage: Any, user_id: str, *, may_use_instance: bool = False
+) -> ResolvedCredential:
+    """Pick the credential a push by *user_id* should use.
+
+    Order, and the reasoning:
+
+    1. **The user's own token.** GitHub's permissions then bound what the push
+       can reach, and the commit is attributed to the person who asked for it.
+       No pebble-side grant is needed: they are spending their own access.
+    2. **The instance token**, only when *may_use_instance* — the caller checks
+       the ``code_push`` capability for that. This spends the OPERATOR's
+       credential, which is exactly the asymmetry ``code_dispatch`` already
+       encodes for agent spend.
+    3. **Nothing**, and the caller reports that rather than letting git fail
+       with an opaque auth error halfway through.
+    """
+    if user_id and storage is not None:
+        try:
+            row = storage.get_user_git_credential(user_id)
+        except Exception:
+            log.warning("git.user_credential_read_failed", exc_info=True)
+            row = None
+        if row and row.get("token_ct"):
+            try:
+                from pebble.core.secret_cipher import decrypt
+
+                token = decrypt(row["token_ct"])
+            except Exception:
+                # A key rotated out without re-saving lands here. Fall through
+                # to the instance token rather than failing the whole dispatch,
+                # but say so in the log — the user's token is now unreadable.
+                log.warning("git.user_credential_undecryptable", exc_info=True)
+                token = ""
+            if token:
+                return ResolvedCredential(
+                    token=token,
+                    host=row.get("host") or DEFAULT_HOST,
+                    login=row.get("login") or "",
+                    source="user",
+                )
+    if may_use_instance:
+        token = git_token()
+        if token:
+            return ResolvedCredential(token=token, host=git_host(), login="", source="instance")
+    return ResolvedCredential(token="", host=git_host(), login="", source="none")
+
+
+def env_for_credential(
+    cred: ResolvedCredential, base: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Git/gh environment for a specific resolved credential."""
+    env = dict(base if base is not None else os.environ)
+    name, email = author_identity()
+    if cred.source == "user" and cred.login:
+        # Attribute to the user's own GitHub identity when we know it, so the
+        # commit is theirs rather than the bot's.
+        name = cred.login
+        email = f"{cred.login}@users.noreply.github.com"
+    env.update(
+        {
+            "GIT_AUTHOR_NAME": name,
+            "GIT_AUTHOR_EMAIL": email,
+            "GIT_COMMITTER_NAME": name,
+            "GIT_COMMITTER_EMAIL": email,
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+    )
+    if not cred.ok:
+        return env
+    askpass = _askpass_path()
+    if askpass:
+        env["GIT_ASKPASS"] = askpass
+        env["PEBBLE_GIT_TOKEN"] = cred.token
+        env["PEBBLE_GIT_HOST"] = cred.host
+        env["PEBBLE_GIT_USER"] = cred.login or DEFAULT_USER
+    env["GH_TOKEN"] = cred.token
+    env["GH_HOST"] = cred.host
+    return env
+
+
+def redact_credential(text: str, cred: ResolvedCredential) -> str:
+    """Scrub a specific resolved token from *text*."""
+    if cred.token and len(cred.token) >= 8:
+        return text.replace(cred.token, "[REDACTED:git-token]")
+    return text
+
+
+def token_hint(token: str) -> str:
+    """A short trailing fragment, for "set, ending 1a2b" in the UI."""
+    t = (token or "").strip()
+    return t[-4:] if len(t) >= 8 else ""
 
 
 def redact(text: str) -> str:

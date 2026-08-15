@@ -1075,6 +1075,29 @@ oidc_user_credentials = sa.Table(
 # rows via fixtures).
 # ---------------------------------------------------------------------------
 
+# Per-user git push credentials.  Kept per user rather than per instance
+# because a dispatch pushes real code: with a single shared token every member
+# of a /global-link'd Discord server pushes as the same identity, and GitHub
+# cannot tell them apart or bound what any one of them may touch.  With the
+# user's own token, GitHub's permissions ARE the enforcement boundary and the
+# commit says who asked for it.
+#
+# The token is stored encrypted (see core/secret_cipher.py); only a truncated
+# hint and the login are readable, which is enough for the UI to show "a token
+# is set, ending 1a2b" without ever projecting the secret.
+user_git_credentials = sa.Table(
+    "user_git_credentials",
+    metadata,
+    sa.Column("user_id", sa.Text, primary_key=True),
+    sa.Column("host", sa.Text, nullable=False, server_default="github.com"),
+    sa.Column("login", sa.Text, nullable=False, server_default=""),
+    sa.Column("token_ct", sa.LargeBinary, nullable=False),
+    sa.Column("token_hint", sa.Text, nullable=False, server_default=""),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.Column("updated", sa.Text, nullable=False),
+)
+
+
 mcp_user_tokens = sa.Table(
     "mcp_user_tokens",
     metadata,

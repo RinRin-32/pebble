@@ -9841,6 +9841,7 @@ class ChatSession:
             "tts": self._prepare_tts,
             "bind_repo": self._prepare_bind_repo,
             "dispatch_agent": self._prepare_dispatch_agent,
+            "publish_work": self._prepare_publish_work,
             "kb": self._prepare_kb,
             "setup_env": self._prepare_setup_env,
             "watch": self._prepare_watch,
@@ -17359,6 +17360,143 @@ class ChatSession:
         except Exception:
             log.debug("nixenv.resolve_failed", exc_info=True)
             return ""
+
+    def _publish_credential(self) -> Any:
+        """Resolve which git credential this workstream's push would use.
+
+        The user's own linked token needs no grant — they are spending their
+        own GitHub access, and GitHub bounds what it reaches.  Falling back to
+        the INSTANCE token is what needs the ``code_push`` capability, for the
+        same reason ``code_dispatch`` exists: it spends the operator's.
+        """
+        from pebble.core.access import can_use_instance_push
+        from pebble.core.git_identity import resolve_for_user
+
+        actor = self._acting_user_id or self._user_id or ""
+        store = None
+        try:
+            from pebble.core.storage._registry import get_storage
+
+            store = get_storage()
+        except Exception:
+            log.debug("publish.storage_unavailable", exc_info=True)
+        may_instance = bool(store is not None and can_use_instance_push(store, actor))
+        return resolve_for_user(store, actor, may_use_instance=may_instance)
+
+    def _prepare_publish_work(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
+        action = (args.get("action") or "status").strip().lower()
+        if action not in {"status", "push", "pr"}:
+            return {
+                "call_id": call_id,
+                "func_name": "publish_work",
+                "error": f"Error: unknown action {action!r}. Use status, push, or pr.",
+            }
+        header = {
+            "status": "\U0001f50e publish_work (status)",
+            "push": "\U0001f4e4 publish_work (push branch)",
+            "pr": "\U0001f4e4 publish_work (open pull request)",
+        }[action]
+        return {
+            "call_id": call_id,
+            "func_name": "publish_work",
+            "header": header,
+            "preview": f"    {DIM}{(args.get('message') or '')[:120]}{RESET}",
+            # Pushing is outward-facing and hard to take back: it puts code on
+            # a remote under someone's name. status only reads.
+            "needs_approval": action != "status",
+            "execute": self._exec_publish_work,
+            "action": action,
+            "message": (args.get("message") or "").strip(),
+            "title": (args.get("title") or "").strip(),
+            "body": (args.get("body") or "").strip(),
+            "base": (args.get("base") or "").strip(),
+        }
+
+    def _exec_publish_work(self, item: dict[str, Any]) -> tuple[str, str]:
+        """Commit, push, and optionally open a PR for this worktree."""
+        self._check_cancelled()
+        call_id = item["call_id"]
+        action = item["action"]
+
+        from pathlib import Path
+
+        from pebble.core import publish
+        from pebble.core.workspace import default_branch
+
+        def _fail(msg: str) -> tuple[str, str]:
+            self._report_tool_result(call_id, "publish_work", msg, is_error=True)
+            return call_id, msg
+
+        cwd_s = self._workspace_cwd()
+        if not cwd_s:
+            return _fail(
+                "Error: this workstream has no repo bound. Call bind_repo first — "
+                "there is no worktree to publish."
+            )
+        cwd = Path(cwd_s)
+        cred = self._publish_credential()
+
+        if action == "status":
+            try:
+                branch = publish.current_branch(cwd, cred)
+                pending = publish.pending_changes(cwd, cred)
+            except Exception as exc:
+                return _fail(f"Error reading worktree: {exc}")
+            who = {
+                "user": f"your linked account{f' ({cred.login})' if cred.login else ''}",
+                "instance": "the instance token",
+                "none": "NO credential — a push would fail",
+            }[cred.source]
+            lines = [
+                f"Branch: {branch}",
+                f"Credential: {who}",
+                "Pending changes:" if pending else "Working tree clean.",
+            ]
+            if pending:
+                lines.append(pending[:1500])
+            out = "\n".join(lines)
+            self._report_tool_result(call_id, "publish_work", out)
+            return call_id, out
+
+        if not cred.ok:
+            return _fail(
+                "Error: no git credential available. Link a GitHub token for your "
+                "user in the console (Users \u2192 access \u2192 Git), or ask an "
+                "administrator for the 'Push with instance token' capability."
+            )
+
+        message = item["message"]
+        try:
+            branch = publish.current_branch(cwd, cred)
+            pending = publish.pending_changes(cwd, cred)
+            sha = ""
+            if pending:
+                if not message:
+                    return _fail(
+                        "Error: message is required — there are uncommitted changes "
+                        "and a commit needs a message describing them."
+                    )
+                sha = publish.commit_all(cwd, cred, message)
+            publish.push_branch(cwd, cred, branch)
+        except Exception as exc:
+            return _fail(f"Error publishing: {exc}")
+
+        parts = [f"Pushed {branch}" + (f" ({sha})" if sha else " (no new commits)")]
+        parts.append(f"Credential: {cred.source}")
+        if action == "pr":
+            base = item["base"] or default_branch(self._bound_repo_id() or "") or "main"
+            title = item["title"] or (message.splitlines() or ["Automated change"])[0]
+            body = item["body"] or "Opened by pebble from a dispatched coding run."
+            try:
+                url = publish.open_pull_request(
+                    cwd, cred, title=title, body=body, base=base, head=branch
+                )
+                parts.append(f"Pull request: {url}")
+            except Exception as exc:
+                parts.append(f"Pull request FAILED: {exc}")
+        out = "\n".join(parts)
+        self._report_tool_result(call_id, "publish_work", out)
+        return call_id, out
 
     def _code_dispatch_denied(self) -> str:
         """Return a refusal message if this user may not run coding agents, else "".
