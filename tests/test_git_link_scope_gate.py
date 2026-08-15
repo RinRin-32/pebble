@@ -144,7 +144,9 @@ class TestWideToken:
         _scopes.value = _WIDE
         _link(client, accept_wide_scopes=True)
         row = next(
-            r for r in storage.list_audit_events(limit=50) if r["action"] == "user.git.wide_scope_accepted"
+            r
+            for r in storage.list_audit_events(limit=50)
+            if r["action"] == "user.git.wide_scope_accepted"
         )
         detail = row.get("details") or row.get("detail") or {}
         if isinstance(detail, str):
@@ -163,7 +165,9 @@ class TestScopesAreRecoverableAfterLinkTime:
         # never audited either way.
         _scopes.value = _NARROW
         _link(client)
-        row = next(r for r in storage.list_audit_events(limit=50) if r["action"] == "user.git.linked")
+        row = next(
+            r for r in storage.list_audit_events(limit=50) if r["action"] == "user.git.linked"
+        )
         detail = row.get("details") or row.get("detail") or {}
         if isinstance(detail, str):
             import json
