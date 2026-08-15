@@ -9,10 +9,17 @@ hand coding tasks to agent CLIs in isolated git worktrees, and keep what was
 learned in a knowledge vault that any machine can reach. Your code, your models,
 your data stay on hardware you control: no telemetry, no phone-home.
 
-> **Pebble is a fork of [Turnstone](https://github.com/turnstonelabs/turnstone)**
-> by Patrick Buckley, Apache-2.0. It adds agentic coding dispatch, a shared
-> knowledge vault exposed over MCP, per-user access and git credentials, and Nix
-> toolchains. See [Upstream](#upstream) for what belongs to whom.
+> **This is a heavily customised personal fork of
+> [Turnstone](https://github.com/turnstonelabs/turnstone)** (Patrick Buckley,
+> Apache-2.0), built around one person's workflow rather than as a general
+> release. It adds agentic coding dispatch, a knowledge vault exposed over MCP,
+> per-user access and git credentials, and Nix toolchains.
+>
+> **Looking for the real project? Go to
+> [turnstonelabs/turnstone](https://github.com/turnstonelabs/turnstone).** That
+> is the maintained one, with releases, documentation and support behind it.
+> This fork makes no such promises and may change in ways that suit its author
+> and nobody else.
 
 <p align="center">
   <img src="docs/diagrams/architecture-overview.svg" alt="System architecture" width="960"/>
@@ -206,10 +213,8 @@ created by Patrick Buckley and licensed Apache-2.0. The orchestration core,
 console, judge, channels, RBAC and SSO are upstream's work; see
 [NOTICE](NOTICE) and [LICENSE](LICENSE).
 
-If upstream's project is useful to you, support it there — its Discord is
-[discord.gg/Nh3bWMacaq](https://discord.gg/Nh3bWMacaq) and it accepts
-[sponsorship](https://github.com/sponsors/eous). Those links fund Turnstone, not
-this fork, and are listed here so credit lands where it belongs.
+If you are evaluating this for real use, use upstream instead — it is the
+maintained project, and questions, issues and community belong there.
 
 ## License
 
