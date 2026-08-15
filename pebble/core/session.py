@@ -17144,6 +17144,35 @@ class ChatSession:
 
     def _prepare_bind_repo(self, call_id: str, args: dict[str, Any]) -> dict[str, Any]:
         repo = (args.get("repo") or "").strip()
+        url = (args.get("url") or "").strip()
+        # Refused here rather than at exec time so a URL carrying a token
+        # never reaches a pending-approval item, which is persisted and
+        # rendered.  git uses in-URL credentials directly and never consults
+        # the askpass helper, so such a URL bypasses the host check, the
+        # https-only check and the username placeholder at once — and it
+        # would be stored verbatim in repos.git_url, in the clear, beside the
+        # encrypted column that exists to prevent exactly that.
+        #
+        # Refused rather than stripped: a caller who pasted a token needs to
+        # know it was exposed, because it now has to be revoked, and quietly
+        # cleaning the URL would hide that.
+        from pebble.core.git_identity import url_has_userinfo
+
+        if url and url_has_userinfo(url):
+            return {
+                "call_id": call_id,
+                "func_name": "bind_repo",
+                # Neither the header nor the error echoes the URL: this is the
+                # one code path that has certainly just been handed a secret.
+                "header": "✗ bind_repo: URL carries credentials",
+                "preview": "",
+                "needs_approval": False,
+                "error": (
+                    "Error: that URL carries credentials in it. Bind the plain "
+                    "URL — pebble supplies the credential itself, per user. "
+                    "Treat the token you just pasted as exposed and revoke it."
+                ),
+            }
         return {
             "call_id": call_id,
             "func_name": "bind_repo",
@@ -17151,10 +17180,10 @@ class ChatSession:
             "preview": "",
             # Checking out a repo writes to the shared workspace volume, so it
             # rides the same approval gate as any other side effect.
-            "needs_approval": bool(repo or (args.get("url") or "").strip()),
+            "needs_approval": bool(repo or url),
             "execute": self._exec_bind_repo,
             "repo": repo,
-            "url": (args.get("url") or "").strip(),
+            "url": url,
             "base_ref": (args.get("base_ref") or "").strip(),
         }
 
@@ -17172,6 +17201,20 @@ class ChatSession:
             return call_id, msg
 
         url = item.get("url") or ""
+        # Checked at prepare time too. Repeated here deliberately: this write
+        # is what would put a token in repos.git_url in the clear, and an item
+        # can reach exec from more than one place. The whole lesson of this
+        # class of bug is that a control on one path is not a control.
+        from pebble.core.git_identity import url_has_userinfo
+
+        if url and url_has_userinfo(url):
+            msg = (
+                "Error: that URL carries credentials. Bind the plain URL — "
+                "pebble supplies the credential itself, per user. Treat the "
+                "token you just pasted as exposed and revoke it."
+            )
+            self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+            return call_id, msg
         if url and not repo_name:
             # Derive a name from the URL so the caller does not have to invent
             # one: "https://github.com/org/audrey-prototype.git" -> the slug.

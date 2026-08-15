@@ -7563,6 +7563,53 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
     # identified may still be a working push credential.
     ident = await asyncio.to_thread(identify_token, token, host)
     login = login or ident["login"]
+
+    # Wide scopes are decided BEFORE the token is stored.  This check used to
+    # run after encrypt() and set_user_git_credential(), purely to fill in a
+    # response field — so a PAT that could delete repositories or administer
+    # an org was persisted first and the operator merely told afterwards.  A
+    # warning on the wrong side of the write is not a control.
+    wide = wide_scopes(ident["scopes"])
+    if wide and not bool(body.get("accept_wide_scopes")):
+        record_audit(
+            storage,
+            audit_uid,
+            "user.git.link_refused",
+            "user",
+            user_id,
+            {"host": host, "login": login, "wide_scopes": wide},
+            ip,
+        )
+        return JSONResponse(
+            {
+                "error": (
+                    f"This token carries {', '.join(wide)}. A credential pebble spends on "
+                    "your behalf should reach no further than the repositories it needs. "
+                    "Issue a narrower token, or re-submit with accept_wide_scopes to "
+                    "record that you accepted this."
+                ),
+                "wide_scopes": wide,
+                "needs_acknowledgement": True,
+            },
+            status_code=409,
+        )
+    if wide:
+        # Its own event, emitted before storage: a scope list on the link event
+        # records what was linked, not whether anyone decided to allow it.
+        # Separate rows make "the operator accepted this" and "the policy was
+        # bypassed" different findings rather than one row read two ways, and
+        # an acceptance with no matching link is a better failure than a link
+        # with no matching acceptance.
+        record_audit(
+            storage,
+            audit_uid,
+            "user.git.wide_scope_accepted",
+            "user",
+            user_id,
+            {"host": host, "login": login, "wide_scopes": wide},
+            ip,
+        )
+
     try:
         ct = encrypt(token)
     except SecretCipherUnavailableError as exc:
@@ -7570,14 +7617,17 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
     storage.set_user_git_credential(
         user_id, token_ct=ct, token_hint=token_hint(token), host=host, login=login
     )
-    # The token is never audited — only that one was linked, and to where.
+    # The token is never audited — only that one was linked, to where, and
+    # what it can reach.  Scopes are not secret, and they are exactly what an
+    # auditor needs later: without them the only record of a credential's
+    # reach was a response body nobody kept.
     record_audit(
         storage,
         audit_uid,
         "user.git.linked",
         "user",
         user_id,
-        {"host": host, "login": login},
+        {"host": host, "login": login, "scopes": ident["scopes"], "wide_scopes": wide},
         ip,
     )
     return JSONResponse(
@@ -7590,7 +7640,7 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
             "identify_error": ident["error"],
             # A classic PAT that can delete repos or administer an org reads
             # exactly like a scoped one in a password box.  Say so.
-            "wide_scopes": wide_scopes(ident["scopes"]),
+            "wide_scopes": wide,
         }
     )
 
