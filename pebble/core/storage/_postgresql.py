@@ -5640,13 +5640,31 @@ class PostgreSQLBackend:
             return result.rowcount > 0
 
     def delete_model_definition(self, definition_id: str) -> bool:
+        """Delete a model, and the per-user grants that pointed at it.
 
+        Without the cleanup the allow-list rows outlive the model, and the
+        "no explicit model, coerce to a permitted one" path can select an
+        alias the registry cannot build — which surfaces as a 503 naming a
+        model the user never chose.  The grant means nothing once the model is
+        gone, so it goes with it.
+        """
         with self._conn() as conn:
+            alias_row = conn.execute(
+                sa.select(model_definitions.c.alias).where(
+                    model_definitions.c.definition_id == definition_id
+                )
+            ).fetchone()
             result = conn.execute(
                 sa.delete(model_definitions).where(
                     model_definitions.c.definition_id == definition_id
                 )
             )
+            if alias_row and alias_row[0]:
+                conn.execute(
+                    sa.delete(user_allowed_models).where(
+                        user_allowed_models.c.alias == alias_row[0]
+                    )
+                )
             conn.commit()
             return result.rowcount > 0
 

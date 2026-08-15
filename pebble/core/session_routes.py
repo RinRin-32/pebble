@@ -2809,8 +2809,25 @@ def make_create_handler(
                     # sends one.
                     _raw_model = body.get("model")
                     _requested_model = _raw_model.strip() if isinstance(_raw_model, str) else ""
+                    # Pass the registry's aliases so a coercion never lands on
+                    # a since-deleted model.  Deleting a model leaves the
+                    # allow-list rows behind, and without this the fallback
+                    # picks the first alias alphabetically — which was a dead
+                    # one, turning "start a session" into a 503 that named a
+                    # model nobody had selected.
+                    _known: set[str] | None = None
+                    try:
+                        _reg = getattr(request.app.state, "registry", None)
+                        if _reg is not None:
+                            _known = set(_reg.list_aliases())
+                    except Exception:
+                        _known = None
                     _eff_model, _model_err = resolve_allowed_model(
-                        _stm, enforcement_uid, _requested_model, ""
+                        _stm,
+                        enforcement_uid,
+                        _requested_model,
+                        "",
+                        known_aliases=_known,
                     )
                     if _model_err:
                         return JSONResponse({"error": _model_err}, status_code=403)

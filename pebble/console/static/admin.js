@@ -8798,23 +8798,56 @@ function _kbBuildGraph(notes, edges) {
 function _kbLayout(nodes, links, W, H) {
   const n = nodes.length;
   if (!n) return;
-  const R = Math.min(W, H) / 2.8;
-  for (let i = 0; i < n; i++) {
-    // Golden-angle seeding spreads the initial ring evenly for any n, and is
-    // a pure function of the index — hence reproducible across refreshes.
-    const a = i * 2.399963229728653;
-    const r = R * Math.sqrt((i + 1) / n);
-    nodes[i].x = W / 2 + Math.cos(a) * r;
-    nodes[i].y = H / 2 + Math.sin(a) * r;
-    nodes[i].vx = 0;
-    nodes[i].vy = 0;
+
+  // Cluster by repo. At 40+ notes a single spring layout is a hairball: the
+  // codebases are genuinely separate concerns and the graph should say so
+  // before you read a single label. Each repo gets its own region, and the
+  // springs pull within it while a separate force holds the regions apart.
+  const groups = {};
+  nodes.forEach(function (nd) {
+    const key = nd.repo || "(unfiled)";
+    (groups[key] = groups[key] || []).push(nd);
+  });
+  const keys = Object.keys(groups).sort(function (a, b) {
+    return groups[b].length - groups[a].length || a.localeCompare(b);
+  });
+
+  // Region centres on a ring, biggest cluster in the middle when there are
+  // several — it has the most edges and benefits from the shortest ones.
+  const cx = W / 2;
+  const cy = H / 2;
+  const ring = Math.min(W, H) * 0.34;
+  const centres = {};
+  if (keys.length === 1) {
+    centres[keys[0]] = { x: cx, y: cy };
+  } else {
+    keys.forEach(function (k, i) {
+      const a = (2 * Math.PI * i) / keys.length - Math.PI / 2;
+      centres[k] = { x: cx + Math.cos(a) * ring, y: cy + Math.sin(a) * ring * 0.82 };
+    });
   }
-  const REPULSION = 5200;
-  const SPRING = 0.012;
-  const REST = 90;
-  const CENTER = 0.006;
-  const DAMP = 0.82;
-  for (let step = 0; step < 320; step++) {
+
+  keys.forEach(function (k) {
+    const c = centres[k];
+    const g = groups[k];
+    g.forEach(function (nd, i) {
+      const a = i * 2.399963229728653;
+      const r = 34 * Math.sqrt((i + 1) / Math.max(1, g.length)) + 8;
+      nd.x = c.x + Math.cos(a) * r;
+      nd.y = c.y + Math.sin(a) * r;
+      nd.vx = 0;
+      nd.vy = 0;
+      nd.cluster = k;
+    });
+  });
+
+  const REPULSION = 3400;
+  const CROSS_REPULSION = 9000; // between clusters: buy the padding
+  const SPRING = 0.014;
+  const REST = 62;
+  const HOME = 0.021; // pull toward the node's own cluster centre
+  const DAMP = 0.84;
+  for (let step = 0; step < 380; step++) {
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         let dx = nodes[i].x - nodes[j].x;
@@ -8822,7 +8855,8 @@ function _kbLayout(nodes, links, W, H) {
         let d2 = dx * dx + dy * dy;
         if (d2 < 1) { d2 = 1; dx = (i - j) || 1; dy = 1; }
         const d = Math.sqrt(d2);
-        const f = REPULSION / d2;
+        const same = nodes[i].cluster === nodes[j].cluster;
+        const f = (same ? REPULSION : CROSS_REPULSION) / d2;
         const ux = dx / d;
         const uy = dy / d;
         nodes[i].vx += ux * f; nodes[i].vy += uy * f;
@@ -8830,28 +8864,30 @@ function _kbLayout(nodes, links, W, H) {
       }
     }
     for (let k = 0; k < links.length; k++) {
-      const s = links[k].s;
+      const s2 = links[k].s;
       const t = links[k].t;
-      const dx = t.x - s.x;
-      const dy = t.y - s.y;
+      const dx = t.x - s2.x;
+      const dy = t.y - s2.y;
       const d = Math.sqrt(dx * dx + dy * dy) || 1;
       const f = (d - REST) * SPRING;
       const ux = (dx / d) * f;
       const uy = (dy / d) * f;
-      s.vx += ux; s.vy += uy;
+      s2.vx += ux; s2.vy += uy;
       t.vx -= ux; t.vy -= uy;
     }
     for (let i = 0; i < n; i++) {
       const nd = nodes[i];
-      nd.vx += (W / 2 - nd.x) * CENTER;
-      nd.vy += (H / 2 - nd.y) * CENTER;
+      const c = centres[nd.cluster] || { x: cx, y: cy };
+      nd.vx += (c.x - nd.x) * HOME;
+      nd.vy += (c.y - nd.y) * HOME;
       nd.vx *= DAMP; nd.vy *= DAMP;
       nd.x += nd.vx; nd.y += nd.vy;
-      const pad = 46;
+      const pad = 52;
       nd.x = Math.max(pad, Math.min(W - pad, nd.x));
-      nd.y = Math.max(24, Math.min(H - 24, nd.y));
+      nd.y = Math.max(30, Math.min(H - 34, nd.y));
     }
   }
+  return { keys: keys, groups: groups };
 }
 
 function _kbGraphSvg(notes, edges) {
@@ -8868,9 +8904,45 @@ function _kbGraphSvg(notes, edges) {
     g.nodes = kept;
     g.links = g.links.filter(function (l) { return keep[l.s.id] && keep[l.t.id]; });
   }
-  const W = 880;
-  const H = Math.max(260, Math.min(460, 200 + g.nodes.length * 14));
-  _kbLayout(g.nodes, g.links, W, H);
+  const W = 1000;
+  // Grow with the graph: at 40+ notes a fixed height packs labels on top of
+  // each other, which is the state that made the vault unreadable.
+  const H = Math.max(300, Math.min(760, 240 + g.nodes.length * 12));
+  const clusters = _kbLayout(g.nodes, g.links, W, H) || { keys: [], groups: {} };
+
+  // One hue per repo. Hand-picked rather than generated: these have to stay
+  // distinguishable on a dark ground, and a hash-to-hue lands on mud.
+  const PALETTE = [
+    "#e8853a", "#67e8f9", "#a78bfa", "#34d399",
+    "#f472b6", "#facc15", "#60a5fa", "#fb7185",
+  ];
+  const hueOf = {};
+  clusters.keys.forEach(function (k, i) {
+    hueOf[k] = PALETTE[i % PALETTE.length];
+  });
+
+  // Cluster captions, drawn under the nodes so they never sit on a label.
+  let clusterSvg = "";
+  clusters.keys.forEach(function (k) {
+    const g2 = clusters.groups[k];
+    if (!g2 || !g2.length) return;
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    g2.forEach(function (nd) {
+      minX = Math.min(minX, nd.x); maxX = Math.max(maxX, nd.x);
+      minY = Math.min(minY, nd.y); maxY = Math.max(maxY, nd.y);
+    });
+    const pad = 26;
+    clusterSvg +=
+      '<rect class="kb-cluster" x="' + (minX - pad).toFixed(1) +
+      '" y="' + (minY - pad).toFixed(1) +
+      '" width="' + (maxX - minX + pad * 2).toFixed(1) +
+      '" height="' + (maxY - minY + pad * 2).toFixed(1) +
+      '" rx="10" style="stroke:' + hueOf[k] + '" />' +
+      '<text class="kb-cluster-label" x="' + (minX - pad + 8).toFixed(1) +
+      '" y="' + (minY - pad + 15).toFixed(1) +
+      '" style="fill:' + hueOf[k] + '">' + escapeHtml(k) +
+      " \u00b7 " + g2.length + "</text>";
+  });
 
   let edgeSvg = "";
   for (let i = 0; i < g.links.length; i++) {
@@ -8886,6 +8958,12 @@ function _kbGraphSvg(notes, edges) {
     const r = 4.5 + Math.min(9, Math.sqrt(nd.deg) * 3);
     const label = nd.title.length > 20 ? nd.title.slice(0, 19) + "…" : nd.title;
     const cls = nd.dangling ? "kb-node kb-node--frontier" : (nd.deg ? "kb-node" : "kb-node kb-node--orphan");
+    const hue = hueOf[nd.cluster] || "";
+    const fill = nd.dangling || !nd.deg ? "" : ' style="fill:' + hue + '"';
+    // Label only what stays readable. Below the threshold the titles overlap
+    // into an unreadable smear — the node is still hoverable and clickable,
+    // which is the affordance that actually matters.
+    const showLabel = g.nodes.length <= 24 || nd.deg >= 2 || nd.dangling;
     const tip = nd.dangling
       ? nd.title + " — linked to, not yet written"
       : nd.title + " (" + nd.kind + ")" + (nd.repo ? " · " + nd.repo : "") +
@@ -8894,9 +8972,12 @@ function _kbGraphSvg(notes, edges) {
       '<g class="' + cls + '" data-kb-title="' + escapeHtml(nd.title) + '" ' +
       'role="button" tabindex="0" aria-label="Open note: ' + escapeHtml(nd.title) + '">' +
       "<title>" + escapeHtml(tip) + "</title>" +
-      '<circle cx="' + nd.x.toFixed(1) + '" cy="' + nd.y.toFixed(1) + '" r="' + r.toFixed(1) + '" />' +
-      '<text x="' + nd.x.toFixed(1) + '" y="' + (nd.y + r + 11).toFixed(1) + '">' +
-      escapeHtml(label) + "</text></g>";
+      '<circle cx="' + nd.x.toFixed(1) + '" cy="' + nd.y.toFixed(1) + '" r="' + r.toFixed(1) + '"' + fill + " />" +
+      (showLabel
+        ? '<text x="' + nd.x.toFixed(1) + '" y="' + (nd.y + r + 11).toFixed(1) + '">' +
+          escapeHtml(label) + "</text>"
+        : "") +
+      "</g>";
   }
   const note = dropped
     ? '<span class="kb-graph-note">showing the ' + _KB_MAX_NODES +
@@ -8908,7 +8989,7 @@ function _kbGraphSvg(notes, edges) {
     '<svg viewBox="0 0 ' + W + " " + H + '" role="img" ' +
     'aria-label="Vault graph: ' + g.nodes.length + " notes connected by " +
     g.links.length + ' links, dangling links shown dashed.">' +
-    edgeSvg + nodeSvg + "</svg>" +
+    clusterSvg + edgeSvg + nodeSvg + "</svg>" +
     '<div class="kb-graph-legend">' +
     '<span><i class="kb-swatch"></i>note</span>' +
     '<span><i class="kb-swatch kb-swatch--frontier"></i>unwritten (frontier)</span>' +

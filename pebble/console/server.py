@@ -7666,6 +7666,20 @@ async def admin_knowledge(request: Request) -> JSONResponse:
     data = await asyncio.to_thread(storage.kb_overview)
     payload = data[0] if data else {"notes": [], "frontier": []}
     notes = payload.get("notes", [])
+
+    # Notes arrive labelled two ways: the in-cluster kb tool records a repo_id
+    # (an opaque uuid), while a note written over MCP records the repo NAME a
+    # person typed.  Resolve the ids so the graph clusters by something a
+    # reader recognises instead of showing a uuid as a heading.
+    try:
+        by_id = {r["repo_id"]: r["name"] for r in storage.list_repos(enabled_only=False)}
+    except Exception:
+        by_id = {}
+    edges = payload.get("edges", [])
+    for note in notes:
+        note["repo_id"] = by_id.get(note.get("repo_id", ""), note.get("repo_id", ""))
+    payload["notes"] = notes
+    payload["edges"] = edges
     return JSONResponse(
         {
             **payload,

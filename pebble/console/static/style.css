@@ -3970,3 +3970,21 @@ h3.skill-spec-heading {
   stroke: var(--accent, #e8853a);
   stroke-width: 2.5;
 }
+
+/* Cluster regions — one per repo.
+   Drawn as a faint outline rather than a filled hull: the point is to say
+   "these belong together and those do not" without competing with the nodes
+   for attention. */
+.kb-cluster {
+  fill: rgb(255 255 255 / 2%);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  opacity: 0.55;
+}
+.kb-cluster-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  pointer-events: none;
+}
