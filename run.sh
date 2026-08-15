@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Turnstone one-line installer.
+# Pebble one-line installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/turnstonelabs/turnstone/main/run.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/RinRin-32/pebble/main/run.sh | bash
 #
 # Autodetects your distro — Ubuntu/Debian, Fedora/RHEL, Arch, their common
 # derivatives (Mint, Pop!_OS, Nobara, AlmaLinux, …), and WSL on any of them —
