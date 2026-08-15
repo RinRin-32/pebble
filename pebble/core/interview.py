@@ -52,6 +52,13 @@ MAX_ANSWER_CHARS = 6000
 MAX_CONTEXT_CHARS = 8000
 MAX_QUESTIONS = 3
 
+#: Floors below which a model reply is treated as truncated rather than short.
+#: A question set has to be at least a sentence, and a note that fits in a
+#: tweet is not worth filing.  Both are well under any genuine reply, so they
+#: catch provider truncation without rejecting a terse-but-real one.
+MIN_QUESTION_CHARS = 40
+MIN_NOTE_CHARS = 120
+
 #: How much prior knowledge to put in front of the interviewer.
 MAX_PRIOR_NOTES = 6
 
@@ -168,6 +175,8 @@ def _ask_model(
     *,
     attempts: int = 2,
     max_tokens: int = 1200,
+    min_chars: int = 0,
+    sentinel: str = "",
 ) -> tuple[str, str]:
     """One call to the reviewer model, as ``(text, error)``.
 
@@ -176,6 +185,18 @@ def _ask_model(
     retrying.  Collapsing both into one message sent a debugging session after
     configuration that was correct the whole time — the first call after a
     restart had simply failed.
+
+    ``min_chars`` treats a stunted reply as a failed attempt.  Observed
+    against a live reviewer: the same prompt returned nothing on one call and
+    the twelve characters ``"1. What test"`` on the next, both with
+    ``finish_reason="stop"`` — the provider truncates without saying so.  A
+    non-empty check alone accepts that fragment, and the interview then asks
+    the engineer half a question, or files a note built from one.  Retrying is
+    the right response because the next call usually answers properly.
+
+    ``sentinel`` exempts a protocol word from the length floor, so a
+    deliberately terse control reply (``ENOUGH``) is not mistaken for a
+    truncated one and retried into a fresh round of questions.
     """
     alias = _reviewer_alias(config_store)
     if not alias:
@@ -204,12 +225,17 @@ def _ask_model(
         for attempt in range(max(1, attempts)):
             result = model_turn(lane, turns, max_tokens=max_tokens)
             text = (result.content or "").strip()
-            if text:
+            if text and (len(text) >= min_chars or (sentinel and sentinel in text.upper()[:40])):
                 return text, ""
             if attempt + 1 < attempts:
-                log.info("interview.empty_reply_retrying", alias=alias, attempt=attempt + 1)
+                log.info(
+                    "interview.thin_reply_retrying",
+                    alias=alias,
+                    attempt=attempt + 1,
+                    chars=len(text),
+                )
                 time.sleep(1.0 * (attempt + 1))
-        return "", f"{alias} returned nothing after {attempts} attempts"
+        return "", f"{alias} returned nothing usable after {attempts} attempts"
     except Exception as exc:
         log.warning("interview.model_call_failed", exc_info=True)
         return "", f"{alias} call failed: {type(exc).__name__}: {exc}"[:200]
@@ -257,7 +283,10 @@ def start(
     )
     transcript = [{"role": "user", "content": opening}]
     reply, err = _ask_model(
-        config_store, storage, _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript)
+        config_store,
+        storage,
+        _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript),
+        min_chars=MIN_QUESTION_CHARS,
     )
     if not reply:
         return {
@@ -309,7 +338,11 @@ def answer(
         return _write_note(storage, config_store, row, transcript, rounds, truncated)
 
     reply, _err = _ask_model(
-        config_store, storage, _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript)
+        config_store,
+        storage,
+        _turns(_SYSTEM.format(max_q=MAX_QUESTIONS), transcript),
+        min_chars=MIN_QUESTION_CHARS,
+        sentinel="ENOUGH",
     )
     if not reply:
         # Questioning failed; go straight to writing rather than stranding an
@@ -348,6 +381,7 @@ def _write_note(
         # needs more room than a couple of questions.
         attempts=4,
         max_tokens=2400,
+        min_chars=MIN_NOTE_CHARS,
     )
     if not text:
         storage.update_interview(

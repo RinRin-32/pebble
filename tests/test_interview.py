@@ -94,6 +94,80 @@ class TestModelSelection:
         assert interview._reviewer_alias(_Config()) == ""
 
 
+class TestThinReplies:
+    """A truncated reply is retried, not accepted.
+
+    Seen against a live reviewer: the same prompt returned nothing on one
+    call and `"1. What test"` on the next, both with finish_reason="stop".
+    Accepting that fragment asks the engineer half a question.
+    """
+
+    @staticmethod
+    def _stub(monkeypatch: pytest.MonkeyPatch, replies: list[str]) -> list[int]:
+        """Drive the real `_ask_model` against a scripted model."""
+        import pebble.core.model_registry as mr
+        import pebble.core.model_turn as mt
+
+        calls: list[int] = []
+
+        class _Reg:
+            def has_alias(self, _a: str) -> bool:
+                return True
+
+            def resolve(self, _a: str) -> tuple[Any, str, Any]:
+                return (object(), "m", None)
+
+            def get_provider(self, _a: str) -> str:
+                return "openai-compatible"
+
+        def fake_turn(_lane: Any, _turns: Any, **_kw: Any) -> Any:
+            calls.append(1)
+            return type("R", (), {"content": replies.pop(0) if replies else ""})()
+
+        monkeypatch.setattr(mr, "load_model_registry", lambda **_kw: _Reg())
+        monkeypatch.setattr(mt, "resolve_lane", lambda *_a, **_kw: object())
+        monkeypatch.setattr(mt, "model_turn", fake_turn)
+        monkeypatch.setattr(interview.time, "sleep", lambda _s: None)
+        return calls
+
+    def _ask(self, **kw: Any) -> tuple[str, str]:
+        return interview._ask_model(
+            _Config(**{"agents.reviewer_model_alias": "rev"}), None, [], **kw
+        )
+
+    def test_a_stunted_reply_is_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._stub(
+            monkeypatch, ["1. What test", "1. What did you measure, and what changed?"]
+        )
+        text, err = self._ask(min_chars=interview.MIN_QUESTION_CHARS)
+        assert "measure" in text and not err
+        assert len(calls) == 2  # the fragment did not count as an answer
+
+    def test_all_attempts_stunted_is_an_error_not_a_fragment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Better to report failure than to interview someone with half a
+        # question, or file a note distilled from one.
+        self._stub(monkeypatch, ["1. What test", "2. And?"])
+        text, err = self._ask(min_chars=interview.MIN_QUESTION_CHARS)
+        assert text == "" and "nothing usable" in err
+
+    def test_the_enough_sentinel_is_exempt_from_the_floor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Terse on purpose: retrying it would ask for questions the
+        # interviewer just said were unnecessary.
+        calls = self._stub(monkeypatch, ["ENOUGH"])
+        text, err = self._ask(min_chars=interview.MIN_QUESTION_CHARS, sentinel="ENOUGH")
+        assert text == "ENOUGH" and not err
+        assert len(calls) == 1
+
+    def test_a_long_enough_reply_passes_first_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._stub(monkeypatch, ["1. What did you measure, and what did you reject?"])
+        text, _err = self._ask(min_chars=interview.MIN_QUESTION_CHARS)
+        assert "reject" in text and len(calls) == 1
+
+
 class TestStart:
     def test_opens_and_returns_questions(self, vault: Path, scripted: list[str]) -> None:
         scripted.append("1. What did you measure?\n2. What did you reject?")
