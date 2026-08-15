@@ -3876,3 +3876,97 @@ h3.skill-spec-heading {
 #admin-knowledge .admin-row {
   grid-template-columns: 1.4fr 100px 1fr 130px 1.6fr;
 }
+
+/* Knowledge reader — the pane a graph node opens.
+   Sits over the graph rather than beside it: at this width a side-by-side
+   split leaves neither readable, and the graph stays visible behind. */
+.kb-graph {
+  position: relative;
+}
+.kb-reader {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: min(30rem, 62%);
+  max-height: calc(100% - 1rem);
+  overflow-y: auto;
+  z-index: 2;
+  background: var(--surface-1, #14171a);
+  border: 1px solid var(--border, #333a42);
+  border-radius: 0.4rem;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 45%);
+  padding: 0.6rem 0.75rem 0.75rem;
+}
+.kb-reader-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+.kb-reader-close {
+  background: none;
+  border: 0;
+  color: var(--muted, #9aa3ad);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+.kb-reader-close:hover {
+  color: var(--fg, #e8eaed);
+}
+.kb-reader-meta {
+  color: var(--muted, #9aa3ad);
+  font-size: 0.75rem;
+  margin: 0.15rem 0 0.5rem;
+}
+.kb-reader-summary {
+  font-size: 0.85rem;
+  border-left: 2px solid var(--accent, #e8853a);
+  padding-left: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.kb-reader-body {
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+.kb-reader-empty {
+  color: #fbbf24;
+}
+.kb-reader-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border, #333a42);
+}
+.kb-chip {
+  background: var(--surface-2, #1c2024);
+  border: 1px solid var(--border, #333a42);
+  border-radius: 0.3rem;
+  color: var(--fg, #e8eaed);
+  font-size: 0.72rem;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.kb-chip:hover {
+  border-color: var(--accent, #e8853a);
+  color: var(--accent, #e8853a);
+}
+.kb-chip--inline {
+  padding: 0 0.25rem;
+  font-size: inherit;
+  border-style: dashed;
+}
+/* Nodes are buttons now — say so on hover and keyboard focus. */
+.kb-node {
+  cursor: pointer;
+}
+.kb-node:focus-visible circle {
+  stroke: var(--accent, #e8853a);
+  stroke-width: 2.5;
+}

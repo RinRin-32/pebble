@@ -294,6 +294,62 @@ def token_hint(token: str) -> str:
     return t[-4:] if len(t) >= 8 else ""
 
 
+def identify_token(
+    token: str, host: str = DEFAULT_HOST, *, timeout: float = 10.0
+) -> dict[str, str]:
+    """Ask the forge who a token belongs to, and how far it reaches.
+
+    Two reasons this is worth a network call at link time rather than a field
+    on a form.  A commit should carry the operator's own identity, and asking
+    them to retype a username they have already proved ownership of is a
+    chance to get it wrong.  And the scope list is the part people misjudge:
+    a classic PAT with ``repo`` and ``delete_repo`` reads the same as a
+    fine-grained one in a password box, right up until an agent uses it.
+
+    Returns ``{login, scopes, error}``; a failure is reported rather than
+    raised, because a token that cannot be identified may still be a working
+    push credential and refusing to store it would be worse.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    api = "https://api.github.com/user" if host == DEFAULT_HOST else f"https://{host}/api/v3/user"
+    req = urllib.request.Request(  # noqa: S310 - fixed https scheme, host from config
+        api,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "pebble",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            data = json.load(resp)
+            return {
+                "login": str(data.get("login") or ""),
+                # Empty for fine-grained tokens: GitHub only sends this header
+                # for classic PATs, and its absence is itself informative.
+                "scopes": resp.headers.get("x-oauth-scopes") or "",
+                "error": "",
+            }
+    except urllib.error.HTTPError as exc:
+        return {"login": "", "scopes": "", "error": f"{exc.code} from {host}"}
+    except Exception as exc:  # network down, DNS, timeout
+        return {"login": "", "scopes": "", "error": str(exc)[:120]}
+
+
+#: Classic-PAT scopes that reach far past "push this branch".  Surfaced in the
+#: console so an operator sees what they just handed to a coding agent.
+WIDE_SCOPES = frozenset({"delete_repo", "admin:org", "admin:enterprise", "workflow"})
+
+
+def wide_scopes(scopes: str) -> list[str]:
+    """Which alarming scopes a token carries, if any."""
+    have = {s.strip() for s in (scopes or "").split(",") if s.strip()}
+    return sorted(have & WIDE_SCOPES)
+
+
 def redact(text: str) -> str:
     """Remove the token from *text*.
 
