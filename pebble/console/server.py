@@ -117,6 +117,25 @@ _HTML = ""
 _HTML_ETAG = ""
 
 
+_KB_MCP_APP: Any = None
+_KB_MCP_SERVER: Any = None
+
+
+def _kb_mcp_app() -> Any:
+    """Build the knowledge MCP app once, lazily.
+
+    Lazily because importing the MCP server SDK costs real import time and a
+    console that nobody points an MCP client at should not pay it at startup.
+    """
+    global _KB_MCP_APP, _KB_MCP_SERVER
+    if _KB_MCP_APP is None:
+        from pebble.core.kb_mcp import UserScopeMiddleware, build_server
+
+        _KB_MCP_SERVER = build_server()
+        _KB_MCP_APP = UserScopeMiddleware(_KB_MCP_SERVER.streamable_http_app())
+    return _KB_MCP_APP
+
+
 def _load_static() -> None:
     import hashlib
 
@@ -5294,6 +5313,27 @@ def _teardown_partial_coord_subsystem(app: Any) -> None:
 
 
 @asynccontextmanager
+async def _kb_mcp_lifespan() -> AsyncGenerator[None, None]:
+    """Run the knowledge MCP session manager for the console's lifetime.
+
+    A no-op when the mount could not be built, so a missing/broken MCP SDK
+    degrades to "that one endpoint is unavailable" rather than taking the
+    whole console down at startup.
+    """
+    manager = None
+    try:
+        _kb_mcp_app()
+        manager = _KB_MCP_SERVER.session_manager if _KB_MCP_SERVER else None
+    except Exception:
+        log.warning("kb_mcp.unavailable", exc_info=True)
+    if manager is None:
+        yield
+        return
+    async with manager.run():
+        yield
+
+
+@asynccontextmanager
 async def _lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     # Create async HTTP clients for proxy routes.  Auth headers are NOT baked
     # in — _proxy_auth_headers() injects a fresh token per-request so JWTs
@@ -5513,7 +5553,12 @@ async def _lifespan(app: Starlette) -> AsyncGenerator[None, None]:
         # ``asyncio.to_thread`` invocation.
         await asyncio.to_thread(_load_and_bootstrap_coord_subsystem, app, storage, config_store)
 
-    yield
+    # The MCP mount carries its own lifespan, and Starlette only runs the
+    # TOP-LEVEL app's — a mounted sub-app's never fires.  Without this the
+    # session manager is never started and every client fails at initialize
+    # with "Session terminated", which reads like an auth problem and is not.
+    async with _kb_mcp_lifespan():
+        yield
     # Shutdown
     if _console_heartbeat_task is not None:
         _console_heartbeat_task.cancel()
@@ -15315,6 +15360,12 @@ def create_app(
             Route("/metrics", console_metrics_endpoint),
             Route("/openapi.json", _openapi_handler),
             Route("/docs", _docs_handler),
+            # Pebble as an MCP SERVER (it has only ever been a client): a
+            # Claude Code session on another machine, working in an unrelated
+            # repo, reads and writes the same knowledge vault the dispatched
+            # agents use.  AuthMiddleware already covers this path, so a caller
+            # is whoever their pebble API token says they are.
+            Mount("/mcp", app=_kb_mcp_app(), name="kb-mcp"),
             Mount("/static", app=StaticFiles(directory=str(_STATIC_DIR)), name="static"),
             Mount("/shared", app=StaticFiles(directory=str(_SHARED_DIR)), name="shared"),
             # Coordinator one-pane UI — the route serves a single

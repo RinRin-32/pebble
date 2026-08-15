@@ -210,6 +210,12 @@ services:
       PEBBLE_DB_BACKEND: *db-backend
       PEBBLE_DB_URL: *db-url
       PEBBLE_CONSOLE_URL: http://console:8090
+    volumes:
+      # The console serves the knowledge MCP mount, so it needs the vault it
+      # is serving.  It previously had no /workspace at all — only nodes did,
+      # which is why the admin panel reads the derived DB index rather than
+      # the note files.
+      - ${WORKSPACE_MOUNT:-workspace}:/workspace
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

@@ -482,18 +482,41 @@ def list_notes() -> list[Note]:
     return out
 
 
-def search_notes(query: str, *, limit: int = 20) -> list[tuple[Note, int]]:
-    """Rank notes against a plain-text *query*.
+def repos() -> list[tuple[str, int]]:
+    """Codebases the vault holds notes about, with counts, most-noted first.
+
+    Discovery for a caller who has just arrived: "what do you already know
+    about?" is the first question worth asking, and it is unanswerable from
+    search alone.
+    """
+    counts: dict[str, int] = {}
+    for note in list_notes():
+        key = (note.repo_id or "").strip()
+        if key:
+            counts[key] = counts.get(key, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
+def search_notes(query: str, *, limit: int = 20, repo: str = "") -> list[tuple[Note, int]]:
+    """Rank notes against a plain-text *query*, optionally scoped to one repo.
 
     Substring scoring rather than embeddings: for a personal KB the corpus is
     small, the results are explainable, and there is no index to go stale — the
     same reasoning that makes agentic grep beat RAG for code search.
+
+    *repo* matters once the vault spans several codebases, which is the normal
+    state as soon as anything writes to it remotely: without it, a session
+    working on one project gets ranked hits from every other one, and the
+    noise grows with the vault's usefulness.
     """
     terms = [t.lower() for t in re.split(r"\W+", query) if t]
     if not terms:
         return []
+    want_repo = (repo or "").strip().lower()
     scored: list[tuple[Note, int]] = []
     for note in list_notes():
+        if want_repo and (note.repo_id or "").strip().lower() != want_repo:
+            continue
         title_l, body_l = note.title.lower(), note.body.lower()
         tags_l = " ".join(note.tags).lower()
         score = 0
