@@ -1800,6 +1800,9 @@ class PostgreSQLBackend:
                     sa.select(kb_links.c.to_title, sa.func.count()).group_by(kb_links.c.to_title)
                 ).fetchall()
             }
+            link_rows = conn.execute(
+                sa.select(kb_links.c.from_note, kb_links.c.to_title)
+            ).fetchall()
             titles = {r[1] for r in rows}
             # A link to a note that does not exist is the research frontier:
             # something was named and never written up.
@@ -1821,7 +1824,27 @@ class PostgreSQLBackend:
             }
             for r in rows
         ]
-        return [{"notes": notes, "frontier": [{"title": t, "count": n} for t, n in frontier]}]
+        # Edges, resolved to titles on both ends so the caller never has to
+        # join note_id -> title itself.  A link whose target does not exist is
+        # marked dangling: that is the research frontier, and the graph draws
+        # it differently rather than dropping it.
+        title_by_id = {str(r[0]): str(r[1]) for r in rows}
+        edges = [
+            {
+                "from": title_by_id[str(a)],
+                "to": str(b),
+                "dangling": str(b) not in titles,
+            }
+            for a, b in link_rows
+            if str(a) in title_by_id
+        ]
+        return [
+            {
+                "notes": notes,
+                "frontier": [{"title": t, "count": n} for t, n in frontier],
+                "edges": edges,
+            }
+        ]
 
     def coding_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
         """Workstreams bound to a repo — the coding work, ongoing or finished."""

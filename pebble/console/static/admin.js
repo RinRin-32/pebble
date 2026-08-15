@@ -1,4 +1,4 @@
-/* Admin panel — user & token management for turnstone console */
+/* Admin panel — user & token management for pebble console */
 
 let _adminTab = "users";
 let _adminUsers = [];
@@ -8745,6 +8745,176 @@ function loadCodingJobs() {
 // Knowledge — the vault graph, read from the derived index
 // ---------------------------------------------------------------------------
 
+// --- Knowledge graph -------------------------------------------------------
+// An Obsidian-style node-link view of the vault, hand-rolled rather than
+// pulled from a charting library: the console ships no graph dependency and
+// loads no external scripts, and a vault of this size settles in a few hundred
+// iterations of a spring layout well inside one frame.
+//
+// The layout is DETERMINISTIC — positions are seeded from the node index and
+// nothing calls Math.random — so hitting Refresh redraws the same picture
+// instead of shuffling the map out from under whoever is reading it.
+
+const _KB_MAX_NODES = 60; // beyond this the picture stops being readable
+
+function _kbBuildGraph(notes, edges) {
+  const byTitle = {};
+  const nodes = [];
+  for (let i = 0; i < notes.length; i++) {
+    const t = notes[i].title || "";
+    if (!t || byTitle[t]) continue;
+    byTitle[t] = {
+      id: t,
+      title: t,
+      kind: notes[i].kind || "note",
+      summary: notes[i].summary || "",
+      repo: notes[i].repo_id || "",
+      dangling: false,
+      deg: 0,
+    };
+    nodes.push(byTitle[t]);
+  }
+  const links = [];
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i] || {};
+    const a = byTitle[e.from];
+    if (!a) continue;
+    let b = byTitle[e.to];
+    if (!b) {
+      // A dangling target has no note of its own. It still gets a node: the
+      // frontier is the interesting part of the graph — a name someone reached
+      // for and nobody has written yet — so it is drawn, not dropped.
+      b = { id: e.to, title: e.to, kind: "unwritten", summary: "", repo: "", dangling: true, deg: 0 };
+      byTitle[e.to] = b;
+      nodes.push(b);
+    }
+    a.deg++;
+    b.deg++;
+    links.push({ s: a, t: b, dangling: !!e.dangling });
+  }
+  return { nodes: nodes, links: links };
+}
+
+function _kbLayout(nodes, links, W, H) {
+  const n = nodes.length;
+  if (!n) return;
+  const R = Math.min(W, H) / 2.8;
+  for (let i = 0; i < n; i++) {
+    // Golden-angle seeding spreads the initial ring evenly for any n, and is
+    // a pure function of the index — hence reproducible across refreshes.
+    const a = i * 2.399963229728653;
+    const r = R * Math.sqrt((i + 1) / n);
+    nodes[i].x = W / 2 + Math.cos(a) * r;
+    nodes[i].y = H / 2 + Math.sin(a) * r;
+    nodes[i].vx = 0;
+    nodes[i].vy = 0;
+  }
+  const REPULSION = 5200;
+  const SPRING = 0.012;
+  const REST = 90;
+  const CENTER = 0.006;
+  const DAMP = 0.82;
+  for (let step = 0; step < 320; step++) {
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let dx = nodes[i].x - nodes[j].x;
+        let dy = nodes[i].y - nodes[j].y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) { d2 = 1; dx = (i - j) || 1; dy = 1; }
+        const d = Math.sqrt(d2);
+        const f = REPULSION / d2;
+        const ux = dx / d;
+        const uy = dy / d;
+        nodes[i].vx += ux * f; nodes[i].vy += uy * f;
+        nodes[j].vx -= ux * f; nodes[j].vy -= uy * f;
+      }
+    }
+    for (let k = 0; k < links.length; k++) {
+      const s = links[k].s;
+      const t = links[k].t;
+      const dx = t.x - s.x;
+      const dy = t.y - s.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (d - REST) * SPRING;
+      const ux = (dx / d) * f;
+      const uy = (dy / d) * f;
+      s.vx += ux; s.vy += uy;
+      t.vx -= ux; t.vy -= uy;
+    }
+    for (let i = 0; i < n; i++) {
+      const nd = nodes[i];
+      nd.vx += (W / 2 - nd.x) * CENTER;
+      nd.vy += (H / 2 - nd.y) * CENTER;
+      nd.vx *= DAMP; nd.vy *= DAMP;
+      nd.x += nd.vx; nd.y += nd.vy;
+      const pad = 46;
+      nd.x = Math.max(pad, Math.min(W - pad, nd.x));
+      nd.y = Math.max(24, Math.min(H - 24, nd.y));
+    }
+  }
+}
+
+function _kbGraphSvg(notes, edges) {
+  const g = _kbBuildGraph(notes || [], edges || []);
+  if (!g.nodes.length) return "";
+  let dropped = 0;
+  if (g.nodes.length > _KB_MAX_NODES) {
+    // Keep the best-connected nodes; say so rather than truncating silently.
+    g.nodes.sort(function (a, b) { return b.deg - a.deg; });
+    const keep = {};
+    const kept = g.nodes.slice(0, _KB_MAX_NODES);
+    for (let i = 0; i < kept.length; i++) keep[kept[i].id] = true;
+    dropped = g.nodes.length - kept.length;
+    g.nodes = kept;
+    g.links = g.links.filter(function (l) { return keep[l.s.id] && keep[l.t.id]; });
+  }
+  const W = 880;
+  const H = Math.max(260, Math.min(460, 200 + g.nodes.length * 14));
+  _kbLayout(g.nodes, g.links, W, H);
+
+  let edgeSvg = "";
+  for (let i = 0; i < g.links.length; i++) {
+    const l = g.links[i];
+    edgeSvg +=
+      '<line x1="' + l.s.x.toFixed(1) + '" y1="' + l.s.y.toFixed(1) +
+      '" x2="' + l.t.x.toFixed(1) + '" y2="' + l.t.y.toFixed(1) +
+      '" class="kb-edge' + (l.dangling ? " kb-edge--frontier" : "") + '" />';
+  }
+  let nodeSvg = "";
+  for (let i = 0; i < g.nodes.length; i++) {
+    const nd = g.nodes[i];
+    const r = 4.5 + Math.min(9, Math.sqrt(nd.deg) * 3);
+    const label = nd.title.length > 20 ? nd.title.slice(0, 19) + "…" : nd.title;
+    const cls = nd.dangling ? "kb-node kb-node--frontier" : (nd.deg ? "kb-node" : "kb-node kb-node--orphan");
+    const tip = nd.dangling
+      ? nd.title + " — linked to, not yet written"
+      : nd.title + " (" + nd.kind + ")" + (nd.repo ? " · " + nd.repo : "") +
+        (nd.summary ? "\n" + nd.summary : "");
+    nodeSvg +=
+      '<g class="' + cls + '"><title>' + escapeHtml(tip) + "</title>" +
+      '<circle cx="' + nd.x.toFixed(1) + '" cy="' + nd.y.toFixed(1) + '" r="' + r.toFixed(1) + '" />' +
+      '<text x="' + nd.x.toFixed(1) + '" y="' + (nd.y + r + 11).toFixed(1) + '">' +
+      escapeHtml(label) + "</text></g>";
+  }
+  const note = dropped
+    ? '<span class="kb-graph-note">showing the ' + _KB_MAX_NODES +
+      " best-connected notes; " + dropped + " more not drawn</span>"
+    : "";
+  return (
+    '<div class="kb-graph">' +
+    '<svg viewBox="0 0 ' + W + " " + H + '" role="img" ' +
+    'aria-label="Vault graph: ' + g.nodes.length + " notes connected by " +
+    g.links.length + ' links, dangling links shown dashed.">' +
+    edgeSvg + nodeSvg + "</svg>" +
+    '<div class="kb-graph-legend">' +
+    '<span><i class="kb-swatch"></i>note</span>' +
+    '<span><i class="kb-swatch kb-swatch--frontier"></i>unwritten (frontier)</span>' +
+    '<span><i class="kb-swatch kb-swatch--orphan"></i>unlinked</span>' +
+    note +
+    "</div></div>"
+  );
+}
+
 function loadKnowledge() {
   const host = document.getElementById("admin-knowledge-table");
   if (!host) return;
@@ -8765,7 +8935,7 @@ function loadKnowledge() {
           '<span class="stat-chip"><b>' + (st.orphans || 0) + "</b> orphans</span>"
         );
       }
-      let html = "";
+      let html = _kbGraphSvg(notes, data.edges || []);
       if (frontier.length) {
         // Dangling links are the useful part: something was named and never
         // written up, which is where research should go next.

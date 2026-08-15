@@ -1140,7 +1140,7 @@ class TestConsoleHTTPEndpoints:
         status, body, ct = self._get_raw(client, "/")
         assert status == 200
         assert "text/html" in ct
-        assert "turnstone console" in body
+        assert "pebble console" in body
 
     def test_static_css(self, client):
         status, body, ct = self._get_raw(client, "/static/style.css")
