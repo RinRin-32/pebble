@@ -7529,7 +7529,7 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
     """
     from pebble.core.audit import record_audit
     from pebble.core.auth import require_permission
-    from pebble.core.git_identity import token_hint
+    from pebble.core.git_identity import identify_token, token_hint, wide_scopes
     from pebble.core.secret_cipher import SecretCipherUnavailableError, encrypt
     from pebble.core.web_helpers import read_json_or_400, require_storage_or_503
 
@@ -7557,6 +7557,12 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
         return JSONResponse({"error": "token is required"}, status_code=400)
     host = str(body.get("host") or "github.com").strip() or "github.com"
     login = str(body.get("login") or "").strip()
+    # Ask the forge who this token belongs to, so commits carry the operator's
+    # own identity rather than the bot's, and so the console can say out loud
+    # what the token reaches.  Not fatal on failure: a token that cannot be
+    # identified may still be a working push credential.
+    ident = await asyncio.to_thread(identify_token, token, host)
+    login = login or ident["login"]
     try:
         ct = encrypt(token)
     except SecretCipherUnavailableError as exc:
@@ -7574,7 +7580,71 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
         {"host": host, "login": login},
         ip,
     )
-    return JSONResponse({"linked": True, "host": host, "login": login, "hint": token_hint(token)})
+    return JSONResponse(
+        {
+            "linked": True,
+            "host": host,
+            "login": login,
+            "hint": token_hint(token),
+            "identified": bool(ident["login"]),
+            "identify_error": ident["error"],
+            # A classic PAT that can delete repos or administer an org reads
+            # exactly like a scoped one in a password box.  Say so.
+            "wide_scopes": wide_scopes(ident["scopes"]),
+        }
+    )
+
+
+async def admin_knowledge_note(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/knowledge/note?title=... — one note, with its body.
+
+    Read from the vault FILES rather than the index: the index carries a
+    summary and the link edges, which is all the graph needs, but a reader
+    clicking a node wants the note itself.  The console mounts /workspace, so
+    it can serve the source of truth instead of a projection of it.
+
+    Neighbours ride along because that is what makes the graph browsable — a
+    reader following links should not have to search for the next title.
+    """
+    from pebble.core.auth import require_permission
+    from pebble.core.web_helpers import require_storage_or_503
+
+    _storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+    title = (request.query_params.get("title") or "").strip()
+    if not title:
+        return JSONResponse({"error": "title is required"}, status_code=400)
+
+    from pebble.core.knowledge import neighbours, read_note
+
+    def _load() -> dict[str, Any]:
+        note = read_note(title)
+        if note is None:
+            return {"found": False, "title": title}
+        near = neighbours(title)
+        return {
+            "found": True,
+            "title": note.title,
+            "kind": note.kind,
+            "summary": note.summary,
+            "tags": list(note.tags or []),
+            "repo": note.repo_id,
+            "ws_id": note.ws_id,
+            "body": note.body,
+            "links": list(note.links or []),
+            "backlinks": near.get("backlinks", []),
+            "dangling": near.get("dangling", []),
+        }
+
+    try:
+        return JSONResponse(await asyncio.to_thread(_load))
+    except Exception:
+        log.warning("admin.knowledge_note_failed", exc_info=True)
+        return JSONResponse({"error": "could not read note"}, status_code=500)
 
 
 async def admin_knowledge(request: Request) -> JSONResponse:
@@ -14971,6 +15041,7 @@ def create_app(
                         methods=["PUT", "DELETE"],
                     ),
                     Route("/api/admin/knowledge", admin_knowledge),
+                    Route("/api/admin/knowledge/note", admin_knowledge_note),
                     Route("/api/admin/coding-jobs", admin_coding_jobs),
                     # Per-user access allow-lists (models + personas)
                     Route("/api/admin/users/{user_id}/models", admin_get_user_models),

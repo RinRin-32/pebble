@@ -8891,7 +8891,9 @@ function _kbGraphSvg(notes, edges) {
       : nd.title + " (" + nd.kind + ")" + (nd.repo ? " · " + nd.repo : "") +
         (nd.summary ? "\n" + nd.summary : "");
     nodeSvg +=
-      '<g class="' + cls + '"><title>' + escapeHtml(tip) + "</title>" +
+      '<g class="' + cls + '" data-kb-title="' + escapeHtml(nd.title) + '" ' +
+      'role="button" tabindex="0" aria-label="Open note: ' + escapeHtml(nd.title) + '">' +
+      "<title>" + escapeHtml(tip) + "</title>" +
       '<circle cx="' + nd.x.toFixed(1) + '" cy="' + nd.y.toFixed(1) + '" r="' + r.toFixed(1) + '" />' +
       '<text x="' + nd.x.toFixed(1) + '" y="' + (nd.y + r + 11).toFixed(1) + '">' +
       escapeHtml(label) + "</text></g>";
@@ -8902,6 +8904,7 @@ function _kbGraphSvg(notes, edges) {
     : "";
   return (
     '<div class="kb-graph">' +
+    '<div class="kb-reader" id="kb-reader" hidden></div>' +
     '<svg viewBox="0 0 ' + W + " " + H + '" role="img" ' +
     'aria-label="Vault graph: ' + g.nodes.length + " notes connected by " +
     g.links.length + ' links, dangling links shown dashed.">' +
@@ -8913,6 +8916,99 @@ function _kbGraphSvg(notes, edges) {
     note +
     "</div></div>"
   );
+}
+
+
+// --- Note reader ----------------------------------------------------------
+// Clicking a node opens the note beside the graph.  The graph answers "what is
+// connected to what"; this answers "what does it say" — and following a link
+// from the body is how a vault becomes browsable rather than merely drawn.
+
+function _kbOpenNote(title) {
+  const host = document.getElementById("kb-reader");
+  if (!host) return;
+  host.hidden = false;
+  setSafeHtml(host, '<div class="kb-reader-body">Loading…</div>');
+  authFetch("/v1/api/admin/knowledge/note?title=" + encodeURIComponent(title))
+    .then(function (r) { return r.json(); })
+    .then(function (n) {
+      if (!n.found) {
+        // A dangling target has no note yet.  Say what it is rather than
+        // showing an error: this is the frontier, not a fault.
+        setSafeHtml(
+          host,
+          '<div class="kb-reader-head"><b>' + escapeHtml(title) + "</b>" +
+          '<button type="button" class="kb-reader-close" aria-label="Close">\u00d7</button></div>' +
+          '<div class="kb-reader-body kb-reader-empty">Not written yet — something links here, ' +
+          "but no note exists. That is the research frontier.</div>",
+        );
+        _kbWireReader();
+        return;
+      }
+      let meta = escapeHtml(n.kind || "note");
+      if (n.repo) meta += " · " + escapeHtml(n.repo);
+      if (n.tags && n.tags.length) meta += " · " + escapeHtml(n.tags.join(", "));
+      let html =
+        '<div class="kb-reader-head"><b>' + escapeHtml(n.title) + "</b>" +
+        '<button type="button" class="kb-reader-close" aria-label="Close">\u00d7</button></div>' +
+        '<div class="kb-reader-meta">' + meta + "</div>";
+      if (n.summary) html += '<div class="kb-reader-summary">' + escapeHtml(n.summary) + "</div>";
+      html += '<div class="kb-reader-body">' + _kbRenderBody(n.body || "") + "</div>";
+      const nav = [];
+      (n.links || []).forEach(function (t) { nav.push(_kbLinkChip(t, "out")); });
+      (n.backlinks || []).forEach(function (t) { nav.push(_kbLinkChip(t, "in")); });
+      if (nav.length) html += '<div class="kb-reader-links">' + nav.join("") + "</div>";
+      setSafeHtml(host, html);
+      _kbWireReader();
+    })
+    .catch(function () {
+      setSafeHtml(host, '<div class="kb-reader-body">Could not load that note.</div>');
+    });
+}
+
+function _kbLinkChip(title, dir) {
+  return (
+    '<button type="button" class="kb-chip kb-chip--' + dir +
+    '" data-kb-title="' + escapeHtml(title) + '">' +
+    (dir === "in" ? "\u2190 " : "\u2192 ") + escapeHtml(title) + "</button>"
+  );
+}
+
+function _kbRenderBody(body) {
+  // Deliberately not a markdown renderer: this is a reading pane for short
+  // notes, and escaping everything then linkifying [[wikilinks]] keeps the one
+  // affordance that matters (following a link) without an XSS surface.
+  const esc = escapeHtml(body);
+  return esc.replace(/\[\[([^\]]+)\]\]/g, function (_m, t) {
+    return '<button type="button" class="kb-chip kb-chip--inline" data-kb-title="' +
+      t.replace(/"/g, "&quot;") + '">' + t + "</button>";
+  });
+}
+
+function _kbWireReader() {
+  document.querySelectorAll("#kb-reader [data-kb-title]").forEach(function (el) {
+    el.addEventListener("click", function () {
+      _kbOpenNote(el.getAttribute("data-kb-title"));
+    });
+  });
+  const close = document.querySelector("#kb-reader .kb-reader-close");
+  if (close) {
+    close.addEventListener("click", function () {
+      const host = document.getElementById("kb-reader");
+      if (host) { host.hidden = true; setSafeHtml(host, ""); }
+    });
+  }
+}
+
+function _kbWireGraph() {
+  document.querySelectorAll(".kb-graph svg [data-kb-title]").forEach(function (el) {
+    const open = function () { _kbOpenNote(el.getAttribute("data-kb-title")); };
+    el.addEventListener("click", open);
+    el.addEventListener("keydown", function (e) {
+      // Nodes are focusable buttons, so the keyboard has to work too.
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    });
+  });
 }
 
 function loadKnowledge() {
@@ -8966,6 +9062,7 @@ function loadKnowledge() {
           "</div>";
       }
       setSafeHtml(host, html);
+      _kbWireGraph();
     })
     .catch(function () {
       setSafeHtml(host, '<div class="dashboard-empty">Failed to load knowledge</div>');

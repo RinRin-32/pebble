@@ -146,3 +146,40 @@ class TestRedaction:
         monkeypatch.delenv("PEBBLE_GIT_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         assert gi.redact("nothing to hide") == "nothing to hide"
+
+
+class TestTokenIdentification:
+    """Who does this token belong to, and how far does it reach?
+
+    Asked at link time so a commit carries the operator's own identity, and so
+    the console can say out loud what it was just handed — a classic PAT with
+    ``delete_repo`` looks exactly like a scoped one in a password box.
+    """
+
+    def test_wide_scopes_are_surfaced(self) -> None:
+        scopes = "repo, delete_repo, admin:org, gist, workflow"
+        assert gi.wide_scopes(scopes) == [
+            "admin:org",
+            "delete_repo",
+            "workflow",
+        ]
+
+    def test_ordinary_scopes_raise_nothing(self) -> None:
+        assert gi.wide_scopes("repo, read:user") == []
+
+    def test_fine_grained_tokens_report_no_scopes(self) -> None:
+        # GitHub sends the x-oauth-scopes header only for classic PATs, so an
+        # empty value is the normal case for the token we recommend.
+        assert gi.wide_scopes("") == []
+
+    def test_identification_failure_is_reported_not_raised(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A token that cannot be identified may still push fine; refusing to
+        # store it would be worse than not knowing the login.
+        def boom(*a: object, **k: object) -> None:
+            raise OSError("network down")
+
+        monkeypatch.setattr("urllib.request.urlopen", boom)
+        out = gi.identify_token("ghp_whatever")
+        assert out["login"] == "" and out["error"]
