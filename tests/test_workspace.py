@@ -338,8 +338,9 @@ class TestActingUserCredential:
         assert _git_env.get() is None
 
     def test_unresolvable_user_does_not_raise(self) -> None:
-        # A storage failure must not take down every git operation; it falls
-        # back to the instance credential.
+        # A storage failure must not take down every git operation. It no
+        # longer falls back to the instance credential, though — see
+        # TestNoSilentInstanceFallback.
         from pebble.core.workspace import acting_user
 
         class _Broken:
@@ -351,3 +352,91 @@ class TestActingUserCredential:
 
         with acting_user("u1", _Broken()):
             pass  # no exception
+
+
+class _NoCredStore:
+    """A user who has linked nothing and holds no capability."""
+
+    def list_user_capabilities(self, user_id: str) -> list[str]:
+        return []
+
+    def get_user_git_credential(self, user_id: str) -> dict[str, object] | None:
+        return None
+
+
+class TestNoSilentInstanceFallback:
+    """A user with no linked credential does not push as the instance.
+
+    `resolve_for_user` already enforces this correctly through the `code_push`
+    capability. The bug was underneath it: when resolution produced nothing,
+    the ContextVar was left empty and `_git()` fell through to `git_env()`,
+    which reads the process environment and cannot know who is asking. On a
+    node holding PEBBLE_GIT_TOKEN the push then succeeded as the bot — no
+    error, an audit trail naming the bot, and a console saying the user
+    dispatched it.
+    """
+
+    def test_the_instance_token_is_stripped_not_merely_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pebble.core.workspace import _git_env, acting_user
+
+        monkeypatch.setenv("PEBBLE_GIT_TOKEN", "instance-token")
+        monkeypatch.setenv("GH_TOKEN", "instance-token")
+        monkeypatch.setenv("GIT_ASKPASS", "/some/askpass")
+        with acting_user("u1", _NoCredStore()):
+            env = _git_env.get()
+            assert env is not None, "an empty ContextVar means _git falls back"
+            for var in ("PEBBLE_GIT_TOKEN", "GH_TOKEN", "GIT_ASKPASS", "GITHUB_TOKEN"):
+                assert var not in env, f"{var} survived into a credential-free context"
+
+    def test_git_still_runs_so_public_repos_still_clone(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The block runs without credentials, not without git. Refusing every
+        # git call would break local work and public clones alike.
+        from pebble.core.workspace import _git_env, acting_user
+
+        monkeypatch.setenv("PEBBLE_GIT_TOKEN", "instance-token")
+        with acting_user("u1", _NoCredStore()):
+            env = _git_env.get() or {}
+            assert env.get("GIT_TERMINAL_PROMPT") == "0"  # fail fast, never hang
+            assert env.get("PATH")  # a usable environment, just an anonymous one
+
+    def test_the_reason_is_recorded_for_the_error_message(self) -> None:
+        # All three no-credential outcomes exit 128 with different stderr, so
+        # the message has to come from us rather than from git.
+        from pebble.core.workspace import _git_denied, acting_user
+
+        with acting_user("u1", _NoCredStore()):
+            assert "no git credential linked" in _git_denied.get()
+        assert _git_denied.get() == ""  # and does not leak out of the block
+
+    def test_a_resolve_fault_is_reported_as_a_fault_not_an_absence(self) -> None:
+        # "Nothing linked" is a settings problem the user can fix; "the
+        # database is down" is not. Collapsing them sends someone to link a
+        # token they already linked.
+        from pebble.core.workspace import _git_denied, acting_user
+
+        class _Broken:
+            def get_user_git_credential(self, user_id: str) -> dict[str, object] | None:
+                raise RuntimeError("db down")
+
+            def list_user_capabilities(self, user_id: str) -> list[str]:
+                raise RuntimeError("db down")
+
+        with acting_user("u1", _Broken()):
+            assert "could not resolve" in _git_denied.get()
+
+    def test_a_resolved_credential_leaves_no_denial(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from pebble.core import git_identity as gi
+        from pebble.core.workspace import _git_denied, acting_user
+
+        class _Store(_NoCredStore):
+            def get_user_git_credential(self, user_id: str) -> dict[str, object] | None:
+                return {"token_ct": "ct", "host": "github.com", "login": "rin"}
+
+        monkeypatch.setattr(gi, "_askpass_path", lambda: "/tmp/askpass")
+        monkeypatch.setattr("pebble.core.secret_cipher.decrypt", lambda _ct: "user-token")
+        with acting_user("u1", _Store()):
+            assert _git_denied.get() == ""

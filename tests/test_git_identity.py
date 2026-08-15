@@ -179,6 +179,78 @@ class TestAskpassScheme:
         assert code == 0 and out == _TOKEN
 
 
+class TestUrlUserinfo:
+    """A URL carrying credentials bypasses the helper entirely.
+
+    Measured: with GIT_ASKPASS pointed at a script that shouts when called,
+    `git clone https://user:TOKEN@github.com/...` never consulted it. So every
+    control the helper enforces is dead code for such a URL, and bind_repo
+    would have stored it verbatim in repos.git_url.
+    """
+
+    @pytest.mark.parametrize(  # type: ignore[misc]
+        "url",
+        [
+            "https://x-access-token:ghp_abc@github.com/o/r.git",
+            "https://ghp_abc@github.com/o/r.git",
+            "http://user:pw@example.com/r.git",
+            "ssh://git@github.com/o/r.git",
+        ],
+    )
+    def test_credential_bearing_urls_are_detected(self, url: str) -> None:
+        assert gi.url_has_userinfo(url) is True
+
+    @pytest.mark.parametrize(  # type: ignore[misc]
+        "url",
+        [
+            "https://github.com/o/r.git",
+            "https://github.com/o/r@v2.git",  # @ in the PATH, not the authority
+            "https://github.com/search?q=a@b",  # @ in the QUERY
+            "https://github.com/o/r.git#frag@ment",
+            "",
+            "git@github.com:o/r.git",  # scp syntax carries no userinfo to strip
+        ],
+    )
+    def test_ordinary_urls_are_not_refused(self, url: str) -> None:
+        # Over-refusing would block legitimate binds, so the authority is
+        # parsed rather than the whole string searched for "@".
+        assert gi.url_has_userinfo(url) is False
+
+
+class TestCredentialFreeEnv:
+    """A credential that did not resolve must REMOVE the ambient one."""
+
+    def test_instance_vars_are_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _env(monkeypatch)
+        base = {
+            "PATH": "/usr/bin",
+            "PEBBLE_GIT_TOKEN": "instance",
+            "GH_TOKEN": "instance",
+            "GITHUB_TOKEN": "instance",
+            "GIT_ASKPASS": "/x/askpass",
+        }
+        env = gi.env_for_credential(
+            gi.ResolvedCredential(token="", host="github.com", login="", source="none"), base
+        )
+        for var in gi.CREDENTIAL_VARS:
+            assert var not in env
+        assert env["PATH"] == "/usr/bin"  # the rest of the environment survives
+        assert env["GIT_TERMINAL_PROMPT"] == "0"
+
+    def test_a_resolved_credential_still_gets_its_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _env(monkeypatch)
+        monkeypatch.setattr(gi, "_askpass_path", lambda: "/tmp/askpass")
+        env = gi.env_for_credential(
+            gi.ResolvedCredential(token="tok", host="github.com", login="rin", source="user"),
+            {"PATH": "/usr/bin"},
+        )
+        assert env["PEBBLE_GIT_TOKEN"] == "tok"
+        assert env["GH_TOKEN"] == "tok"
+        assert env["GIT_AUTHOR_NAME"] == "rin"  # attributed to the person, not the bot
+
+
 class TestRedaction:
     def test_token_is_scrubbed_from_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _env(monkeypatch)

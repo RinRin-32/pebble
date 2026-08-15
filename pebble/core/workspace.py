@@ -98,20 +98,42 @@ def worktree_path(ws_id: str) -> Path:
 #: functions that would only pass it along.
 _git_env: ContextVar[dict[str, str] | None] = ContextVar("workspace_git_env", default=None)
 
+#: Why this context has no credential, "" when it has one or when no user is
+#: acting.  Kept so a remote operation can fail with the actual reason instead
+#: of git's "could not read Username", which names neither the user nor the
+#: cause.  All three no-credential outcomes exit 128 with different stderr, so
+#: the exit code carries nothing and the message has to come from us.
+_git_denied: ContextVar[str] = ContextVar("workspace_git_denied", default="")
+
 
 @contextmanager
 def acting_user(user_id: str, storage: Any = None) -> Iterator[None]:
-    """Run git in this block as *user_id*.
+    """Run git in this block as *user_id*, or as nobody.
 
     The credential is resolved ONCE on entry: ``_git`` is called for status and
     diff as well as fetch, and a database read plus a decrypt per invocation
     would be paid on operations that never touch a remote.
+
+    When resolution yields nothing this sets a CREDENTIAL-FREE env rather than
+    leaving the ContextVar empty.  An empty ContextVar meant ``_git`` fell
+    through to ``git_env()`` and the process environment — so on a node
+    holding the instance token, a user with nothing linked pushed as the bot,
+    silently.  ``resolve_for_user`` already enforces that correctly via the
+    ``code_push`` capability; the fallback simply reached around it, because
+    ``git_env()`` reads the environment and cannot know who is asking.
+
+    Public repositories still clone here: the block runs without credentials,
+    not without git.  What it will not do is borrow someone else's.
     """
     env: dict[str, str] | None = None
+    why = ""
     if user_id:
+        from pebble.core.git_identity import ResolvedCredential, env_for_credential
+
+        cred = ResolvedCredential(token="", host="", login="", source="none")
         try:
             from pebble.core.access import can_use_instance_push
-            from pebble.core.git_identity import env_for_credential, resolve_for_user
+            from pebble.core.git_identity import git_host, resolve_for_user
 
             if storage is None:
                 from pebble.core.storage._registry import get_storage
@@ -120,15 +142,53 @@ def acting_user(user_id: str, storage: Any = None) -> Iterator[None]:
             cred = resolve_for_user(
                 storage, user_id, may_use_instance=can_use_instance_push(storage, user_id)
             )
-            if cred.ok:
-                env = env_for_credential(cred)
+            if not cred.ok:
+                why = (
+                    f"could not resolve a git credential: {cred.error}"
+                    if cred.error
+                    else (
+                        f"no git credential linked for {cred.host or git_host()}. "
+                        "Link a token in the console, or ask an admin for the "
+                        "code_push capability to use the instance credential."
+                    )
+                )
         except Exception:
-            log.debug("workspace.credential_resolve_failed", exc_info=True)
+            # Distinct from "nothing linked": this is a fault, and treating it
+            # as an absence would report a settings problem for an outage.
+            log.warning("workspace.credential_resolve_failed", user_id=user_id, exc_info=True)
+            why = "could not resolve a git credential (see the node logs)"
+        env = env_for_credential(cred)
+        if why:
+            log.info("workspace.acting_without_credential", user_id=user_id, reason=why)
     token = _git_env.set(env)
+    denied = _git_denied.set(why)
     try:
         yield
     finally:
         _git_env.reset(token)
+        _git_denied.reset(denied)
+
+
+#: Git's vocabulary for "nobody authenticated me".  Measured against a real
+#: private repo with an isolated config: all three failure modes exit 128, so
+#: the exit code discriminates nothing and the text is all there is.
+#:  - no credential:      "could not read Username for '...': terminal prompts disabled"
+#:  - askpass refused:    "unable to read askpass response from '<path>'"
+#:  - token without access: "Invalid username or token" / "Authentication failed"
+_AUTH_FAILURE_MARKERS = (
+    "could not read username",
+    "could not read password",
+    "unable to read askpass response",
+    "authentication failed",
+    "invalid username or token",
+    "terminal prompts disabled",
+    "repository not found",  # GitHub's 404-for-403 on a private repo
+)
+
+
+def _looks_like_auth_failure(stderr: str) -> bool:
+    low = stderr.lower()
+    return any(m in low for m in _AUTH_FAILURE_MARKERS)
 
 
 def _git(*args: str, cwd: Path | None = None, timeout: int = _GIT_TIMEOUT) -> str:
@@ -154,6 +214,14 @@ def _git(*args: str, cwd: Path | None = None, timeout: int = _GIT_TIMEOUT) -> st
         raise WorkspaceError("git is not installed") from exc
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()
+        # An auth failure in a context that resolved no credential has one
+        # cause worth naming, and git cannot name it: "could not read Username
+        # for 'https://github.com'" says nothing about WHO was acting or why
+        # nothing answered. Only added when git actually complained about
+        # authentication, so an unrelated failure is not mislabelled.
+        why = _git_denied.get()
+        if why and _looks_like_auth_failure(detail):
+            raise WorkspaceError(f"git {args[0]} failed: {why} (git said: {detail[-200:]})")
         raise WorkspaceError(f"git {args[0]} failed: {detail[-400:]}")
     return proc.stdout
 

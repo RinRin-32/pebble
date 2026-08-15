@@ -210,6 +210,13 @@ class ResolvedCredential:
     host: str
     login: str
     source: str  # "user" | "instance" | "none"
+    #: Why resolution produced nothing, when the cause was a FAULT rather than
+    #: an absence — a storage read that failed, a ciphertext that would not
+    #: decrypt.  Empty when the user simply has not linked anything.  The two
+    #: are reported apart because only one of them is the user's to fix:
+    #: telling someone to link a token they already linked sends them after a
+    #: configuration that was correct the whole time.
+    error: str = ""
 
     @property
     def ok(self) -> bool:
@@ -233,12 +240,14 @@ def resolve_for_user(
     3. **Nothing**, and the caller reports that rather than letting git fail
        with an opaque auth error halfway through.
     """
+    fault = ""
     if user_id and storage is not None:
         try:
             row = storage.get_user_git_credential(user_id)
         except Exception:
             log.warning("git.user_credential_read_failed", exc_info=True)
             row = None
+            fault = "the credential store could not be read"
         if row and row.get("token_ct"):
             try:
                 from pebble.core.secret_cipher import decrypt
@@ -250,6 +259,7 @@ def resolve_for_user(
                 # but say so in the log — the user's token is now unreadable.
                 log.warning("git.user_credential_undecryptable", exc_info=True)
                 token = ""
+                fault = "the linked credential could not be decrypted (key rotated?)"
             if token:
                 return ResolvedCredential(
                     token=token,
@@ -261,14 +271,67 @@ def resolve_for_user(
         token = git_token()
         if token:
             return ResolvedCredential(token=token, host=git_host(), login="", source="instance")
-    return ResolvedCredential(token="", host=git_host(), login="", source="none")
+    return ResolvedCredential(token="", host=git_host(), login="", source="none", error=fault)
+
+
+def url_has_userinfo(url: str) -> bool:
+    """Whether *url* carries credentials in its authority.
+
+    ``https://user:token@host/path`` and ``https://token@host/path`` both do.
+    Parsed rather than pattern-matched on "@": a path or query can contain one
+    (``https://host/a@b``), and treating that as a credential would refuse
+    legitimate URLs.  Only the authority — between ``://`` and the first
+    ``/``, ``?`` or ``#`` — can hold userinfo.
+
+    Matters because git consumes in-URL credentials directly and never calls
+    the askpass helper, so a URL like this bypasses every control the helper
+    enforces.
+    """
+    text = (url or "").strip()
+    if "://" not in text:
+        return False
+    authority = text.split("://", 1)[1]
+    for sep in ("/", "?", "#"):
+        authority = authority.split(sep, 1)[0]
+    return "@" in authority
+
+
+#: Every env var that can hand git or gh a credential.  Listed in one place
+#: because :func:`env_for_credential` has to be able to take them AWAY: an
+#: env inherited from the process carries the instance token on any node
+#: configured with one, and a caller who resolved no credential must not
+#: silently push as the operator.
+CREDENTIAL_VARS = (
+    "GIT_ASKPASS",
+    "SSH_ASKPASS",
+    "GIT_CONFIG_PARAMETERS",
+    "PEBBLE_GIT_TOKEN",
+    "TURNSTONE_GIT_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "PEBBLE_GIT_HOST",
+    "PEBBLE_GIT_USER",
+    "GH_HOST",
+)
 
 
 def env_for_credential(
     cred: ResolvedCredential, base: dict[str, str] | None = None
 ) -> dict[str, str]:
-    """Git/gh environment for a specific resolved credential."""
+    """Git/gh environment for a specific resolved credential.
+
+    A credential that did NOT resolve produces an env with every credential
+    variable stripped, not merely one where none were added.  The base is the
+    process environment, which on a node holding ``PEBBLE_GIT_TOKEN`` would
+    otherwise let git authenticate as the instance for a user who has linked
+    nothing — the push succeeds, the audit trail names the bot, and the
+    console says the user dispatched it.  Failing to add a credential and
+    removing the ambient one are different acts, and only the second is safe.
+    """
     env = dict(base if base is not None else os.environ)
+    if not cred.ok:
+        for var in CREDENTIAL_VARS:
+            env.pop(var, None)
     name, email = author_identity()
     if cred.source == "user" and cred.login:
         # Attribute to the user's own GitHub identity when we know it, so the

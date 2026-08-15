@@ -375,6 +375,35 @@ class TestToolPreparesAreCallable:
         status = ChatSession._prepare_bind_repo(self._stub(), "c1", {})
         assert status["needs_approval"] is False
 
+    def test_bind_repo_refuses_a_url_carrying_credentials(self) -> None:
+        """git uses in-URL credentials directly and never calls the askpass
+        helper, so such a URL bypasses the host check, the https check and the
+        username placeholder at once — and would be stored verbatim in
+        repos.git_url, in the clear.
+
+        Refused rather than stripped: a caller who pasted a token needs to
+        know it was exposed, because it now has to be revoked.
+        """
+        from pebble.core.session import ChatSession
+
+        url = "https://x-access-token:ghp_secret@github.com/o/r.git"
+        item = ChatSession._prepare_bind_repo(self._stub(), "c1", {"url": url})
+        assert "revoke" in item["error"].lower()
+        # Never offered for approval: the pending item is persisted and
+        # rendered, so the URL must not get that far.
+        assert item["needs_approval"] is False
+        # And the token is echoed nowhere — this is the one code path that
+        # has certainly just been handed a secret.
+        assert "ghp_secret" not in str(item)
+
+    def test_bind_repo_still_accepts_an_ordinary_url(self) -> None:
+        from pebble.core.session import ChatSession
+
+        item = ChatSession._prepare_bind_repo(
+            self._stub(), "c1", {"url": "https://github.com/o/r.git"}
+        )
+        assert not item.get("error") and item["needs_approval"] is True
+
     def test_prepare_setup_env(self) -> None:
         from pebble.core.session import ChatSession
 
