@@ -107,9 +107,7 @@ def gather_context(repo: str, topic: str) -> str:
 
         hits = search_notes(topic or repo, limit=MAX_PRIOR_NOTES, repo=repo)
         if hits:
-            lines = [
-                f"- {n.title} ({n.kind}): {n.summary or '(no summary)'}" for n, _ in hits
-            ]
+            lines = [f"- {n.title} ({n.kind}): {n.summary or '(no summary)'}" for n, _ in hits]
             parts.append("Notes already in the vault for this repo:\n" + "\n".join(lines))
         else:
             parts.append(f"The vault has nothing recorded for repo {repo!r} yet.")

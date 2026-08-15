@@ -9,12 +9,14 @@ interview always terminates in a written note. Dragging it out buys nothing.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from pebble.core import interview
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class _Config:
@@ -67,9 +69,7 @@ def scripted(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Queue of model replies, so the flow is testable without a model."""
     replies: list[str] = []
 
-    def fake(
-        config_store: Any, storage: Any, turns: Any, **_kw: Any
-    ) -> tuple[str, str]:
+    def fake(config_store: Any, storage: Any, turns: Any, **_kw: Any) -> tuple[str, str]:
         # Mirrors the real helper's (text, error) contract: an empty queue
         # stands in for a model that could not be reached.
         return (replies.pop(0), "") if replies else ("", "no model in test")
@@ -95,9 +95,7 @@ class TestModelSelection:
 
 
 class TestStart:
-    def test_opens_and_returns_questions(
-        self, vault: Path, scripted: list[str]
-    ) -> None:
+    def test_opens_and_returns_questions(self, vault: Path, scripted: list[str]) -> None:
         scripted.append("1. What did you measure?\n2. What did you reject?")
         store = _Store()
         out = interview.start(
@@ -114,17 +112,13 @@ class TestStart:
         assert store.rows[out["interview_id"]]["rounds"] == 1
 
     def test_topic_is_required(self, vault: Path) -> None:
-        out = interview.start(
-            _Store(), _Config(), user_id="u1", repo="r", topic="  ", context="x"
-        )
+        out = interview.start(_Store(), _Config(), user_id="u1", repo="r", topic="  ", context="x")
         assert out["ok"] is False
 
     def test_no_model_is_an_actionable_error(self, vault: Path) -> None:
         # Deliberately NOT using the scripted stub: this exercises the real
         # helper's unconfigured branch, which the stub would bypass.
-        out = interview.start(
-            _Store(), _Config(), user_id="u1", repo="r", topic="t", context="c"
-        )
+        out = interview.start(_Store(), _Config(), user_id="u1", repo="r", topic="t", context="c")
         # Reports WHICH failure: unconfigured is a settings problem, a failed
         # call is usually transient, and collapsing them sends people hunting
         # configuration that is already correct.
@@ -148,9 +142,7 @@ class TestBudget:
         )
         return str(out["interview_id"])
 
-    def test_rounds_are_capped_and_then_it_writes(
-        self, vault: Path, scripted: list[str]
-    ) -> None:
+    def test_rounds_are_capped_and_then_it_writes(self, vault: Path, scripted: list[str]) -> None:
         store = _Store()
         iid = self._open(store, scripted)
         cfg = _Config(**{"agents.reviewer_model_alias": "rev"})
@@ -260,8 +252,6 @@ class TestContext:
     def test_prior_notes_are_offered_to_the_interviewer(self, vault: Path) -> None:
         from pebble.core.knowledge import Note, write_note
 
-        write_note(
-            Note(title="Router timing", body="measured 18s", repo_id="r", summary="18s")
-        )
+        write_note(Note(title="Router timing", body="measured 18s", repo_id="r", summary="18s"))
         ctx = interview.gather_context("r", "router timing")
         assert "Router timing" in ctx
