@@ -17655,6 +17655,16 @@ class ChatSession:
                 item["model"] = (cs.get("agents.coder_model_alias") or "").strip()
             except Exception:
                 log.debug("dispatch.coder_alias_unreadable", exc_info=True)
+        # The agent CLIs want a provider/model string, not a pebble alias, so
+        # resolve one to the other. A value that is not a registered alias is
+        # passed through untouched — that is how an operator names a model
+        # pebble does not know but the CLI does.
+        if item.get("model") and self._registry is not None:
+            try:
+                if self._registry.has_alias(item["model"]):
+                    item["model"] = self._registry.get_config(item["model"]).model
+            except Exception:
+                log.debug("dispatch.model_alias_resolve_failed", exc_info=True)
         if not name:
             # Prefer whatever this node actually has, in a stable order.
             name = next((n for n in ("claude", "opencode", "codex") if n in installed), "")
