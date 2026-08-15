@@ -26,6 +26,7 @@ is refreshed after a write so the console's graph does not go stale.
 
 from __future__ import annotations
 
+import os
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
@@ -101,6 +102,39 @@ def _note_summary(note: Any) -> dict[str, Any]:
     }
 
 
+def _transport_security() -> Any:
+    """DNS-rebinding protection, with the operator's hostnames allowed through.
+
+    The SDK defaults to trusting only localhost, so a remote client reaching a
+    real hostname gets a bare 421 and a log line — which reads like a routing
+    fault rather than a policy one.  ``PEBBLE_MCP_ALLOWED_HOSTS`` is the way to
+    say "this deployment answers to that name"; entries are ``host`` or
+    ``host:port``, comma separated, e.g.::
+
+        PEBBLE_MCP_ALLOWED_HOSTS=pebble.example.com,box.tailnet.ts.net:9443
+
+    The protection is kept ON rather than waved away, because this mount sits
+    behind an AuthMiddleware that also accepts a session COOKIE.  A bearer
+    token cannot be forged by a hostile page, but a cookie rides along
+    automatically — so a browser with a live console session is exactly the
+    thing this check exists to protect.  Setting the variable to ``*`` disables
+    it, which is only reasonable when the mount cannot be reached by a browser
+    that holds such a cookie.
+    """
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    raw = (os.environ.get("PEBBLE_MCP_ALLOWED_HOSTS") or "").strip()
+    if raw == "*":
+        log.warning("kb_mcp.dns_rebinding_protection_disabled")
+        return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    extra = [h.strip() for h in raw.split(",") if h.strip()]
+    hosts = ["localhost", "127.0.0.1", "::1", *extra]
+    # Origins matter for browser-issued requests; mirror the host list so a
+    # deployment that is allowed to answer is also allowed to be called.
+    origins = [f"https://{h}" for h in extra] + [f"http://{h}" for h in extra]
+    return TransportSecuritySettings(allowed_hosts=hosts, allowed_origins=origins)
+
+
 def build_server() -> Any:
     """Construct the MCP server with the vault tools registered."""
     from mcp.server.fastmcp import FastMCP
@@ -113,7 +147,12 @@ def build_server() -> Any:
     # "/mcp", so the real endpoint becomes /mcp/mcp and a client pointed at
     # the obvious URL gets a 404 that surfaces as "Session terminated" —
     # which reads like an auth or protocol fault and is neither.
-    mcp = FastMCP("pebble-knowledge", stateless_http=True, streamable_http_path="/")
+    mcp = FastMCP(
+        "pebble-knowledge",
+        stateless_http=True,
+        streamable_http_path="/",
+        transport_security=_transport_security(),
+    )
 
     @mcp.tool(
         description=(

@@ -15676,7 +15676,24 @@ def main() -> None:
 
     import uvicorn
 
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    # Honour X-Forwarded-* so URLs the app generates match how the client
+    # reached it.  Behind any TLS-terminating proxy (Caddy, tailscale serve, a
+    # load balancer) the app sees plain HTTP, so a redirect it builds from the
+    # request — the trailing-slash redirect on a Mount, for instance — comes
+    # back as http:// and the client's next hop fails against a TLS port.
+    #
+    # forwarded_allow_ips="*" is safe here because nothing is exposed directly:
+    # the console listens on the loopback/compose network and is always fronted
+    # by a proxy.  Trusting the header from an arbitrary direct client would
+    # let it spoof its own scheme and address.
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level="warning",
+        proxy_headers=True,
+        forwarded_allow_ips=os.environ.get("PEBBLE_FORWARDED_ALLOW_IPS", "*"),
+    )
 
 
 if __name__ == "__main__":
