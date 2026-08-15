@@ -560,6 +560,33 @@ def _build_registry() -> dict[str, SettingDef]:
             "registered aliases inherit the session model and log a warning — "
             "register the model in the Models tab and reference it by alias.",
         ),
+        # -- model roles ----------------------------------------------------
+        # Three roles, deliberately separate.  The default writes prose and
+        # drives sessions; the coder is dispatched into a worktree and is
+        # judged on diffs; the reviewer asks questions about work it did not
+        # do.  They want different models, and pinning one alias for all three
+        # forces a compromise on every axis at once.
+        SettingDef(
+            "agents.coder_model_alias",
+            "str",
+            "",
+            "Model alias dispatched coding agents use (empty = the agent CLI's own default)",
+            "agents",
+            help="Passed to the agent CLI when dispatch_agent is called without an explicit "
+            "model. Empty leaves the CLI's own default in place. This is the model that writes "
+            "code in a worktree, so favour one that is good at diffs and tool use.",
+        ),
+        SettingDef(
+            "agents.reviewer_model_alias",
+            "str",
+            "",
+            "Model alias for reviewing and interviewing (empty = falls back to the default alias)",
+            "agents",
+            help="Used by the knowledge interview, where pebble questions an agent about work "
+            "it just did in order to write the finding down properly. This model asks rather "
+            "than produces, so favour reasoning and scepticism over code fluency. Empty falls "
+            "back to model.default_alias.",
+        ),
         SettingDef(
             "agents.dispatch_requires_grant",
             "bool",
