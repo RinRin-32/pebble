@@ -66,9 +66,7 @@ class TestResolution:
         assert cred.token == _USER_TOKEN
         assert cred.login == "rin"
 
-    def test_instance_token_requires_permission(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_instance_token_requires_permission(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PEBBLE_GIT_TOKEN", _INSTANCE_TOKEN)
         store = _Store(caps=[], cred=None)
         denied = resolve_for_user(store, "u1", may_use_instance=False)
@@ -121,9 +119,7 @@ class TestCapability:
 
 class TestCredentialEnv:
     def test_user_credential_attributes_commits_to_them(self) -> None:
-        cred = ResolvedCredential(
-            token=_USER_TOKEN, host="github.com", login="rin", source="user"
-        )
+        cred = ResolvedCredential(token=_USER_TOKEN, host="github.com", login="rin", source="user")
         env = env_for_credential(cred, base={})
         assert env["GIT_AUTHOR_NAME"] == "rin"
         assert env["GIT_AUTHOR_EMAIL"].startswith("rin@")
@@ -131,9 +127,7 @@ class TestCredentialEnv:
         assert env["GH_TOKEN"] == _USER_TOKEN
         assert env["PEBBLE_GIT_HOST"] == "github.com"
 
-    def test_instance_credential_commits_as_the_bot(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_instance_credential_commits_as_the_bot(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("PEBBLE_GIT_AUTHOR_NAME", raising=False)
         cred = ResolvedCredential(
             token=_INSTANCE_TOKEN, host="github.com", login="", source="instance"
@@ -148,9 +142,7 @@ class TestCredentialEnv:
         assert "GH_TOKEN" not in env
 
     def test_redaction_scrubs_the_resolved_token(self) -> None:
-        cred = ResolvedCredential(
-            token=_USER_TOKEN, host="github.com", login="rin", source="user"
-        )
+        cred = ResolvedCredential(token=_USER_TOKEN, host="github.com", login="rin", source="user")
         out = redact_credential(f"remote: rejected {_USER_TOKEN}", cred)
         assert _USER_TOKEN not in out
 
@@ -194,13 +186,13 @@ class TestSecretCipher:
     def test_unconfigured_refuses_rather_than_storing_plaintext(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from pebble.core.secret_cipher import SecretCipherUnavailable, encrypt, is_configured
+        from pebble.core.secret_cipher import SecretCipherUnavailableError, encrypt, is_configured
 
         monkeypatch.delenv("PEBBLE_SECRET_KEY", raising=False)
         monkeypatch.delenv("PEBBLE_SECRET_KEYS", raising=False)
         monkeypatch.setattr("pebble.core.secret_cipher._raw_keys", lambda: [])
         assert is_configured() is False
-        with pytest.raises(SecretCipherUnavailable):
+        with pytest.raises(SecretCipherUnavailableError):
             encrypt("secret")
 
     def test_round_trip(self, keyed: None) -> None:

@@ -43,9 +43,7 @@ class PublishError(RuntimeError):
     """A publish step failed, with output already redacted."""
 
 
-def _run(
-    args: list[str], *, cwd: Path, cred: ResolvedCredential, timeout: int = _TIMEOUT
-) -> str:
+def _run(args: list[str], *, cwd: Path, cred: ResolvedCredential, timeout: int = _TIMEOUT) -> str:
     proc = subprocess.run(  # noqa: S603 - fixed binaries, list args, no shell
         args,
         cwd=str(cwd),

@@ -37,7 +37,7 @@ KEY_HINT = (
 )
 
 
-class SecretCipherUnavailable(RuntimeError):
+class SecretCipherUnavailableError(RuntimeError):
     """No key material is configured, so a user secret cannot be stored.
 
     Deliberately loud: the alternative is accepting a token and silently
@@ -83,7 +83,7 @@ def cipher() -> MultiFernet | None:
         try:
             fernets.append(Fernet(raw.encode() if isinstance(raw, str) else raw))
         except (ValueError, TypeError) as exc:
-            raise SecretCipherUnavailable(
+            raise SecretCipherUnavailableError(
                 f"secret key #{idx} is not a valid Fernet key. {KEY_HINT}"
             ) from exc
     return MultiFernet(fernets)
@@ -97,19 +97,19 @@ def is_configured() -> bool:
     """
     try:
         return cipher() is not None
-    except SecretCipherUnavailable:
+    except SecretCipherUnavailableError:
         return False
 
 
 def encrypt(plaintext: str) -> bytes:
     c = cipher()
     if c is None:
-        raise SecretCipherUnavailable
+        raise SecretCipherUnavailableError
     return c.encrypt(plaintext.encode("utf-8"))
 
 
 def decrypt(ciphertext: bytes) -> str:
-    """Decrypt, or raise SecretCipherUnavailable when the key cannot read it.
+    """Decrypt, or raise SecretCipherUnavailableError when the key cannot read it.
 
     A key that was rotated out without re-saving lands here.  It is reported
     as "unavailable" rather than "corrupt" because that is the actionable
@@ -117,11 +117,11 @@ def decrypt(ciphertext: bytes) -> str:
     """
     c = cipher()
     if c is None:
-        raise SecretCipherUnavailable
+        raise SecretCipherUnavailableError
     try:
         return c.decrypt(ciphertext).decode("utf-8")
     except InvalidToken as exc:
-        raise SecretCipherUnavailable(
+        raise SecretCipherUnavailableError(
             "stored secret could not be decrypted with the configured key(s) — "
             "it was probably encrypted under a key that has since been removed"
         ) from exc

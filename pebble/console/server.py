@@ -7485,7 +7485,7 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
     from pebble.core.audit import record_audit
     from pebble.core.auth import require_permission
     from pebble.core.git_identity import token_hint
-    from pebble.core.secret_cipher import SecretCipherUnavailable, encrypt
+    from pebble.core.secret_cipher import SecretCipherUnavailableError, encrypt
     from pebble.core.web_helpers import read_json_or_400, require_storage_or_503
 
     storage, err = require_storage_or_503(request)
@@ -7514,7 +7514,7 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
     login = str(body.get("login") or "").strip()
     try:
         ct = encrypt(token)
-    except SecretCipherUnavailable as exc:
+    except SecretCipherUnavailableError as exc:
         return JSONResponse({"error": str(exc)}, status_code=503)
     storage.set_user_git_credential(
         user_id, token_ct=ct, token_hint=token_hint(token), host=host, login=login
