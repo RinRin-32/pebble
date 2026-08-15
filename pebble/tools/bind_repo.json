@@ -1,6 +1,6 @@
 {
   "name": "bind_repo",
-  "description": "Bind this workstream to a git repository and check out an isolated worktree for it. Every shell command and file tool in this workstream then runs inside that checkout. Call this before setup_env and dispatch_agent. ALWAYS pass the 'repo' argument \u2014 omitting it does NOT bind anything, it only reports the current binding and lists available repos.",
+  "description": "Bind this workstream to a git repository and check out an isolated worktree for it. Every shell command and file tool in this workstream then runs inside that checkout. Call this before setup_env and dispatch_agent. Pass 'repo' with a registered repo name, OR pass 'url' with a git URL to register and bind a repository the server has not seen before \u2014 the clone uses your own linked git credential, so a private repo you can access works. ALWAYS pass one of them: omitting both does NOT bind anything, it only reports the current binding and lists available repos.",
   "parameters": {
     "type": "object",
     "properties": {
@@ -12,6 +12,11 @@
       "base_ref": {
         "type": "string",
         "description": "Branch, tag or commit to check out from. Defaults to the repo's default branch.",
+        "default": ""
+      },
+      "url": {
+        "type": "string",
+        "description": "Git URL to register and bind, e.g. https://github.com/org/repo.git. Use when the repository is not already registered. The name is derived from the URL unless 'repo' is also given.",
         "default": ""
       }
     },

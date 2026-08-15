@@ -17138,9 +17138,10 @@ class ChatSession:
             "preview": "",
             # Checking out a repo writes to the shared workspace volume, so it
             # rides the same approval gate as any other side effect.
-            "needs_approval": bool(repo),
+            "needs_approval": bool(repo or (args.get("url") or "").strip()),
             "execute": self._exec_bind_repo,
             "repo": repo,
+            "url": (args.get("url") or "").strip(),
             "base_ref": (args.get("base_ref") or "").strip(),
         }
 
@@ -17157,6 +17158,40 @@ class ChatSession:
             self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
             return call_id, msg
 
+        url = item.get("url") or ""
+        if url and not repo_name:
+            # Derive a name from the URL so the caller does not have to invent
+            # one: "https://github.com/org/audrey-prototype.git" -> the slug.
+            repo_name = re.sub(r"\.git$", "", url.rstrip("/").rsplit("/", 1)[-1])
+
+        if url:
+            existing = storage.get_repo_by_name(repo_name)
+            if existing is None:
+                import uuid as _uuid
+
+                try:
+                    storage.create_repo(
+                        {
+                            "repo_id": _uuid.uuid4().hex,
+                            "name": repo_name,
+                            "git_url": url,
+                            "created_by": self._acting_user_id or self._user_id or "",
+                        }
+                    )
+                except Exception as exc:
+                    msg = f"Error: could not register {repo_name!r}: {exc}"
+                    self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+                    return call_id, msg
+            elif existing.get("git_url") != url:
+                # Same name, different remote: refuse rather than silently
+                # binding to something else under a familiar name.
+                msg = (
+                    f"Error: a repo named {repo_name!r} is already registered with a "
+                    f"different URL ({existing.get('git_url')}). Pick another name."
+                )
+                self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
+                return call_id, msg
+
         if not repo_name:
             # Status form: what am I bound to, and what could I bind to?
             current = self._bound_repo_id()
@@ -17172,19 +17207,26 @@ class ChatSession:
 
         row = storage.get_repo_by_name(repo_name)
         if row is None:
-            msg = f"Error: no repo named '{repo_name}'. Register it in the console first."
+            msg = (
+                f"Error: no repo named '{repo_name}'. Register it in the console, or call "
+                f'bind_repo again with url="https://…" to register and bind it here.'
+            )
             self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
             return call_id, msg
 
         try:
-            from pebble.core.workspace import create_worktree, ensure_mirror
+            from pebble.core.workspace import acting_user, create_worktree, ensure_mirror
 
-            ensure_mirror(row["repo_id"], row["git_url"])
-            info = create_worktree(
-                row["repo_id"],
-                self._ws_id,
-                base_ref=item["base_ref"] or row.get("default_branch") or "HEAD",
-            )
+            # Clone with the caller's own credential. Without this a private
+            # repo their token can plainly see fails with "could not read
+            # Username", which reads as the repo not existing.
+            with acting_user(self._acting_user_id or self._user_id or "", storage):
+                ensure_mirror(row["repo_id"], row["git_url"])
+                info = create_worktree(
+                    row["repo_id"],
+                    self._ws_id,
+                    base_ref=item["base_ref"] or row.get("default_branch") or "HEAD",
+                )
         except Exception as exc:
             msg = f"Error: could not prepare worktree: {exc}"
             self._report_tool_result(call_id, "bind_repo", msg, is_error=True)
@@ -17583,7 +17625,11 @@ class ChatSession:
         self._check_cancelled()
         call_id = item["call_id"]
         from pebble.core.agents import DEFAULT_TIMEOUT, available_agents, get_adapter, run_agent
-        from pebble.core.workspace import WorkspaceError, worktree_diff, worktree_stat
+        from pebble.core.workspace import (
+            WorkspaceError,
+            worktree_diff,
+            worktree_stat,
+        )
 
         cwd = self._workspace_cwd()
         if not cwd:
@@ -17655,6 +17701,19 @@ class ChatSession:
             _mcp_servers = DEFAULT_MCP_SERVERS
         except Exception:
             _mcp_servers = None
+        # The dispatched agent inherits the CALLER's git credential, not the
+        # instance one: it may fetch, and if it opens a pull request that PR
+        # should be attributed to the person who asked for the work.
+        _agent_env: dict[str, str] | None = None
+        try:
+            from pebble.core.git_identity import env_for_credential
+
+            _cred = self._publish_credential()
+            if _cred.ok:
+                _agent_env = env_for_credential(_cred)
+        except Exception:
+            log.debug("dispatch.agent_credential_failed", exc_info=True)
+
         result = run_agent(
             adapter,
             item["task"],
@@ -17664,6 +17723,7 @@ class ChatSession:
             timeout=timeout,
             on_event=_on_event,
             wrap=env_dir or "",
+            env=_agent_env,
             mcp_servers=_mcp_servers,
         )
 
