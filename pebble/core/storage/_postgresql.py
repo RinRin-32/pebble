@@ -74,6 +74,7 @@ from pebble.core.storage._schema import (
     user_allowed_models,
     user_allowed_personas,
     user_capabilities,
+    user_git_credentials,
     user_roles,
     users,
     watches,
@@ -1845,6 +1846,74 @@ class PostgreSQLBackend:
                 "edges": edges,
             }
         ]
+
+    def get_user_git_credential(self, user_id: str) -> dict[str, Any] | None:
+        """Credential row for a user, ciphertext included.
+
+        The caller decrypts (see core/secret_cipher.py); storage deliberately
+        does not, so a code path that only needs "is one set?" never touches
+        key material.
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                sa.select(
+                    user_git_credentials.c.user_id,
+                    user_git_credentials.c.host,
+                    user_git_credentials.c.login,
+                    user_git_credentials.c.token_ct,
+                    user_git_credentials.c.token_hint,
+                    user_git_credentials.c.created,
+                    user_git_credentials.c.updated,
+                ).where(user_git_credentials.c.user_id == user_id)
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "user_id": row[0],
+                "host": row[1],
+                "login": row[2],
+                "token_ct": bytes(row[3]) if row[3] is not None else b"",
+                "token_hint": row[4],
+                "created": row[5],
+                "updated": row[6],
+            }
+
+    def set_user_git_credential(
+        self,
+        user_id: str,
+        *,
+        token_ct: bytes,
+        token_hint: str = "",
+        host: str = "github.com",
+        login: str = "",
+    ) -> None:
+        """Store (or replace) a user's encrypted push credential."""
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                sa.delete(user_git_credentials).where(user_git_credentials.c.user_id == user_id)
+            )
+            conn.execute(
+                sa.insert(user_git_credentials).values(
+                    user_id=user_id,
+                    host=host or "github.com",
+                    login=login,
+                    token_ct=token_ct,
+                    token_hint=token_hint,
+                    created=now,
+                    updated=now,
+                )
+            )
+            conn.commit()
+
+    def delete_user_git_credential(self, user_id: str) -> bool:
+        """Forget a user's credential.  True when a row was removed."""
+        with self._conn() as conn:
+            res = conn.execute(
+                sa.delete(user_git_credentials).where(user_git_credentials.c.user_id == user_id)
+            )
+            conn.commit()
+            return bool(res.rowcount)
 
     def coding_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
         """Workstreams bound to a repo — the coding work, ongoing or finished."""

@@ -992,6 +992,26 @@ class StorageBackend(Protocol):
         """Workstreams bound to a repo, most recently updated first."""
         ...
 
+    def get_user_git_credential(self, user_id: str) -> dict[str, Any] | None:
+        """Encrypted push credential for a user, or None."""
+        ...
+
+    def set_user_git_credential(
+        self,
+        user_id: str,
+        *,
+        token_ct: bytes,
+        token_hint: str = "",
+        host: str = "github.com",
+        login: str = "",
+    ) -> None:
+        """Store (or replace) a user's encrypted push credential."""
+        ...
+
+    def delete_user_git_credential(self, user_id: str) -> bool:
+        """Forget a user's credential.  True when a row was removed."""
+        ...
+
     def list_user_capabilities(self, user_id: str) -> list[str]:
         """Capability keys granted to a user."""
         ...

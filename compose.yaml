@@ -87,6 +87,10 @@ x-shared:
   # Git identity + push credentials for dispatched coding work.  A FINE-GRAINED
   # token scoped to the repos pebble is bound to — not the operator's personal
   # gh login, which would give every agent push rights to everything they own.
+  # Encrypts per-user secrets pebble stores (git push tokens today).  Without
+  # it those cannot be stored at all — deliberately, since the alternative is
+  # keeping them in plaintext next to the data they protect.
+  secret-key: &secret-key "${PEBBLE_SECRET_KEY:-}"
   git-token: &git-token "${PEBBLE_GIT_TOKEN:-${GITHUB_TOKEN:-}}"
   git-host: &git-host "${PEBBLE_GIT_HOST:-github.com}"
   git-author-name: &git-author-name "${PEBBLE_GIT_AUTHOR_NAME:-pebble}"
@@ -198,6 +202,7 @@ services:
       - "${PEBBLE_HOST_IP:-${TURNSTONE_HOST_IP:-127.0.0.1}}:8090:8090"
     environment:
       PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_SECRET_KEY: *secret-key
       PEBBLE_GIT_TOKEN: *git-token
       PEBBLE_GIT_HOST: *git-host
       PEBBLE_GIT_AUTHOR_NAME: *git-author-name
@@ -259,6 +264,7 @@ services:
         $${PEBBLE_DISCORD_GUILD:+--discord-guild $$PEBBLE_DISCORD_GUILD}
     environment:
       PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_SECRET_KEY: *secret-key
       PEBBLE_GIT_TOKEN: *git-token
       PEBBLE_GIT_HOST: *git-host
       PEBBLE_GIT_AUTHOR_NAME: *git-author-name
@@ -346,6 +352,7 @@ services:
       # docs/coding-dispatch.md, "Authentication".
     environment: &node-env
       PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_SECRET_KEY: *secret-key
       PEBBLE_GIT_TOKEN: *git-token
       PEBBLE_GIT_HOST: *git-host
       PEBBLE_GIT_AUTHOR_NAME: *git-author-name

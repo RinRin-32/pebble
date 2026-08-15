@@ -31,6 +31,11 @@ if TYPE_CHECKING:
 #: Capability gating whether a user may run a coding agent at all.
 CAPABILITY_CODE_DISPATCH = "code_dispatch"
 
+#: Capability gating use of the INSTANCE push token.  A user pushing with
+#: their own linked GitHub credential needs no grant — they are spending their
+#: own access, and GitHub bounds it.  This one is for spending the operator's.
+CAPABILITY_CODE_PUSH = "code_push"
+
 
 class _AccessStore(Protocol):
     def list_user_allowed_models(self, user_id: str) -> list[str]: ...
@@ -156,4 +161,20 @@ def can_dispatch_code(storage: _AccessStore, user_id: str, *, require_grant: boo
     except Exception:
         # Fail CLOSED: if the grant cannot be read, spending someone else's
         # credentials is not the safe default.
+        return False
+
+
+def can_use_instance_push(storage: _AccessStore, user_id: str) -> bool:
+    """Whether *user_id* may push with the INSTANCE token.
+
+    Unlike :func:`can_dispatch_code` this has no "off by default" switch: the
+    instance token is the operator's credential, so using it is opt-in per
+    user from the start.  A user with their own linked credential never
+    reaches this check.
+    """
+    if not user_id:
+        return False
+    try:
+        return CAPABILITY_CODE_PUSH in set(storage.list_user_capabilities(user_id))
+    except Exception:
         return False
