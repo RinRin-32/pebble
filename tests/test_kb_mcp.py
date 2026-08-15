@@ -232,3 +232,41 @@ class TestRepoScoping:
     def test_untagged_notes_are_not_a_repo(self, vault: Path) -> None:
         _call("kb_write", {"title": "Loose thought", "body": "no repo"})
         assert _call("kb_repos", {})["count"] == 0
+
+
+class TestTransportSecurity:
+    """DNS-rebinding protection, and how an operator opens it up deliberately.
+
+    The default refuses any hostname but localhost with a bare 421, which
+    reads as a routing fault rather than a policy one — so the point of these
+    is that the knob exists and that it stays ON unless someone says otherwise.
+    """
+
+    def test_localhost_is_always_allowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("PEBBLE_MCP_ALLOWED_HOSTS", raising=False)
+        sec = kb_mcp._transport_security()
+        assert sec.enable_dns_rebinding_protection is True
+        assert "localhost" in sec.allowed_hosts and "127.0.0.1" in sec.allowed_hosts
+
+    def test_operator_hosts_are_added(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PEBBLE_MCP_ALLOWED_HOSTS", "pebble.example.com, box.ts.net:9443")
+        sec = kb_mcp._transport_security()
+        assert "pebble.example.com" in sec.allowed_hosts
+        assert "box.ts.net:9443" in sec.allowed_hosts
+        # Still on: adding a host is not the same as waiving the check.
+        assert sec.enable_dns_rebinding_protection is True
+
+    def test_origins_mirror_the_allowed_hosts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PEBBLE_MCP_ALLOWED_HOSTS", "box.ts.net:9443")
+        origins = kb_mcp._transport_security().allowed_origins
+        assert "https://box.ts.net:9443" in origins
+
+    def test_star_disables_protection_explicitly(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Only reasonable when no browser holding a console session can reach
+        # the mount — hence explicit, never a default.
+        monkeypatch.setenv("PEBBLE_MCP_ALLOWED_HOSTS", "*")
+        assert kb_mcp._transport_security().enable_dns_rebinding_protection is False
+
+    def test_blank_is_not_a_wildcard(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PEBBLE_MCP_ALLOWED_HOSTS", "   ")
+        assert kb_mcp._transport_security().enable_dns_rebinding_protection is True

@@ -103,18 +103,41 @@ still honoured, so an existing deployment keeps working. Copy
 |---|---|
 | `PEBBLE_SECRET_KEY` | Encrypts per-user secrets (git tokens). Without it, linking a token is refused rather than stored in the clear. |
 | `PEBBLE_GIT_TOKEN` | Instance-level git push credential. Prefer per-user tokens linked in the console — see [Coding dispatch](docs/coding-dispatch.md). |
+| `PEBBLE_MCP_ALLOWED_HOSTS` | Hostnames the `/mcp` endpoint answers to. Unset means localhost only, and a remote client is refused with a bare `421`. |
 
 ### Connecting a laptop over MCP
 
+A session on another machine — working in a repository pebble has never seen —
+can read and write the same vault the dispatched agents use.
+
 ```bash
-claude mcp add --transport http pebble https://<your-console>/mcp \
+claude mcp add --transport http pebble https://<your-console>:<port>/mcp \
   --header "Authorization: Bearer ts_..."
 ```
 
 Tools: `kb_search` (scope with `repo`), `kb_read`, `kb_write`,
 `kb_record_experiment`, `kb_graph`, `kb_repos`. It **records** results; it never
 executes commands remotely — your session runs its own, then writes down what
-happened.
+happened. The token needs `read` and `write` scopes; `write` is what the two
+writing tools use.
+
+Two things bite when the console is behind a proxy, and neither error says so:
+
+- **`421 Misdirected Request`** — the MCP SDK trusts only `localhost` by
+  default, so list the name you actually connect to:
+  `PEBBLE_MCP_ALLOWED_HOSTS=box.tailnet.ts.net:9443`. The check is worth
+  keeping; see [`.env.example`](.env.example) for why and for the `*` escape
+  hatch.
+- **Get the port right.** The bundled Caddy publishes TLS on **8443**, not 443,
+  and anything else on the host may already own those. With
+  [Tailscale](https://tailscale.com), the tidiest route is a port nothing else
+  claims, which also gets you a real certificate rather than Caddy's local CA:
+
+  ```bash
+  sudo tailscale serve --bg --https=9443 http://127.0.0.1:8090
+  ```
+
+  That points at the console directly, bypassing Caddy entirely.
 
 ### Programmatic (SDK)
 
