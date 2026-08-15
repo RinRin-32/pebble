@@ -135,6 +135,43 @@ def _transport_security() -> Any:
     return TransportSecuritySettings(allowed_hosts=hosts, allowed_origins=origins)
 
 
+def _storage_and_config() -> tuple[Any, Any]:
+    """Storage and settings, as the console process sees them.
+
+    ``get_storage()`` in a process where app startup never ran hands back a
+    default SQLite backend, so the interview would read an empty vault index
+    and write its transcript somewhere nobody looks.  Preferring the
+    configured URL is the same guard preflight uses.
+    """
+    import os
+
+    storage: Any = None
+    url = (os.environ.get("PEBBLE_DB_URL") or "").strip()
+    if url.startswith("postgresql"):
+        try:
+            from pebble.core.storage._postgresql import PostgreSQLBackend
+
+            storage = PostgreSQLBackend(url)
+        except Exception:
+            log.warning("kb_mcp.storage_url_failed", exc_info=True)
+    if storage is None:
+        try:
+            from pebble.core.storage._registry import get_storage
+
+            storage = get_storage()
+        except Exception:
+            log.warning("kb_mcp.storage_unavailable", exc_info=True)
+            return None, None
+    config_store = None
+    try:
+        from pebble.core.config_store import ConfigStore
+
+        config_store = ConfigStore(storage)
+    except Exception:
+        log.debug("kb_mcp.config_store_unavailable", exc_info=True)
+    return storage, config_store
+
+
 def build_server() -> Any:
     """Construct the MCP server with the vault tools registered."""
     from mcp.server.fastmcp import FastMCP
@@ -303,6 +340,53 @@ def build_server() -> Any:
         path = write_note(note)
         _sync_index()
         return {"ok": True, "title": note.title, "path": str(path), "verdict": verdict}
+
+    @mcp.tool(
+        description=(
+            "Start a debrief with pebble about work you just finished, so the finding gets "
+            "written down properly. You describe what you did; pebble reads what it already "
+            "knows about this repo and asks what is missing — what you measured, what you "
+            "tried and abandoned, what the next person will trip over — then writes the note "
+            "itself. Prefer this over kb_write when the work is worth teaching someone: a note "
+            "you write alone tends to record the happy path. Answer with kb_interview_answer."
+        )
+    )
+    def kb_interview(topic: str, context: str, repo: str = "") -> dict[str, Any]:
+        from pebble.core.interview import start
+
+        storage, config_store = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return start(
+            storage,
+            config_store,
+            user_id=current_user(),
+            repo=(repo or "").strip(),
+            topic=(topic or "").strip(),
+            context=context or "",
+        )
+
+    @mcp.tool(
+        description=(
+            "Answer pebble's debrief questions. Returns either the next questions or the "
+            "finished note. Be specific and quote real numbers — the budget is small and fixed, "
+            "and when it runs out the note is written from whatever has been said, so a padded "
+            "answer costs accuracy rather than buying time."
+        )
+    )
+    def kb_interview_answer(interview_id: str, answers: str) -> dict[str, Any]:
+        from pebble.core.interview import answer
+
+        storage, config_store = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return answer(
+            storage,
+            config_store,
+            interview_id=(interview_id or "").strip(),
+            answers=answers or "",
+            user_id=current_user(),
+        )
 
     @mcp.tool(
         description=(

@@ -1085,6 +1085,30 @@ oidc_user_credentials = sa.Table(
 # The token is stored encrypted (see core/secret_cipher.py); only a truncated
 # hint and the login are readable, which is enough for the UI to show "a token
 # is set, ending 1a2b" without ever projecting the secret.
+# Knowledge interviews: pebble questioning an agent about work it just did,
+# so the finding gets written down properly rather than as whatever the agent
+# volunteered.  The transcript is KEPT — when a note later looks wrong, the
+# useful question is what was asked to produce it, and a distilled note alone
+# cannot answer that.
+kb_interviews = sa.Table(
+    "kb_interviews",
+    metadata,
+    sa.Column("interview_id", sa.Text, primary_key=True),
+    sa.Column("user_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("repo", sa.Text, nullable=False, server_default=""),
+    sa.Column("topic", sa.Text, nullable=False, server_default=""),
+    # open | written | abandoned
+    sa.Column("state", sa.Text, nullable=False, server_default="open"),
+    sa.Column("rounds", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("transcript", sa.Text, nullable=False, server_default="[]"),
+    sa.Column("note_title", sa.Text, nullable=False, server_default=""),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.Column("updated", sa.Text, nullable=False),
+)
+
+sa.Index("idx_kb_interviews_user", kb_interviews.c.user_id)
+
+
 user_git_credentials = sa.Table(
     "user_git_credentials",
     metadata,

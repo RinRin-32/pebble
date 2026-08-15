@@ -17602,6 +17602,13 @@ class ChatSession:
         installed = available_agents()
         cs = getattr(self, "_config_store", None)
         name = item["agent"] or ((cs.get("agents.default") if cs else None) or "")
+        # The coder role: which MODEL the agent CLI runs, distinct from which
+        # CLI it is.  An explicit model on the call still wins.
+        if not item.get("model") and cs:
+            try:
+                item["model"] = (cs.get("agents.coder_model_alias") or "").strip()
+            except Exception:
+                log.debug("dispatch.coder_alias_unreadable", exc_info=True)
         if not name:
             # Prefer whatever this node actually has, in a stable order.
             name = next((n for n in ("claude", "opencode", "codex") if n in installed), "")

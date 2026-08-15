@@ -38,6 +38,7 @@ from pebble.core.storage._schema import (
     guild_prefs,
     heuristic_rules,
     intent_verdicts,
+    kb_interviews,
     kb_links,
     kb_notes,
     mcp_oauth_pending,
@@ -2066,6 +2067,107 @@ class SQLiteBackend:
             )
             conn.commit()
             return bool(res.rowcount)
+
+    def create_interview(self, interview_id: str, *, user_id: str, repo: str, topic: str) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                sa.insert(kb_interviews).values(
+                    interview_id=interview_id,
+                    user_id=user_id,
+                    repo=repo,
+                    topic=topic,
+                    state="open",
+                    rounds=0,
+                    transcript="[]",
+                    note_title="",
+                    created=now,
+                    updated=now,
+                )
+            )
+            conn.commit()
+
+    def get_interview(self, interview_id: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                sa.select(
+                    kb_interviews.c.interview_id,
+                    kb_interviews.c.user_id,
+                    kb_interviews.c.repo,
+                    kb_interviews.c.topic,
+                    kb_interviews.c.state,
+                    kb_interviews.c.rounds,
+                    kb_interviews.c.transcript,
+                    kb_interviews.c.note_title,
+                ).where(kb_interviews.c.interview_id == interview_id)
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "interview_id": row[0],
+                "user_id": row[1],
+                "repo": row[2],
+                "topic": row[3],
+                "state": row[4],
+                "rounds": int(row[5] or 0),
+                "transcript": row[6],
+                "note_title": row[7],
+            }
+
+    def update_interview(
+        self,
+        interview_id: str,
+        *,
+        transcript: str,
+        rounds: int,
+        state: str = "open",
+        note_title: str = "",
+    ) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                sa.update(kb_interviews)
+                .where(kb_interviews.c.interview_id == interview_id)
+                .values(
+                    transcript=transcript,
+                    rounds=rounds,
+                    state=state,
+                    note_title=note_title,
+                    updated=now,
+                )
+            )
+            conn.commit()
+
+    def list_interviews(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Recent interviews, newest first — for the console."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(
+                    kb_interviews.c.interview_id,
+                    kb_interviews.c.user_id,
+                    kb_interviews.c.repo,
+                    kb_interviews.c.topic,
+                    kb_interviews.c.state,
+                    kb_interviews.c.rounds,
+                    kb_interviews.c.note_title,
+                    kb_interviews.c.updated,
+                )
+                .order_by(kb_interviews.c.updated.desc())
+                .limit(limit)
+            ).fetchall()
+            return [
+                {
+                    "interview_id": r[0],
+                    "user_id": r[1],
+                    "repo": r[2],
+                    "topic": r[3],
+                    "state": r[4],
+                    "rounds": int(r[5] or 0),
+                    "note_title": r[6],
+                    "updated": r[7],
+                }
+                for r in rows
+            ]
 
     def coding_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
         """Workstreams bound to a repo — the coding work, ongoing or finished."""
