@@ -1,108 +1,127 @@
-# Turnstone
+# Pebble
 
 [![CI](https://github.com/RinRin-32/pebble/actions/workflows/ci.yml/badge.svg)](https://github.com/RinRin-32/pebble/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/turnstone)](https://pypi.org/project/turnstone/)
-[![Python](https://img.shields.io/pypi/pyversions/turnstone)](https://pypi.org/project/turnstone/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/Nh3bWMacaq)
-[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/eous)
 
-Self-hosted, local-first orchestration for tool-using AI agents. Give LLMs real tools — shell, files, search, web — and run them across your own cluster with direct HTTP routing and interactive interfaces. Your code, your models, your data stay on hardware you control: no telemetry, no phone-home.
+Self-hosted, local-first orchestration for tool-using AI agents — and a place to
+put the work they produce. Give LLMs real tools (shell, files, search, web),
+hand coding tasks to agent CLIs in isolated git worktrees, and keep what was
+learned in a knowledge vault that any machine can reach. Your code, your models,
+your data stay on hardware you control: no telemetry, no phone-home.
+
+> **This is a heavily customised personal fork of
+> [Turnstone](https://github.com/turnstonelabs/turnstone)** (Patrick Buckley,
+> Apache-2.0), built around one person's workflow rather than as a general
+> release. It adds agentic coding dispatch, a knowledge vault exposed over MCP,
+> per-user access and git credentials, and Nix toolchains.
+>
+> **Looking for the real project? Go to
+> [turnstonelabs/turnstone](https://github.com/turnstonelabs/turnstone).** That
+> is the maintained one, with releases, documentation and support behind it.
+> This fork makes no such promises and may change in ways that suit its author
+> and nobody else.
 
 <p align="center">
-  <img src="docs/assets/hero.png" alt="Turnstone coordinator — parallel tool batches with judge-graded approval and child workstream tracking" width="960"/>
+  <img src="docs/diagrams/architecture-overview.svg" alt="System architecture" width="960"/>
 </p>
-
-Named after the [Ruddy Turnstone](https://en.wikipedia.org/wiki/Ruddy_turnstone) (*Arenaria interpres*) — a shorebird that flips stones to discover what's hiding underneath.
-
-**What is a harness?**
-
-```
-ℋ :  s_{n+1} ~ T(s_n)   for n < τ*,    T = ρ ∘ (M_W ∘ π, E)
-```
-
-[**the primer →**](PRIMER.md)
-
-### Release Tracks
-
-| Track | Install | Docker | Description |
-|-------|---------|--------|-------------|
-| **Stable** | `pip install turnstone` | `ghcr.io/turnstonelabs/turnstone:stable` | Production-grade. Bugfixes only. |
-| **Experimental** | `pip install turnstone --pre` | `ghcr.io/turnstonelabs/turnstone:experimental` | New features. May have rough edges. |
-
-See [docs/releasing.md](docs/releasing.md) for the full release process.
 
 ## What it does
 
-Turnstone gives LLMs tools — shell, files, search, web, planning — and orchestrates multi-turn conversations where the model investigates, acts, and reports.
+**Orchestration.** LLMs get tools — shell, files, search, web, planning — across
+multi-turn conversations where the model investigates, acts, and reports. A
+coordinator can fan work out to child workstreams and collect the results.
 
-- **Local-first & private** — runs entirely on hardware you control, with no telemetry and no phone-home. Point it at local models (vLLM, llama.cpp) or commercial APIs you hold the keys to — your prompts and data never transit a third party you didn't choose.
-- **Bring your own models** — OpenAI-compatible APIs (vLLM, llama.cpp, NIM), the Anthropic Messages API, and Google Gemini, mixed freely per role
-- **Interactive sessions** — terminal CLI or browser UI with parallel workstreams
-- **Cluster dashboard** — real-time view of every node and workstream, with a rendezvous routing proxy
-- **Intent validation** — an LLM judge (your model) grades every tool call with a risk assessment and evidence before it runs
-- **MCP support** — external tool servers with native deferred loading (Anthropic/OpenAI) or BM25 fallback
-- **Team controls when you need them** — optional RBAC, SSO, tool policies, and audit logs, all stored in your own database
+**Agentic coding.** `dispatch_agent` hands a task to an external coding agent
+(Claude Code, opencode, or Codex) running in this workstream's own git worktree,
+with a Nix toolchain provisioned so it can build and test rather than only edit.
+`publish_work` then commits, pushes the workstream's branch, and opens a pull
+request — never to the default branch, and behind an approval gate.
 
-<p align="center">
-  <img src="docs/diagrams/architecture-overview.svg" alt="Turnstone system architecture" width="960"/>
-</p>
+**A knowledge vault that outlives the session.** Agents record measured results
+as Obsidian-format markdown (frontmatter + `[[wikilinks]]`), and the console
+draws the graph. Dangling links are kept on purpose: a name someone reached for
+and nobody has written is the research frontier.
+
+**Reachable from anywhere.** Pebble is also an **MCP server** — a Claude Code
+session on your laptop, working in an unrelated repository, reads and writes the
+same vault the dispatched agents use.
+
+- **Local-first & private** — runs on hardware you control. Point it at local
+  models (vLLM, llama.cpp) or APIs you hold the keys to.
+- **Bring your own models** — OpenAI-compatible, Anthropic Messages, and Google
+  Gemini, mixed freely per role.
+- **Interactive sessions** — terminal CLI, browser UI, or Discord/Slack, with
+  parallel workstreams.
+- **Cluster dashboard** — every node, workstream, coding job and note, live.
+- **Intent validation** — an LLM judge grades every tool call with a risk
+  assessment and evidence before it runs.
+- **Per-user authority** — which models, which personas, whether they may
+  dispatch agents at all, and whose git credentials a push spends.
 
 ## Quickstart
 
-```bash
-pip install turnstone
-
-# Terminal REPL
-turnstone --base-url http://localhost:8000/v1
-
-# Browser UI
-pebble-server --port 8080 --base-url http://localhost:8000/v1
-
-# Cluster dashboard
-pebble-console --port 8090
-```
-
-For PostgreSQL (recommended for production):
+Pebble is not published to PyPI; install it from this repository.
 
 ```bash
-export PEBBLE_DB_BACKEND=postgresql
-export TURNSTONE_DB_URL="postgresql+psycopg://user:pass@localhost:5432/turnstone"
-pebble-server --port 8080 --base-url http://localhost:8000/v1
+git clone https://github.com/RinRin-32/pebble.git
+cd pebble
+docker compose up -d
 ```
 
-### Docker
+That builds one image and brings up a local cluster — PostgreSQL, console,
+Caddy, channel gateway and 6 server nodes (10 with `--profile extra`) — with no
+`.env` required; it ships insecure dev defaults. Open the dashboard at
+<https://localhost:8443> (Caddy serves TLS with its own local CA — trust it
+once). Nodes boot without an LLM; add model backends from the console.
 
-One-line install — autodetects Ubuntu/Debian, Fedora/RHEL, Arch, and WSL,
-installs git + Docker if missing, generates secrets, and starts the stack:
+Or let the installer do it — it autodetects Ubuntu/Debian, Fedora/RHEL, Arch and
+WSL, installs git + Docker if missing, generates secrets, and starts the stack:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/turnstonelabs/turnstone/main/run.sh | bash
+curl -fsSL https://raw.githubusercontent.com/RinRin-32/pebble/main/run.sh | bash
 ```
 
-Or, if you already have Docker, clone the repo and run it yourself:
+Without Docker:
 
 ```bash
-docker compose up
+pip install -e .            # add [discord,slack] for channel gateways
+pebble --base-url http://localhost:8000/v1        # terminal REPL
+pebble-server --port 8080 --base-url http://localhost:8000/v1   # web UI + API
+pebble-console --port 8090                        # cluster dashboard
 ```
 
-That builds one image and brings up a full local cluster — PostgreSQL, console,
-Caddy, channel gateway, and 10 server nodes — with no `.env` required (it ships
-with insecure dev defaults). Open the dashboard at https://localhost:8443 (Caddy
-serves it over TLS with its own local CA — trust it once). Nodes boot without an
-LLM; add model backends from the console UI.
+See [QUICKSTART.md](QUICKSTART.md) for the walkthrough and
+[docs/docker.md](docs/docker.md) for Docker configuration.
 
-For production (released images from ghcr.io, real secrets required), use the
-bundled stack: `docker compose -f pebble/deploy/compose.yaml up`.
+### Configuration
 
-See [QUICKSTART.md](QUICKSTART.md) for the install + troubleshooting walkthrough and [docs/docker.md](docs/docker.md) for Docker configuration.
+Environment variables are `PEBBLE_*`; the pre-rename `TURNSTONE_*` spellings are
+still honoured, so an existing deployment keeps working. Copy
+[`.env.example`](.env.example) for the annotated list. Two worth knowing:
+
+| Variable | Why |
+|---|---|
+| `PEBBLE_SECRET_KEY` | Encrypts per-user secrets (git tokens). Without it, linking a token is refused rather than stored in the clear. |
+| `PEBBLE_GIT_TOKEN` | Instance-level git push credential. Prefer per-user tokens linked in the console — see [Coding dispatch](docs/coding-dispatch.md). |
+
+### Connecting a laptop over MCP
+
+```bash
+claude mcp add --transport http pebble https://<your-console>/mcp \
+  --header "Authorization: Bearer ts_..."
+```
+
+Tools: `kb_search` (scope with `repo`), `kb_read`, `kb_write`,
+`kb_record_experiment`, `kb_graph`, `kb_repos`. It **records** results; it never
+executes commands remotely — your session runs its own, then writes down what
+happened.
 
 ### Programmatic (SDK)
 
 ```python
-from turnstone.sdk import TurnstoneServer
+from pebble.sdk import TurnstoneServer
 
-with TurnstoneServer("http://localhost:8080", token="tok_xxx") as client:
+with TurnstoneServer("http://localhost:8080", token="ts_xxx") as client:
     ws = client.create_workstream(name="demo")
     result = client.send_and_wait("Analyze the error logs", ws.ws_id, auto_approve=True)
     print(result.content)
@@ -110,24 +129,35 @@ with TurnstoneServer("http://localhost:8080", token="tok_xxx") as client:
 
 ## Tools
 
-Built-in tools for shell, files, search, web, memory, notifications, and autonomous sub-agents — plus external tools via [MCP](https://modelcontextprotocol.io/) with native deferred loading. See [docs/tools.md](docs/tools.md) for the full reference and [docs/mcp-registry.md](docs/mcp-registry.md) for MCP configuration.
+37 built-in tools — shell, files, search, web, memory, notifications,
+sub-agents, plus the coding chain (`bind_repo`, `setup_env`, `dispatch_agent`,
+`publish_work`) and the knowledge base (`kb`) — and external tools via
+[MCP](https://modelcontextprotocol.io/). See [docs/tools.md](docs/tools.md).
 
 ## Architecture
 
-**Single-node**: Client → Server (direct HTTP + SSE). No external dependencies beyond the database.
+**Single-node**: Client → Server (direct HTTP + SSE). No dependencies beyond the
+database.
 
-**Multi-node**: Client → Console (rendezvous routing proxy) → Server nodes. The console picks the target node for each workstream via rendezvous (HRW) hashing over the live service registry — pure function of `(ws_id, live_nodes)`, no stored bucket state, deterministic across readers. A node join or drop only re-routes the keys that score highest on the affected node.
+**Multi-node**: Client → Console (rendezvous routing proxy) → Server nodes. The
+console picks the target node per workstream via rendezvous (HRW) hashing over
+the live service registry — a pure function of `(ws_id, live_nodes)`, no stored
+bucket state, deterministic across readers. A node joining or dropping re-routes
+only the keys that score highest on it.
 
 | Component | Purpose |
 |-----------|---------|
-| `turnstone` | Terminal CLI (REPL) |
+| `pebble` | Terminal CLI (REPL) |
 | `pebble-server` | Web UI + REST API + SSE events |
-| `pebble-console` | Cluster dashboard + routing proxy + admin panel |
+| `pebble-console` | Cluster dashboard, routing proxy, admin panel, MCP server |
+| `pebble-client` | Drive a remote cluster from your own machine |
 | `pebble-channel` | Channel gateway (Discord and Slack adapters) |
 | `pebble-admin` | User/token management CLI |
 | `pebble-eval` | Headless measurement — scores tool-use against expected actions |
 | `pebble-optimizer` | Prompt/tool optimizer (UCB self-modify loop over the eval substrate) |
 | `pebble-doctor` | LLM-backed cluster diagnostics |
+
+The pre-rename `turnstone-*` command names still work.
 
 ### Diagrams
 
@@ -152,11 +182,13 @@ UML diagrams in [`docs/diagrams/`](docs/diagrams/):
 
 | Topic | Link |
 |-------|------|
+| Coding dispatch, worktrees, Nix envs, git credentials | [docs/coding-dispatch.md](docs/coding-dispatch.md) |
 | Configuration reference | [docs/settings.md](docs/settings.md) |
 | API reference | [docs/api-reference.md](docs/api-reference.md) |
 | Docker deployment | [docs/docker.md](docs/docker.md) |
 | Intent validation (judge) | [docs/judge.md](docs/judge.md) |
 | Governance & RBAC | [docs/governance.md](docs/governance.md) |
+| Personas | [docs/personas.md](docs/personas.md) |
 | OIDC SSO | [docs/oidc.md](docs/oidc.md) |
 | TLS / mTLS | [docs/tls.md](docs/tls.md) |
 | Channel integrations | [docs/channels.md](docs/channels.md) |
@@ -169,22 +201,21 @@ UML diagrams in [`docs/diagrams/`](docs/diagrams/):
 
 - Python 3.11+
 - An OpenAI-compatible API endpoint, Anthropic API key, or Google Gemini API key
-- Optional: Discord / Slack channel integrations (`pip install turnstone[discord,slack]`)
+- For agentic coding: Docker (the image carries `git`, `gh`, Nix and the agent
+  CLIs), plus credentials for whichever agent you dispatch
+- Optional: Discord / Slack integrations (`pip install -e ".[discord,slack]"`)
 - [Git LFS](https://git-lfs.com/) for cloning (diagram PNGs)
 
-## Support
+## Upstream
 
-Turnstone is free, Apache-2.0, and self-hosted — no paid tier, no telemetry, no upsell. If it saves you time or you'd like to help keep development moving, you can sponsor the project:
+Pebble is a fork of [turnstonelabs/turnstone](https://github.com/turnstonelabs/turnstone),
+created by Patrick Buckley and licensed Apache-2.0. The orchestration core,
+console, judge, channels, RBAC and SSO are upstream's work; see
+[NOTICE](NOTICE) and [LICENSE](LICENSE).
 
-**[❤ Sponsor Turnstone →](https://github.com/sponsors/eous)**  ·  one-off via **[PayPal](https://paypal.me/eousphoros)**
-
-Sponsorship is entirely optional and funds maintenance, new features, and infrastructure. Prefer to contribute in other ways? Filing issues, improving docs, and [pull requests](CONTRIBUTING.md) help just as much.
-
-## Community
-
-Questions, ideas, or want to show what you're building? Join us on Discord:
-**[discord.gg/Nh3bWMacaq](https://discord.gg/Nh3bWMacaq)**.
+If you are evaluating this for real use, use upstream instead — it is the
+maintained project, and questions, issues and community belong there.
 
 ## License
 
-[Apache License 2.0](LICENSE), as of version 1.6.0. Versions 1.5.x and earlier remain under the Business Source License 1.1 they shipped with.
+Apache-2.0 — see [LICENSE](LICENSE).
