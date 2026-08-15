@@ -35,9 +35,16 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # Cap a hung run at 20 min instead of riding GitHub's 6-hour default
-    # (a flaky-hang run otherwise streams -v output for hours).
-    timeout-minutes: 20
+    # Cap a hung run instead of riding GitHub's 6-hour default (a flaky-hang
+    # run otherwise streams -v output for hours).
+    #
+    # 30, not 20: the suite is ~12.5 min of real work, and at a 20-minute cap
+    # that is only about a third of headroom.  A slow runner spent it — two of
+    # the three matrix jobs were cancelled mid-run at DIFFERENT tests (60% and
+    # 83%) while the third finished everything in 12m37s, which is the
+    # signature of contention rather than a hang.  30 still catches a hang
+    # long before the 6-hour default, and tolerates a runner half as fast.
+    timeout-minutes: 30
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
@@ -66,7 +73,7 @@ jobs:
 
   test-postgres:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18
