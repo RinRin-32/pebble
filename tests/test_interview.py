@@ -103,8 +103,12 @@ class TestThinReplies:
     """
 
     @staticmethod
-    def _stub(monkeypatch: pytest.MonkeyPatch, replies: list[str]) -> list[int]:
-        """Drive the real `_ask_model` against a scripted model."""
+    def _stub(monkeypatch: pytest.MonkeyPatch, replies: list[Any]) -> list[int]:
+        """Drive the real `_ask_model` against a scripted model.
+
+        A reply is either text (stopped cleanly) or ``(text, "length")`` to
+        model the reviewer running out of room mid-sentence.
+        """
         import pebble.core.model_registry as mr
         import pebble.core.model_turn as mt
 
@@ -122,7 +126,9 @@ class TestThinReplies:
 
         def fake_turn(_lane: Any, _turns: Any, **_kw: Any) -> Any:
             calls.append(1)
-            return type("R", (), {"content": replies.pop(0) if replies else ""})()
+            reply = replies.pop(0) if replies else ""
+            text, finish = reply if isinstance(reply, tuple) else (reply, "stop")
+            return type("R", (), {"content": text, "finish_reason": finish})()
 
         monkeypatch.setattr(mr, "load_model_registry", lambda **_kw: _Reg())
         monkeypatch.setattr(mt, "resolve_lane", lambda *_a, **_kw: object())
@@ -166,6 +172,72 @@ class TestThinReplies:
         calls = self._stub(monkeypatch, ["1. What did you measure, and what did you reject?"])
         text, _err = self._ask(min_chars=interview.MIN_QUESTION_CHARS)
         assert "reject" in text and len(calls) == 1
+
+    def test_stopping_on_length_is_retried_even_when_long_enough(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A reasoning model bills thinking against the same ceiling, so it can
+        # produce a plausible-looking half-answer and stop. Length alone
+        # cannot tell that apart — the finish reason can.
+        calls = self._stub(
+            monkeypatch,
+            [
+                ("1. What did you measure, and what did you rej", "length"),
+                "1. What did you measure, and what did you reject?",
+            ],
+        )
+        text, err = self._ask(min_chars=interview.MIN_QUESTION_CHARS)
+        assert text.endswith("reject?") and not err
+        assert len(calls) == 2
+
+    def test_all_truncated_keeps_the_longest_rather_than_nothing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A debrief has to end in writing. When every attempt is cut short,
+        # a cut note beats losing everything that was said to earn it.
+        long_cut = (
+            "TITLE: Credentials\nSUMMARY: askpass scoping\nBODY: the helper compares the host "
+            "exactly and exits 1 on a mismatch, so the token only ever reaches the one host it"
+        )
+        self._stub(
+            monkeypatch, [("TITLE: x\nSUMMARY: y\nBODY: short", "length"), (long_cut, "length")]
+        )
+        text, err = self._ask(attempts=2, min_chars=interview.MIN_NOTE_CHARS)
+        assert text == long_cut and not err
+
+    def test_all_truncated_and_all_too_short_is_still_an_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._stub(monkeypatch, [("1. What", "length"), ("2. And", "length")])
+        text, err = self._ask(min_chars=interview.MIN_QUESTION_CHARS)
+        assert text == "" and "nothing usable" in err
+
+    def test_a_reply_about_the_debrief_is_not_a_note(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Observed for real, and filed into the vault before this check
+        # existed. It is fluent, long, and stops cleanly — only the missing
+        # marker distinguishes it from a note.
+        chat = (
+            "The conversation appears complete. The requested knowledge-base note was "
+            "written, and all follow-up questions were answered. If you'd like an updated "
+            "note incorporating the newly identified defects, let me know."
+        )
+        note = (
+            "TITLE: Credentials reach git through an askpass helper\nSUMMARY: one host\nBODY: "
+            + ("x" * 200)
+        )
+        calls = self._stub(monkeypatch, [chat, note])
+        text, err = self._ask(min_chars=interview.MIN_NOTE_CHARS, require="TITLE:")
+        assert text.startswith("TITLE:") and not err
+        assert len(calls) == 2
+
+    def test_a_chat_reply_is_never_kept_as_the_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The truncation fallback keeps a SHORT note. A reply with no note in
+        # it at all is not a short note, so it must not be salvaged.
+        self._stub(monkeypatch, [("The conversation appears complete. " * 6, "length")] * 2)
+        text, err = self._ask(min_chars=interview.MIN_NOTE_CHARS, require="TITLE:")
+        assert text == "" and "nothing usable" in err
 
 
 class TestStart:
