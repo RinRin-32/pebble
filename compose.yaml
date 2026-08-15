@@ -84,6 +84,13 @@ x-shared:
   # mints its own service token (signed with this) to reach the nodes. Override
   # PEBBLE_JWT_SECRET in .env for anything that isn't a local sandbox.
   jwt-secret: &jwt-secret "${PEBBLE_JWT_SECRET:-${TURNSTONE_JWT_SECRET:-dev-only-insecure-jwt-secret-change-me-for-real-deployments}}"
+  # Git identity + push credentials for dispatched coding work.  A FINE-GRAINED
+  # token scoped to the repos pebble is bound to — not the operator's personal
+  # gh login, which would give every agent push rights to everything they own.
+  git-token: &git-token "${PEBBLE_GIT_TOKEN:-${GITHUB_TOKEN:-}}"
+  git-host: &git-host "${PEBBLE_GIT_HOST:-github.com}"
+  git-author-name: &git-author-name "${PEBBLE_GIT_AUTHOR_NAME:-pebble}"
+  git-author-email: &git-author-email "${PEBBLE_GIT_AUTHOR_EMAIL:-pebble@users.noreply.github.com}"
   db-backend: &db-backend "${PEBBLE_DB_BACKEND:-${TURNSTONE_DB_BACKEND:-postgresql}}"
   # All services point at the same Postgres. Node discovery REQUIRES a shared
   # DB: each server registers + heartbeats into a `services` table that the
@@ -191,6 +198,10 @@ services:
       - "${PEBBLE_HOST_IP:-${TURNSTONE_HOST_IP:-127.0.0.1}}:8090:8090"
     environment:
       PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_GIT_TOKEN: *git-token
+      PEBBLE_GIT_HOST: *git-host
+      PEBBLE_GIT_AUTHOR_NAME: *git-author-name
+      PEBBLE_GIT_AUTHOR_EMAIL: *git-author-email
       PEBBLE_DB_BACKEND: *db-backend
       PEBBLE_DB_URL: *db-url
       PEBBLE_CONSOLE_URL: http://console:8090
@@ -248,6 +259,10 @@ services:
         $${PEBBLE_DISCORD_GUILD:+--discord-guild $$PEBBLE_DISCORD_GUILD}
     environment:
       PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_GIT_TOKEN: *git-token
+      PEBBLE_GIT_HOST: *git-host
+      PEBBLE_GIT_AUTHOR_NAME: *git-author-name
+      PEBBLE_GIT_AUTHOR_EMAIL: *git-author-email
       PEBBLE_DB_BACKEND: *db-backend
       PEBBLE_DB_URL: *db-url
       PEBBLE_DISCORD_TOKEN: ${PEBBLE_DISCORD_TOKEN:-${TURNSTONE_DISCORD_TOKEN:-}}
@@ -331,6 +346,10 @@ services:
       # docs/coding-dispatch.md, "Authentication".
     environment: &node-env
       PEBBLE_JWT_SECRET: *jwt-secret
+      PEBBLE_GIT_TOKEN: *git-token
+      PEBBLE_GIT_HOST: *git-host
+      PEBBLE_GIT_AUTHOR_NAME: *git-author-name
+      PEBBLE_GIT_AUTHOR_EMAIL: *git-author-email
       PEBBLE_DB_BACKEND: *db-backend
       PEBBLE_DB_URL: *db-url
       # Bootstrap LLM defaults — real backends are configured in the console UI.

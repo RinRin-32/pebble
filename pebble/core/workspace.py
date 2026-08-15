@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pebble.core.git_identity import git_env
 from pebble.core.log import get_logger
 
 if TYPE_CHECKING:
@@ -93,9 +94,11 @@ def _git(*args: str, cwd: Path | None = None, timeout: int = _GIT_TIMEOUT) -> st
             text=True,
             errors="replace",
             timeout=timeout,
-            # Never prompt for credentials: a private URL without a working
-            # helper must fail fast instead of hanging the tool call forever.
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            # Bot identity + host-scoped push credentials. Terminal prompting
+            # stays disabled either way: with a token the askpass helper
+            # answers, without one git must fail fast rather than hang the
+            # tool call on a prompt nobody can see.
+            env=git_env(),
         )
     except subprocess.TimeoutExpired as exc:
         raise WorkspaceError(f"git {args[0]} timed out after {timeout}s") from exc
