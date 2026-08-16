@@ -36,6 +36,13 @@ CAPABILITY_CODE_DISPATCH = "code_dispatch"
 #: own access, and GitHub bounds it.  This one is for spending the operator's.
 CAPABILITY_CODE_PUSH = "code_push"
 
+#: Capability gating publishing a SKILL from an edge device.  Deliberately not
+#: folded into the MCP ``write`` scope: writing a note records a claim someone
+#: can read and disbelieve, while a skill is instructions an agent will follow
+#: and that ``kb_skills_pull`` ships to other machines.  A token that may write
+#: notes must not thereby be able to install behaviour.
+CAPABILITY_SKILL_PUBLISH = "skill_publish"
+
 
 class _AccessStore(Protocol):
     def list_user_allowed_models(self, user_id: str) -> list[str]: ...
@@ -161,6 +168,23 @@ def can_dispatch_code(storage: _AccessStore, user_id: str, *, require_grant: boo
     except Exception:
         # Fail CLOSED: if the grant cannot be read, spending someone else's
         # credentials is not the safe default.
+        return False
+
+
+def can_publish_skills(storage: _AccessStore, user_id: str) -> bool:
+    """Whether *user_id* may publish a skill from an edge device.
+
+    Off by default and fails CLOSED, like :func:`can_dispatch_code`: a storage
+    hiccup must not read as a grant, because what is being granted here is the
+    ability to put instructions in front of other sessions.
+    """
+    if not user_id:
+        return False
+    try:
+        return CAPABILITY_SKILL_PUBLISH in set(storage.list_user_capabilities(user_id))
+    except Exception:
+        # Matches the neighbours: this module has no logger by design, and the
+        # caller is the one with the context worth logging.
         return False
 
 
