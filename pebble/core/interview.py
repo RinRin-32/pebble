@@ -187,8 +187,14 @@ def _ask_model(
     min_chars: int = 0,
     sentinel: str = "",
     require: str = "",
+    alias: str = "",
 ) -> tuple[str, str]:
-    """One call to the reviewer model, as ``(text, error)``.
+    """One call to a utility model, as ``(text, error)``.
+
+    Defaults to the reviewer; ``alias`` overrides it, so the planner can use a
+    different model without duplicating the retry, truncation and marker rules
+    below — every one of which was earned by a specific failure in production
+    and would have to be rediscovered in a copy.
 
     The two failures are reported apart on purpose.  "No reviewer configured"
     is fixed in settings; "the call failed" is usually transient and fixed by
@@ -220,7 +226,7 @@ def _ask_model(
     A reply that never produced ``require`` is not eligible — it is not a
     short note, it is not a note.
     """
-    alias = _reviewer_alias(config_store)
+    alias = alias or _reviewer_alias(config_store)
     if not alias:
         return "", "no reviewer model configured"
     try:

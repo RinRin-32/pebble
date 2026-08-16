@@ -1112,6 +1112,29 @@ kb_interviews = sa.Table(
 sa.Index("idx_kb_interviews_user", kb_interviews.c.user_id)
 
 
+kb_plans = sa.Table(
+    "kb_plans",
+    metadata,
+    sa.Column("plan_id", sa.Text, primary_key=True),
+    sa.Column("user_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("repo", sa.Text, nullable=False, server_default=""),
+    sa.Column("goal", sa.Text, nullable=False, server_default=""),
+    # open | closed
+    sa.Column("state", sa.Text, nullable=False, server_default="open"),
+    sa.Column("turns", sa.Integer, nullable=False, server_default="0"),
+    # Spend, not rounds, is the brake on a planning conversation: the
+    # interview's round cap works because both parties want to stop, and
+    # neither party here does.
+    sa.Column("tokens", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("transcript", sa.Text, nullable=False, server_default="[]"),
+    sa.Column("note_title", sa.Text, nullable=False, server_default=""),
+    sa.Column("created", sa.Text, nullable=False),
+    sa.Column("updated", sa.Text, nullable=False),
+)
+
+sa.Index("idx_kb_plans_user", kb_plans.c.user_id)
+
+
 user_git_credentials = sa.Table(
     "user_git_credentials",
     metadata,
