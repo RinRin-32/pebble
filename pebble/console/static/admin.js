@@ -49,6 +49,7 @@ const ADMIN_IA = [
     tabs: [
       { tab: "coding-jobs", label: "Coding Jobs", perm: "admin.users" },
       { tab: "knowledge", label: "Knowledge", perm: "admin.users" },
+      { tab: "skills-graph", label: "Skills", perm: "admin.users" },
     ],
   },
   {
@@ -213,6 +214,7 @@ function switchAdminTab(tab) {
     "audit",
     "memories",
     "models",
+    "skills-graph",
     "node-metadata",
     "settings",
     "tls",
@@ -237,6 +239,7 @@ function switchAdminTab(tab) {
   if (tab === "users") loadAdminUsers();
   if (tab === "coding-jobs") loadCodingJobs();
   if (tab === "knowledge") loadKnowledge();
+  if (tab === "skills-graph") loadSkillsGraph();
   if (tab === "tokens") _populateTokenUserSelect();
   if (tab === "channels") _populateChannelUserSelect();
   if (tab === "schedules") loadAdminSchedules();
@@ -9112,6 +9115,201 @@ function _kbWireGraph() {
     });
   });
 }
+
+// --- Skills visualizer ----------------------------------------------------
+// Same layout engine as the vault graph, pointed the other way: skills are the
+// main nodes and the notes that mention them hang off as smaller ones.
+//
+// Two deliberate departures from the vault graph.
+//
+// Size is INVOKED count, never pulled. A skill shipped in every bundle and
+// never run is dead weight, and drawing it large would tell the opposite of
+// the truth — the same conflation the janitor exists to avoid.
+//
+// Label thinning is far weaker here. The vault's thresholds are tuned for 50+
+// notes; skills are a handful, and inheriting that thinning would hide exactly
+// the rare skills the janitor is meant to protect.
+
+function _skillNodes(skills, edges) {
+  const nodes = [];
+  const byName = {};
+  for (let i = 0; i < skills.length; i++) {
+    const s = skills[i];
+    const nd = {
+      id: "skill:" + s.name,
+      title: s.name,
+      kind: "skill",
+      repo: s.repo || "",
+      summary: (s.reasons || []).join("; "),
+      invoked: s.invoked || 0,
+      pulled: s.pulled || 0,
+      candidate: !!s.candidate,
+      doomed: !!s.doomed,
+      archived: !!s.archived,
+      secondary: false,
+      color: "",
+      dangling: false,
+      deg: 0,
+    };
+    byName[s.name] = nd;
+    nodes.push(nd);
+  }
+  const links = [];
+  const noteNodes = {};
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i] || {};
+    const a = byName[e.skill];
+    if (!a) continue;
+    let b = noteNodes[e.note];
+    if (!b) {
+      // A note is evidence FOR a skill, drawn smaller so the vault does not
+      // swamp the thing this view is about.
+      b = {
+        id: "note:" + e.note, title: e.note, kind: "note", repo: a.repo,
+        summary: "", secondary: true, color: "", dangling: false, deg: 0,
+      };
+      noteNodes[e.note] = b;
+      nodes.push(b);
+    }
+    a.deg++; b.deg++;
+    links.push({ s: a, t: b, dangling: false });
+  }
+  return { nodes: nodes, links: links };
+}
+
+function _skillsGraphSvg(skills, edges, thresholds) {
+  const g = _skillNodes(skills || [], edges || []);
+  if (!g.nodes.length) return "";
+  const W = 1000;
+  const H = Math.max(300, Math.min(760, 260 + g.nodes.length * 10));
+  const clusters = _kbLayout(g.nodes, g.links, W, H) || { keys: [], groups: {} };
+  const PALETTE = [
+    "#67e8f9", "#a78bfa", "#34d399", "#e8853a",
+    "#f472b6", "#facc15", "#60a5fa", "#fb7185",
+  ];
+  const hueOf = {};
+  clusters.keys.forEach(function (k, i) { hueOf[k] = PALETTE[i % PALETTE.length]; });
+
+  let edgeSvg = "";
+  for (let i = 0; i < g.links.length; i++) {
+    const l = g.links[i];
+    edgeSvg += '<line class="kb-edge" x1="' + l.s.x.toFixed(1) + '" y1="' + l.s.y.toFixed(1) +
+      '" x2="' + l.t.x.toFixed(1) + '" y2="' + l.t.y.toFixed(1) + '" />';
+  }
+
+  let nodeSvg = "";
+  for (let i = 0; i < g.nodes.length; i++) {
+    const nd = g.nodes[i];
+    // Invoked, not pulled. sqrt so one heavily-used skill does not dwarf the
+    // rest into invisibility.
+    const r = nd.secondary ? 3.5 : 5 + Math.min(11, Math.sqrt(nd.invoked || 0) * 3.2);
+    const hue = hueOf[nd.cluster] || "#67e8f9";
+    let cls = "kb-node skills-node";
+    if (nd.secondary) cls += " skills-node--note";
+    if (nd.archived) cls += " skills-node--archived";
+    else if (nd.doomed) cls += " skills-node--doomed";
+    else if (nd.candidate) cls += " skills-node--candidate";
+    const style = nd.secondary ? "" : ' style="fill:' + hue + '"';
+    // Almost everything gets a label: hiding a rare skill is the one failure
+    // this view must not have.
+    const showLabel = !nd.secondary || g.nodes.length <= 30;
+    const label = nd.title.length > 22 ? nd.title.slice(0, 21) + "…" : nd.title;
+    const tip = nd.secondary
+      ? nd.title + " — note that mentions this skill"
+      : nd.title + (nd.repo ? " · " + nd.repo : "") +
+        "\ninvoked " + nd.invoked + " · pulled " + nd.pulled +
+        (nd.archived ? "\narchived" : nd.candidate ? "\n" + nd.summary : "");
+    nodeSvg +=
+      '<g class="' + cls + '" data-skill="' + escapeHtml(nd.secondary ? "" : nd.title) +
+      '" data-kb-title="' + escapeHtml(nd.secondary ? nd.title : "") + '" ' +
+      'role="button" tabindex="0" aria-label="' +
+      escapeHtml((nd.secondary ? "Open note: " : "Skill: ") + nd.title) + '">' +
+      "<title>" + escapeHtml(tip) + "</title>" +
+      '<circle cx="' + nd.x.toFixed(1) + '" cy="' + nd.y.toFixed(1) + '" r="' + r.toFixed(1) + '"' + style + " />" +
+      (showLabel
+        ? '<text x="' + nd.x.toFixed(1) + '" y="' + (nd.y + r + 11).toFixed(1) + '">' +
+          escapeHtml(label) + "</text>"
+        : "") +
+      "</g>";
+  }
+
+  // The legend states the rule, so the janitor's reasoning is legible BEFORE
+  // it proposes anything — a node is visibly fading while it is still safe.
+  const rule = (thresholds && thresholds.rule) || "";
+  return (
+    '<div class="kb-graph skills-graph">' +
+    '<div class="kb-reader" id="kb-reader" hidden></div>' +
+    '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Skills graph: ' +
+    skills.length + ' skills, sized by how often they were invoked.">' +
+    edgeSvg + nodeSvg + "</svg>" +
+    '<div class="kb-graph-legend">' +
+    "<span>size = times invoked (not shipped)</span>" +
+    '<span><i class="kb-swatch skills-swatch--candidate"></i>archive candidate</span>' +
+    '<span><i class="kb-swatch skills-swatch--archived"></i>archived</span>' +
+    '<span><i class="kb-swatch kb-swatch--orphan"></i>note (evidence)</span>' +
+    (rule ? '<span class="kb-graph-note">' + escapeHtml(rule) + "</span>" : "") +
+    "</div></div>"
+  );
+}
+
+function loadSkillsGraph() {
+  const host = document.getElementById("admin-skills-graph-table");
+  if (!host) return;
+  setSafeHtml(host, '<div class="dashboard-empty">Loading skills...</div>');
+  authFetch("/v1/api/admin/skills/graph")
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      const skills = data.skills || [];
+      const st = data.stats || {};
+      const stats = document.getElementById("admin-skills-stats");
+      if (stats) {
+        setSafeHtml(
+          stats,
+          '<span class="stat-chip"><b>' + (st.skills || 0) + "</b> skills</span>" +
+          '<span class="stat-chip"><b>' + (st.invoked || 0) + "</b> ever invoked</span>" +
+          '<span class="stat-chip"><b>' + (st.candidates || 0) + "</b> archive candidates</span>" +
+          '<span class="stat-chip"><b>' + (st.archived || 0) + "</b> archived</span>"
+        );
+      }
+      if (!skills.length) {
+        setSafeHtml(host, '<div class="dashboard-empty">No skills yet.</div>');
+        return;
+      }
+      let html = _skillsGraphSvg(skills, data.edges || [], data.thresholds);
+      html += '<div class="admin-row admin-row--head">' +
+        '<span class="admin-col">SKILL</span><span class="admin-col">REPO</span>' +
+        '<span class="admin-col">INVOKED</span><span class="admin-col">PULLED</span>' +
+        '<span class="admin-col">WHY</span></div>';
+      for (let i = 0; i < skills.length; i++) {
+        const s = skills[i];
+        html += '<div class="admin-row' + (s.candidate ? " admin-row--muted" : "") + '">' +
+          '<span class="admin-col">' + escapeHtml((s.name || "").slice(0, 34)) + "</span>" +
+          '<span class="admin-col">' + escapeHtml(s.repo || "global") + "</span>" +
+          '<span class="admin-col">' + (s.invoked || 0) +
+          (s.invoked_sessions ? " (" + s.invoked_sessions + " sess)" : "") + "</span>" +
+          '<span class="admin-col">' + (s.pulled || 0) + "</span>" +
+          '<span class="admin-col">' + escapeHtml((s.reasons || []).join("; ").slice(0, 70)) + "</span>" +
+          "</div>";
+      }
+      setSafeHtml(host, html);
+      // Clicking a note node jumps to the vault reader — one engine, two
+      // modes, and the cross-links are the reason the graphs are separate
+      // rather than merged.
+      host.querySelectorAll("[data-kb-title]").forEach(function (el) {
+        const title = el.getAttribute("data-kb-title");
+        if (!title) return;
+        const open = function () { _kbOpenNote(title); };
+        el.addEventListener("click", open);
+        el.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+        });
+      });
+    })
+    .catch(function () {
+      setSafeHtml(host, '<div class="dashboard-empty">Could not load skills.</div>');
+    });
+}
+
 
 function loadKnowledge() {
   const host = document.getElementById("admin-knowledge-table");

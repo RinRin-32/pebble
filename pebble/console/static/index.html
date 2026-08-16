@@ -378,6 +378,25 @@
               </div>
             </div>
 
+            <!-- Skills Tab -->
+            <div id="admin-skills-graph" class="admin-panel" style="display: none">
+              <div class="admin-toolbar">
+                <span class="section-header" style="margin: 0">SKILLS</span>
+                <button class="admin-action-btn" onclick="loadSkillsGraph()">
+                  Refresh
+                </button>
+              </div>
+              <div id="admin-skills-stats" class="admin-stats"></div>
+              <div
+                id="admin-skills-graph-table"
+                role="list"
+                aria-label="Skills and their usage"
+                aria-live="polite"
+              >
+                <div class="dashboard-empty">Loading skills...</div>
+              </div>
+            </div>
+
             <!-- Personas Tab -->
             <div id="admin-personas" class="admin-panel" style="display: none">
               <div class="admin-toolbar">
