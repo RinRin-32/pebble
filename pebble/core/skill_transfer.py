@@ -169,7 +169,12 @@ def build_bundle(
     in_scope = [
         r
         for r in rows
-        if r.get("enabled", 1) and (not r.get("repo_id") or r.get("repo_id") == repo)
+        if r.get("enabled", 1)
+        # Archived skills stop costing anyone context. If they still shipped,
+        # archiving would be a label rather than an action, and the janitor
+        # would have no reversible step between "suspicious" and "deleted".
+        and not r.get("archived")
+        and (not r.get("repo_id") or r.get("repo_id") == repo)
     ]
     # A repo's own skill shadows a global of the same name — the same
     # resolution rule get_prompt_template_by_name uses, applied to the set.
