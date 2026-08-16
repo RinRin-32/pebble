@@ -500,6 +500,71 @@ def build_server() -> Any:
 
     @mcp.tool(
         description=(
+            "What has stopped earning its place — skills nothing invokes and no note "
+            "supports, plus untidiness in the vault. Every finding carries its "
+            "evidence (pulled/invoked counts, age, note support) so you can disagree "
+            "on the facts rather than on trust. This tool NEVER deletes anything. "
+            "Never-invoked alone is not treated as useless: rare is not useless, and "
+            "the strongest negative signal is that no note mentions the skill at all."
+        )
+    )
+    def kb_janitor(scope: str = "all") -> dict[str, Any]:
+        from pebble.core.janitor import analyze_skills, analyze_vault
+
+        storage, _config = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        which = (scope or "all").strip().lower()
+        out: dict[str, Any] = {"ok": True}
+        if which in ("all", "skills"):
+            out["skills"] = analyze_skills(storage)
+        if which in ("all", "vault"):
+            out["vault"] = analyze_vault()
+        return out
+
+    @mcp.tool(
+        description=(
+            "Archive skills (or restore them with restore=true). Archiving is "
+            "reversible by construction: the skill stops being shipped in bundles "
+            "and stops costing context, but the row, its files and its whole event "
+            "history stay. Reports per name what actually changed, so a sweep that "
+            "matched nothing cannot look like one that worked."
+        )
+    )
+    def kb_skills_archive(
+        names: list[str], repo: str = "", restore: bool = False
+    ) -> dict[str, Any]:
+        from pebble.core.janitor import archive_skills
+
+        storage, _config = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return archive_skills(
+            storage,
+            list(names or []),
+            repo=(repo or "").strip(),
+            by=current_user() or "janitor",
+            restore=bool(restore),
+        )
+
+    @mcp.tool(
+        description=(
+            "Archived skills old enough to be worth deleting, with the reasons. "
+            "This produces a list for a person to act on; it deletes nothing itself. "
+            "The first cleanup tool that deletes on a heuristic is the last one "
+            "anybody trusts."
+        )
+    )
+    def kb_skills_deletion_review() -> dict[str, Any]:
+        from pebble.core.janitor import deletion_review
+
+        storage, _config = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return deletion_review(storage)
+
+    @mcp.tool(
+        description=(
             "Get the telemetry hook to install alongside a skill bundle, so pebble "
             "learns which skills actually get invoked rather than only which get "
             "shipped. Returns settings.json JSON containing a short-lived token "

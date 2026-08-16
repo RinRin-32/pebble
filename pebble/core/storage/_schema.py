@@ -685,10 +685,21 @@ prompt_templates = sa.Table(
     sa.Column("notify_on_complete", sa.Text, nullable=False, server_default="[]"),
     sa.Column("enabled", sa.Integer, nullable=False, server_default="1"),
     sa.Column("priority", sa.Integer, nullable=False, server_default="0"),
+    #: When this was archived, "" while active.  A timestamp rather than a
+    #: flag because "when" is the next question: archived this morning by a
+    #: sweep is a different situation from archived six months ago and never
+    #: missed, and only the second is a deletion candidate.
+    sa.Column("archived", sa.Text, nullable=False, server_default=""),
+    #: "janitor" or a user id — so a sweep is recognisable as one action, and
+    #: an operator's deliberate archive is not undone by a janitor that thinks
+    #: it made a mistake.
+    sa.Column("archived_by", sa.Text, nullable=False, server_default=""),
     sa.Column("created", sa.Text, nullable=False),
     sa.Column("updated", sa.Text, nullable=False),
     sa.UniqueConstraint("name", "repo_id", name="uq_prompt_templates_name_repo"),
 )
+
+sa.Index("idx_prompt_templates_archived", prompt_templates.c.archived)
 
 sa.Index("idx_prompt_templates_repo", prompt_templates.c.repo_id, prompt_templates.c.name)
 

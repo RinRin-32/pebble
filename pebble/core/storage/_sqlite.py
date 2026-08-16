@@ -2219,6 +2219,37 @@ class SQLiteBackend:
             )
             conn.commit()
 
+    def set_skill_archived(self, template_id: str, *, archived: str, by: str = "") -> bool:
+        """Archive (non-empty timestamp) or restore ("") a skill.
+
+        Returns whether a row changed, so a caller can report what actually
+        happened rather than what it asked for — an archive that silently
+        matched nothing reads identically to one that worked.
+        """
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            result = conn.execute(
+                sa.update(prompt_templates)
+                .where(prompt_templates.c.template_id == template_id)
+                .values(archived=archived, archived_by=by, updated=now)
+            )
+            conn.commit()
+            return bool(result.rowcount)
+
+    def list_archived_skills(self) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(prompt_templates)
+                .where(prompt_templates.c.archived != "")
+                .order_by(prompt_templates.c.archived)
+            ).fetchall()
+            return [
+                _row_to_dict(
+                    r, "is_default", "readonly", "auto_approve", "enabled", "hidden_from_menu"
+                )
+                for r in rows
+            ]
+
     # ---- skill usage events -----------------------------------------------
 
     def record_skill_event(
