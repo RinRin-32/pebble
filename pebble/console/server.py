@@ -7645,6 +7645,100 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
     )
 
 
+async def admin_skills_graph(request: Request) -> JSONResponse:
+    """GET /v1/api/admin/skills/graph — skills, their usage, and their evidence.
+
+    Shaped for the graph rather than for a table: each skill carries the two
+    counts that decide how it is DRAWN (invoked, not pulled — a skill shipped
+    everywhere and never run must look small) plus whether the janitor would
+    consider it, so a candidate is visibly fading before anything acts on it.
+
+    Note edges are the skill-to-evidence links.  They are built from the same
+    name-search proxy the janitor uses, and are labelled as a proxy here too:
+    the graph must not imply a precision the data does not have.
+    """
+    from pebble.core.janitor import analyze_skills
+    from pebble.core.web_helpers import require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    err = require_permission(request, "admin.users")
+    if err:
+        return err
+
+    def _load() -> dict[str, Any]:
+        report = analyze_skills(storage)
+        if not report.get("ok"):
+            return {"skills": [], "edges": [], "stats": {}}
+        candidates = {c["skill_id"] for c in report["archive_candidates"]}
+        doomed = {c["skill_id"] for c in report["delete_candidates"]}
+        rows = [*report["archive_candidates"], *report["delete_candidates"], *report["keep"]]
+
+        # repo_id is an opaque uuid for in-cluster rows and a plain name for
+        # anything written over MCP; resolve so one codebase is one cluster
+        # rather than two (the same fix the knowledge graph needed).
+        names: dict[str, str] = {}
+        try:
+            names = {r["repo_id"]: r["name"] for r in storage.list_repos(enabled_only=False)}
+        except Exception:
+            log.debug("skills_graph.repo_names_failed", exc_info=True)
+
+        skills = []
+        edges = []
+        for row in rows:
+            repo = names.get(row.get("repo", ""), row.get("repo", ""))
+            skills.append(
+                {
+                    "name": row["name"],
+                    "skill_id": row["skill_id"],
+                    "repo": repo,
+                    "invoked": row["invoked"],
+                    "invoked_sessions": row.get("invoked_sessions", 0),
+                    "pulled": row["pulled"],
+                    "note_support": row["note_support"],
+                    "age_days": row["age_days"],
+                    "archived": bool(row.get("archived")),
+                    "candidate": row["skill_id"] in candidates,
+                    "doomed": row["skill_id"] in doomed,
+                    "reasons": row.get("reasons", []),
+                }
+            )
+            for title in _skill_note_titles(row["name"], row.get("repo", "")):
+                edges.append({"skill": row["name"], "note": title})
+        return {
+            "skills": skills,
+            "edges": edges,
+            "stats": {
+                "skills": len(skills),
+                "invoked": sum(1 for s in skills if s["invoked"]),
+                "candidates": len(candidates),
+                "archived": sum(1 for s in skills if s["archived"]),
+            },
+            "thresholds": report["thresholds"],
+        }
+
+    return JSONResponse(await asyncio.to_thread(_load))
+
+
+def _skill_note_titles(name: str, repo: str = "") -> list[str]:
+    """Vault notes that mention a skill — the evidence edge, as a proxy.
+
+    Deliberately the SAME function the janitor counts, so the picture and the
+    decision cannot disagree: an operator looking at a faded node sees exactly
+    the absence of edges that made it a candidate.  Two implementations would
+    drift, and the first symptom would be a graph that contradicts the tool
+    it is supposed to explain.
+    """
+    try:
+        from pebble.core.janitor import notes_mentioning
+
+        return notes_mentioning(name, repo, limit=4)
+    except Exception:
+        log.debug("skills_graph.note_edges_failed", exc_info=True)
+        return []
+
+
 async def skills_report(request: Request) -> JSONResponse:
     """POST /v1/api/skills/report — an edge device ran a skill.
 
@@ -15147,6 +15241,7 @@ def create_app(
                     ),
                     Route("/api/admin/knowledge", admin_knowledge),
                     Route("/api/admin/knowledge/note", admin_knowledge_note),
+                    Route("/api/admin/skills/graph", admin_skills_graph),
                     # Edge devices report skill invocations here. NOT under
                     # /api/admin: it is reached by a short-lived hook token
                     # whose scope grants nothing else, and required_scope()

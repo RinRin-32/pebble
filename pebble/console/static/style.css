@@ -3836,6 +3836,61 @@ h3.skill-spec-heading {
 .kb-node:hover circle {
   stroke: var(--fg, #e8eaed);
 }
+
+/* --- Skills graph -------------------------------------------------------
+   Same engine as the vault graph, different meaning. Size encodes INVOKED
+   count, and the fading below is the janitor's reasoning made visible: a
+   candidate looks like one before anything acts on it, which is the whole
+   difference between a cleanup you can audit and one you have to trust. */
+.skills-node--note circle {
+  fill: none;
+  stroke: var(--muted, #9aa3ad);
+  stroke-width: 1.2;
+}
+.skills-node--note text {
+  fill: var(--muted, #9aa3ad);
+  font-size: 9.5px;
+}
+/* Fading, not hiding. A candidate is still readable — it has to be, because
+   disagreeing with the janitor is the point of showing it. */
+.skills-node--candidate circle {
+  opacity: 0.45;
+  stroke-dasharray: 3 3;
+}
+.skills-node--candidate text {
+  opacity: 0.6;
+}
+.skills-node--doomed circle {
+  opacity: 0.4;
+  fill: none;
+  stroke: #fb7185;
+  stroke-width: 1.6;
+  stroke-dasharray: 2 3;
+}
+.skills-node--archived circle {
+  opacity: 0.3;
+  fill: none;
+  stroke: var(--muted, #9aa3ad);
+  stroke-width: 1.2;
+  stroke-dasharray: 2 4;
+}
+.skills-node--archived text {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.skills-swatch--candidate {
+  background: transparent;
+  border: 1px dashed var(--accent, #e8853a);
+  opacity: 0.6;
+}
+.skills-swatch--archived {
+  background: transparent;
+  border: 1px dashed var(--muted, #9aa3ad);
+  opacity: 0.45;
+}
+.admin-row--muted {
+  opacity: 0.62;
+}
 .kb-graph-legend {
   display: flex;
   flex-wrap: wrap;

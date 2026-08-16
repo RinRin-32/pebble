@@ -68,6 +68,11 @@ def _use(pulled: int = 0, invoked: int = 0, sessions: int = 0) -> dict[str, Any]
     return {"pulled": pulled, "invoked": invoked, "invoked_sessions": sessions}
 
 
+#: The genuine implementation, kept before the autouse stub replaces it, so
+#: the tests that are ABOUT note support can still reach it.
+_REAL_NOTE_SUPPORT = janitor._note_support
+
+
 @pytest.fixture(autouse=True)
 def no_note_support(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default: the vault knows nothing. Tests opt in to support."""
@@ -192,6 +197,48 @@ class TestArchiveAction:
 
         out = janitor.archive_skills(_Broken([_row("real")]), ["real"])
         assert out["not_found"] == ["real"]
+
+
+class TestNoteSupportIsLiteral:
+    """Ranked search alone claims support that does not exist.
+
+    Asked about `firecrawl-deep-research` it returned "A reasoning model burns
+    max_tokens…", because both contain common words. As a janitor input that
+    error is merely conservative. Drawn on the skills graph it is an edge
+    asserting a note supports a skill when it says nothing about it — and a
+    picture that lies is worse than no picture.
+    """
+
+    def test_only_notes_that_actually_name_the_skill_count(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path))
+        (tmp_path / "kb").mkdir()
+        from pebble.core.knowledge import Note, write_note
+
+        write_note(Note(title="Deep research on models", body="unrelated prose", summary="s"))
+        write_note(Note(title="Using firecrawl-deep-research", body="we ran it on X", summary="s"))
+        got = janitor.notes_mentioning("firecrawl-deep-research")
+        assert got == ["Using firecrawl-deep-research"]
+
+    def test_a_mention_in_the_body_counts(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("PEBBLE_WORKSPACE", str(tmp_path))
+        (tmp_path / "kb").mkdir()
+        from pebble.core.knowledge import Note, write_note
+
+        write_note(
+            Note(title="Scraping notes", body="firecrawl-lead-research was slow", summary="s")
+        )
+        assert janitor.notes_mentioning("firecrawl-lead-research") == ["Scraping notes"]
+
+    def test_an_unreadable_vault_does_not_mean_no_evidence(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # "We could not check" must never read as "nothing supports it", or an
+        # outage becomes a reason to archive.
+        def boom(*_a: Any, **_k: Any) -> Any:
+            raise RuntimeError("vault gone")
+
+        monkeypatch.setattr(janitor, "notes_mentioning", boom)
+        assert _REAL_NOTE_SUPPORT("anything") == 1
 
 
 class TestVaultReport:

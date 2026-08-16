@@ -67,19 +67,50 @@ def _age_days(stamp: str) -> float:
         return 10_000.0
 
 
-def _note_support(name: str, repo: str = "") -> int:
-    """How many vault notes mention this skill by name.
+def notes_mentioning(name: str, repo: str = "", *, limit: int = 6) -> list[str]:
+    """Titles of vault notes that mention *name* LITERALLY.
 
-    A proxy for a skill→note edge, not the edge itself.  See the module
-    docstring for what it gets wrong and why the errors lean toward keeping.
+    Ranked search is used to find candidates and then every hit is checked for
+    the actual name.  Search alone was not good enough: asked about
+    ``firecrawl-deep-research`` it happily returned "A reasoning model burns
+    max_tokens…" because both contain common words.  As a janitor input that
+    error was merely conservative; drawn on the graph it is an edge asserting
+    that a note supports a skill when it says nothing about it, and a picture
+    that lies is worse than no picture.
+
+    Still a proxy for a real skill→note edge — it misses a note that discusses
+    a skill without naming it — but now it only claims what it can show.
     """
+    needle = (name or "").strip().lower()
+    if not needle:
+        return []
     try:
         from pebble.core.knowledge import search_notes
 
-        return len(search_notes(name, limit=5, repo=repo))
+        hits = search_notes(name, limit=limit * 4, repo=repo)
     except Exception:
         log.debug("janitor.note_support_failed", exc_info=True)
-        # Unknown support means "do not use this as a reason to remove".
+        return []
+    out: list[str] = []
+    for note, _score in hits:
+        haystack = f"{note.title}\n{note.summary}\n{note.body}".lower()
+        if needle in haystack:
+            out.append(note.title)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _note_support(name: str, repo: str = "") -> int:
+    """How many vault notes mention this skill by name.
+
+    A failure to read the vault returns 1, not 0: "we could not check" must
+    never read as "no evidence", or an outage becomes a reason to archive.
+    """
+    try:
+        return len(notes_mentioning(name, repo))
+    except Exception:
+        log.debug("janitor.note_support_failed", exc_info=True)
         return 1
 
 
