@@ -64,6 +64,7 @@ from pebble.core.storage._schema import (
     scheduled_task_runs,
     scheduled_tasks,
     services,
+    skill_events,
     skill_resources,
     skill_versions,
     structured_memories,
@@ -2217,6 +2218,108 @@ class SQLiteBackend:
                 )
             )
             conn.commit()
+
+    # ---- skill usage events -----------------------------------------------
+
+    def record_skill_event(
+        self,
+        event_id: str,
+        *,
+        event: str,
+        skill_id: str = "",
+        name: str = "",
+        repo_id: str = "",
+        user_id: str = "",
+        session_id: str = "",
+    ) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                sa.insert(skill_events).values(
+                    event_id=event_id,
+                    skill_id=skill_id,
+                    name=name,
+                    repo_id=repo_id,
+                    user_id=user_id,
+                    event=event,
+                    session_id=session_id,
+                    created=now,
+                )
+            )
+            conn.commit()
+
+    def skill_usage(self, skill_id: str) -> dict[str, Any]:
+        """Counts and last-seen per event kind for one skill.
+
+        Sessions are counted distinctly alongside raw invocations: a skill
+        invoked forty times inside one session is a loop, not adoption, and
+        the janitor should not read it as popularity.
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(
+                    skill_events.c.event,
+                    sa.func.count().label("n"),
+                    sa.func.count(sa.distinct(skill_events.c.session_id)).label("sessions"),
+                    sa.func.max(skill_events.c.created).label("last"),
+                )
+                .where(skill_events.c.skill_id == skill_id)
+                .group_by(skill_events.c.event)
+            ).fetchall()
+        out: dict[str, Any] = {
+            "pulled": 0,
+            "invoked": 0,
+            "invoked_sessions": 0,
+            "last_pulled": "",
+            "last_invoked": "",
+        }
+        for event, n, sessions, last in rows:
+            if event == "pulled":
+                out["pulled"] = int(n or 0)
+                out["last_pulled"] = last or ""
+            elif event == "invoked":
+                out["invoked"] = int(n or 0)
+                out["invoked_sessions"] = int(sessions or 0)
+                out["last_invoked"] = last or ""
+        return out
+
+    def skill_usage_all(self) -> dict[str, dict[str, Any]]:
+        """Usage for every skill that has any, keyed by skill_id.
+
+        One query rather than one per skill: the console graph and the janitor
+        both want the whole picture at once, and a per-node round trip is how
+        a graph view becomes too slow to open.
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(
+                    skill_events.c.skill_id,
+                    skill_events.c.event,
+                    sa.func.count().label("n"),
+                    sa.func.count(sa.distinct(skill_events.c.session_id)).label("sessions"),
+                    sa.func.max(skill_events.c.created).label("last"),
+                ).group_by(skill_events.c.skill_id, skill_events.c.event)
+            ).fetchall()
+        out: dict[str, dict[str, Any]] = {}
+        for skill_id, event, n, sessions, last in rows:
+            entry = out.setdefault(
+                skill_id,
+                {
+                    "pulled": 0,
+                    "invoked": 0,
+                    "invoked_sessions": 0,
+                    "last_pulled": "",
+                    "last_invoked": "",
+                },
+            )
+            if event == "pulled":
+                entry["pulled"] = int(n or 0)
+                entry["last_pulled"] = last or ""
+            elif event == "invoked":
+                entry["invoked"] = int(n or 0)
+                entry["invoked_sessions"] = int(sessions or 0)
+                entry["last_invoked"] = last or ""
+        return out
 
     def list_plans(self, user_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
         """Open conversations first, newest first — a caller reconnecting wants

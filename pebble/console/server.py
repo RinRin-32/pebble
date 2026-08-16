@@ -7645,6 +7645,42 @@ async def admin_set_user_git(request: Request) -> JSONResponse:
     )
 
 
+async def skills_report(request: Request) -> JSONResponse:
+    """POST /v1/api/skills/report — an edge device ran a skill.
+
+    Reached by the short-lived ``skills.report`` token minted at transfer
+    time and embedded in the hook pebble hands over.  That scope expands to
+    itself and nothing else, so this is the only path such a token can reach —
+    the property that makes it safe to leave in a settings.json on a laptop.
+
+    Failures here are reported but never loud: telemetry that can break a
+    working session is worse than telemetry that is occasionally missing.
+    """
+    from pebble.core.skill_transfer import record_invocation
+    from pebble.core.web_helpers import read_json_or_400, require_storage_or_503
+
+    storage, err = require_storage_or_503(request)
+    if err:
+        return err
+    body = await read_json_or_400(request)
+    if isinstance(body, JSONResponse):
+        return body
+    auth = getattr(request.state, "auth_result", None)
+    try:
+        return JSONResponse(
+            record_invocation(
+                storage,
+                name=str(body.get("name") or ""),
+                user_id=getattr(auth, "user_id", "") or "",
+                session_id=str(body.get("session_id") or ""),
+                repo=str(body.get("repo") or ""),
+            )
+        )
+    except Exception:
+        log.warning("skills.report_failed", exc_info=True)
+        return JSONResponse({"ok": False, "error": "could not record"}, status_code=500)
+
+
 async def admin_knowledge_note(request: Request) -> JSONResponse:
     """GET /v1/api/admin/knowledge/note?title=... — one note, with its body.
 
@@ -15111,6 +15147,11 @@ def create_app(
                     ),
                     Route("/api/admin/knowledge", admin_knowledge),
                     Route("/api/admin/knowledge/note", admin_knowledge_note),
+                    # Edge devices report skill invocations here. NOT under
+                    # /api/admin: it is reached by a short-lived hook token
+                    # whose scope grants nothing else, and required_scope()
+                    # matches this exact path.
+                    Route("/api/skills/report", skills_report, methods=["POST"]),
                     Route("/api/admin/coding-jobs", admin_coding_jobs),
                     # Per-user access allow-lists (models + personas)
                     Route("/api/admin/users/{user_id}/models", admin_get_user_models),
