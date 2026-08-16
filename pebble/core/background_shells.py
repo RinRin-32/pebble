@@ -602,13 +602,26 @@ class BackgroundShellRegistry:
             log.warning("bg_shell.drain_leaked", shell_id=shell.shell_id, pid=shell.pid)
         with contextlib.suppress(OSError):
             os.unlink(shell._script_path)
-        with shell.lock:
-            shell.exit_code = shell.proc.returncode
-            shell.status = "killed" if shell._killed else "completed"
-            notify = not shell._killed
+        # The sequence is taken BEFORE the status flips, so a shell is never
+        # observable as "exited with no exit order".  It used to be assigned
+        # after, which left a window another waiter's prune could see: an
+        # unsequenced exited shell sorts as newest (below), so a waiter that
+        # was merely SLOW made its shell immortal and got a genuinely newer
+        # record evicted in its place.  Three shells, cap of two, and shell 0
+        # descheduled between the two locks is enough — the oldest survives
+        # forever and shell 1 is dropped.
+        #
+        # Not nested: this takes ``self._lock`` and releases it before taking
+        # ``shell.lock``, because the reverse nesting order exists elsewhere
+        # and holding both would invite a deadlock instead of a race.
         with self._lock:
             self._exit_counter += 1
-            shell._exit_seq = self._exit_counter
+            seq = self._exit_counter
+        with shell.lock:
+            shell.exit_code = shell.proc.returncode
+            shell._exit_seq = seq
+            shell.status = "killed" if shell._killed else "completed"
+            notify = not shell._killed
         log.info(
             "bg_shell.exited",
             shell_id=shell.shell_id,
@@ -631,9 +644,14 @@ class BackgroundShellRegistry:
         buffer).  Eviction sorts on exit order, NOT spawn order — the shell
         whose exit triggered this prune is by definition the newest-exited
         and therefore never its own victim (its exit notice and unread
-        output survive).  An exited shell whose ``_exit_seq`` isn't
-        assigned yet (waiter mid-transition) sorts as newest for the same
-        reason.
+        output survive).
+
+        The ``inf`` fallback should now be unreachable for an exited shell:
+        the waiter takes its sequence before flipping the status, so status
+        and order are consistent for any reader.  It is kept because sorting
+        needs a total order and a crash between those two writes would
+        otherwise raise here — but it is a backstop, not the mechanism it
+        once was.
         """
         with self._lock:
             if self._closed:
