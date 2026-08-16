@@ -212,6 +212,53 @@ class TestThinReplies:
         text, err = self._ask(min_chars=interview.MIN_QUESTION_CHARS)
         assert text == "" and "nothing usable" in err
 
+    def test_a_truncated_attempt_is_retried_at_a_larger_budget(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Retrying a truncation at the same ceiling mostly truncates again.
+
+        The cause is that this prompt makes the model reason past its
+        allowance, and that does not change between attempts. Observed live:
+        a planning prompt returned 0 chars with finish_reason="length" twice
+        at 4_000 and the caller got an error, while the same prompt at a
+        larger ceiling answered first time.
+        """
+        budgets: list[int] = []
+        import pebble.core.model_registry as mr
+        import pebble.core.model_turn as mt
+
+        class _Reg:
+            def has_alias(self, _a: str) -> bool:
+                return True
+
+            def resolve(self, _a: str) -> tuple[Any, str, Any]:
+                return (object(), "m", None)
+
+            def get_provider(self, _a: str) -> str:
+                return "openai-compatible"
+
+        replies = [("", "length"), ("1. A real question about what you measured?", "stop")]
+
+        def fake_turn(_lane: Any, _turns: Any, **kw: Any) -> Any:
+            budgets.append(kw.get("max_tokens"))
+            text, finish = replies.pop(0)
+            return type("R", (), {"content": text, "finish_reason": finish})()
+
+        monkeypatch.setattr(mr, "load_model_registry", lambda **_kw: _Reg())
+        monkeypatch.setattr(mt, "resolve_lane", lambda *_a, **_kw: object())
+        monkeypatch.setattr(mt, "model_turn", fake_turn)
+        monkeypatch.setattr(interview.time, "sleep", lambda _s: None)
+
+        text, err = self._ask(max_tokens=4000, min_chars=interview.MIN_QUESTION_CHARS)
+        assert "measured" in text and not err
+        assert budgets == [4000, 8000], budgets
+
+    def test_escalation_is_bounded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A pathological prompt must not escalate without limit.
+        calls = self._stub(monkeypatch, [("", "length")] * 6)
+        self._ask(attempts=6, max_tokens=interview.MAX_ESCALATED_TOKENS, min_chars=1)
+        assert len(calls) == 6  # ran, and the ceiling held rather than growing
+
     def test_a_reply_about_the_debrief_is_not_a_note(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Observed for real, and filed into the vault before this check
         # existed. It is fluent, long, and stops cleanly — only the missing

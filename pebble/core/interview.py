@@ -68,6 +68,12 @@ MIN_NOTE_CHARS = 120
 QUESTION_TOKENS = 4000
 NOTE_TOKENS = 6000
 
+#: Ceiling when a truncated attempt is retried at a larger budget.  A prompt
+#: that makes the model reason past its allowance will do so again at the same
+#: allowance, so the retry doubles instead of repeating — bounded here so a
+#: pathological prompt cannot escalate without limit.
+MAX_ESCALATED_TOKENS = 24_000
+
 #: How much prior knowledge to put in front of the interviewer.
 MAX_PRIOR_NOTES = 6
 
@@ -253,10 +259,23 @@ def _ask_model(
         # an interview that dies on a blank response wastes the round trip
         # AND the operator's attention on something a retry fixes.
         best = ""
+        budget = max_tokens
         for attempt in range(max(1, attempts)):
-            result = model_turn(lane, turns, max_tokens=max_tokens)
+            result = model_turn(lane, turns, max_tokens=budget)
             text = (result.content or "").strip()
             cut = getattr(result, "finish_reason", "") == "length"
+            if cut:
+                # Retrying a truncation at the SAME ceiling mostly truncates
+                # again: the cause is that this prompt makes the model reason
+                # longer than the budget allows, and that does not change
+                # between attempts.  Escalating is what actually recovers.
+                #
+                # Sizing by measurement rather than by taste: visible replies
+                # run 800-1400 chars whatever the ceiling, so the headroom is
+                # entirely reasoning and a bigger number costs nothing on the
+                # calls that did not need it — output tokens are billed on
+                # use, not on allowance.
+                budget = min(budget * 2, MAX_ESCALATED_TOKENS)
             if text and (sentinel and sentinel in text.upper()[:40]):
                 return text, ""
             usable = bool(text) and (not require or require in text)
@@ -271,6 +290,7 @@ def _ask_model(
                     attempt=attempt + 1,
                     chars=len(text),
                     truncated=cut,
+                    next_budget=budget,
                 )
                 time.sleep(1.0 * (attempt + 1))
         if best:
