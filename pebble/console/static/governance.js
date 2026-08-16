@@ -3123,18 +3123,10 @@ function loadMoreAudit() {
 
 // Populate audit user filter from admin users list
 function _populateAuditUserFilter() {
-  const sel = document.getElementById("audit-user-filter");
-  if (!sel) return;
-  let html = '<option value="">All users</option>';
-  for (let i = 0; i < _adminUsers.length; i++) {
-    html +=
-      '<option value="' +
-      escapeHtml(_adminUsers[i].user_id) +
-      '">' +
-      escapeHtml(_adminUsers[i].username) +
-      "</option>";
-  }
-  setSafeHtml(sel, html);
+  // Same bug as the token picker had: this read _adminUsers, which only the
+  // Users tab filled, so opening Audit first offered "All users" and nothing
+  // to narrow by.
+  _fillUserSelect("audit-user-filter", "All users");
 }
 
 // ---------------------------------------------------------------------------

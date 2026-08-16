@@ -2,6 +2,63 @@
 
 let _adminTab = "users";
 let _adminUsers = [];
+// In-flight /admin/users request, so N pickers opening at once make ONE call
+// and none of them race each other's writes to _adminUsers.
+let _adminUsersInFlight = null;
+
+// Every user picker in the console reads _adminUsers. Only the Users tab ever
+// filled it, so opening Tokens (or Channels, or the audit filter) first showed
+// an empty dropdown until you visited Users and came back — the list was not
+// slow, it had never been requested.
+//
+// One loader, used by all of them. Cached because the answer rarely changes
+// and the pickers are opened constantly; refreshable because "rarely" is not
+// "never", and a user created in this session must appear without a reload.
+function _ensureAdminUsers(force) {
+  if (!force && _adminUsers.length) return Promise.resolve(_adminUsers);
+  if (_adminUsersInFlight) return _adminUsersInFlight;
+  _adminUsersInFlight = authFetch("/v1/api/admin/users")
+    .then(function (r) {
+      return r.ok ? r.json() : { users: [] };
+    })
+    .then(function (data) {
+      _adminUsersInFlight = null;
+      _adminUsers = data.users || [];
+      return _adminUsers;
+    })
+    .catch(function () {
+      // Keep the last known list rather than blanking the picker: a dropdown
+      // that empties itself on one failed refresh is worse than a slightly
+      // stale one, because the operator cannot tell which happened.
+      _adminUsersInFlight = null;
+      return _adminUsers;
+    });
+  return _adminUsersInFlight;
+}
+
+// Fill a <select> with users, keeping whatever was selected.
+//
+// Painted from cache FIRST when the cache is warm, then again once the
+// refresh lands. The fetch is ~11ms server-side, so what reads as slowness is
+// the empty-then-fill repaint on every single tab visit, not the request.
+function _fillUserSelect(selectId, placeholder) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const paint = function (users) {
+    const current = sel.value;
+    setSafeHtml(sel, '<option value="">' + escapeHtml(placeholder) + "</option>");
+    for (let i = 0; i < users.length; i++) {
+      const u = users[i];
+      const opt = document.createElement("option");
+      opt.value = u.user_id;
+      opt.textContent = u.display_name ? u.username + " (" + u.display_name + ")" : u.username;
+      sel.appendChild(opt);
+    }
+    if (current) sel.value = current;
+  };
+  if (_adminUsers.length) paint(_adminUsers);
+  _ensureAdminUsers().then(paint);
+}
 let _adminTokenUserId = "";
 let _adminChannelUserId = "";
 let _lastCreatedToken = "";
@@ -478,22 +535,22 @@ function _initKebabMenus() {
 // ---------------------------------------------------------------------------
 
 function loadAdminUsers() {
-  authFetch("/v1/api/admin/users")
-    .then(function (r) {
-      if (!r.ok) throw new Error("Failed to load users");
-      return r.json();
-    })
-    .then(function (data) {
-      _adminUsers = data.users || [];
-      _renderUsers(_adminUsers);
-      _populateTokenUserSelect();
-    })
-    .catch(function () {
+  // Paint the cached list immediately when there is one, so revisiting the
+  // tab does not blank the table for a round trip, then refresh behind it.
+  if (_adminUsers.length) _renderUsers(_adminUsers);
+  _ensureAdminUsers(true).then(function (users) {
+    if (!users.length) {
+      // Genuinely empty and a failed fetch are different; _ensureAdminUsers
+      // preserves the last known list, so an empty result here means empty.
       setSafeHtml(
         document.getElementById("admin-users-table"),
-        '<div class="dashboard-empty">Failed to load users</div>',
+        '<div class="dashboard-empty">No users yet. Create one to get started.</div>',
       );
-    });
+    } else {
+      _renderUsers(users);
+    }
+    _populateTokenUserSelect();
+  });
 }
 
 function _renderUsers(users) {
@@ -890,17 +947,7 @@ function _relativeTime(isoStr) {
 // ---------------------------------------------------------------------------
 
 function _populateTokenUserSelect() {
-  const sel = document.getElementById("admin-token-user");
-  const current = sel.value;
-  setSafeHtml(sel, '<option value="">Select user...</option>');
-  for (let i = 0; i < _adminUsers.length; i++) {
-    const u = _adminUsers[i];
-    const opt = document.createElement("option");
-    opt.value = u.user_id;
-    opt.textContent = u.username + " (" + u.display_name + ")";
-    sel.appendChild(opt);
-  }
-  if (current) sel.value = current;
+  _fillUserSelect("admin-token-user", "Select user...");
 }
 
 function loadAdminTokens() {
@@ -1022,17 +1069,7 @@ function confirmRevokeToken(tokenId) {
 // ---------------------------------------------------------------------------
 
 function _populateChannelUserSelect() {
-  const sel = document.getElementById("admin-channel-user");
-  const current = sel.value;
-  setSafeHtml(sel, '<option value="">Select user...</option>');
-  for (let i = 0; i < _adminUsers.length; i++) {
-    const u = _adminUsers[i];
-    const opt = document.createElement("option");
-    opt.value = u.user_id;
-    opt.textContent = u.username + " (" + u.display_name + ")";
-    sel.appendChild(opt);
-  }
-  if (current) sel.value = current;
+  _fillUserSelect("admin-channel-user", "Select user...");
 }
 
 function loadAdminChannels() {
@@ -3476,21 +3513,10 @@ function _populateMemberUserSelect() {
   // Reuse the Users tab's already-loaded list when present; else fetch it (an
   // admin managing projects normally also holds admin.users — if not, the
   // fetch 403s and the picker stays empty, the documented v1 limitation).
-  if (_adminUsers && _adminUsers.length) {
-    fill(_adminUsers);
-    return;
-  }
-  authFetch("/v1/api/admin/users")
-    .then(function (r) {
-      return r.ok ? r.json() : { users: [] };
-    })
-    .then(function (data) {
-      _adminUsers = data.users || [];
-      fill(_adminUsers);
-    })
-    .catch(function () {
-      fill([]);
-    });
+  // This picker already got it right by hand; it now shares the one loader
+  // so a future fix lands in every picker instead of this one only.
+  if (_adminUsers.length) fill(_adminUsers);
+  _ensureAdminUsers().then(fill);
 }
 
 function _loadProjectMembers(pid) {
