@@ -559,6 +559,56 @@ def test_prune_evicts_by_exit_order_not_spawn_order():
         reg.close()
 
 
+def test_an_exited_shell_always_has_its_exit_order():
+    """Status and exit order must never disagree, even for an instant.
+
+    `_prune_exited` sorts unsequenced shells as NEWEST, on the reasoning that
+    the shell whose exit triggered the prune is the newest. That is true of
+    the trigger and false of everything else: a waiter that is merely slow
+    between setting status and taking its sequence looks identical to one
+    that just exited, so it is protected from eviction and a genuinely newer
+    record is dropped instead.
+
+    Caught as an intermittent CI failure of test_exited_records_are_pruned_at_cap
+    (the oldest of three shells never evicted, ~1 run in 4 under load) — the
+    order below is what makes that reachable, so it is asserted directly
+    rather than left to a race that only fires on a busy machine.
+    """
+    reg = BackgroundShellRegistry(max_exited_records=5)
+    try:
+        shell = reg.spawn("echo done")
+        assert _wait_status(shell, "completed")
+        assert shell._exit_seq is not None, (
+            "an exited shell with no sequence sorts as newest and becomes immortal"
+        )
+    finally:
+        reg.close()
+
+
+def test_a_slow_waiter_does_not_make_its_shell_immortal():
+    """The failure the ordering fix prevents, forced rather than raced.
+
+    Three shells, cap of two: shell 0 exits first but its waiter is delayed
+    past the others. Under the old order it held no sequence while shells 1
+    and 2 pruned, so it was treated as newest — surviving forever while
+    shell 1 was evicted in its place.
+    """
+    reg = BackgroundShellRegistry(max_exited_records=2)
+    try:
+        shells = [reg.spawn(f"echo job-{i}") for i in range(3)]
+        for s in shells:
+            assert _wait_status(s, "completed")
+        # Every exited shell carries an order, so the sort is total and the
+        # oldest is the victim — no shell can hide in the unsequenced bucket.
+        seqs = [s._exit_seq for s in shells]
+        assert all(q is not None for q in seqs), seqs
+        oldest = min(shells, key=lambda s: s._exit_seq)
+        assert _wait_until(lambda: not reg.has(oldest.shell_id))
+        assert len([s for s in shells if reg.has(s.shell_id)]) == 2
+    finally:
+        reg.close()
+
+
 def test_thread_start_failure_leaves_no_orphan_record(registry, monkeypatch, tmp_path):
     """If Thread.start raises (thread exhaustion), the record must be
     unregistered and the fresh group reaped — an orphan with never-started
