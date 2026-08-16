@@ -1668,16 +1668,17 @@ class StorageBackend(Protocol):
         hidden_from_menu: bool = False,
         arguments: str = "[]",
         argument_hint: str = "",
+        repo_id: str = "",
     ) -> None:
-        """Create a prompt template (skill)."""
+        """Create a prompt template (skill).  ``repo_id`` "" means global."""
         ...
 
     def get_prompt_template(self, template_id: str) -> dict[str, Any] | None:
         """Return prompt template dict or None."""
         ...
 
-    def get_prompt_template_by_name(self, name: str) -> dict[str, Any] | None:
-        """Lookup prompt template by name. Returns same dict as get_prompt_template or None."""
+    def get_prompt_template_by_name(self, name: str, repo_id: str = "") -> dict[str, Any] | None:
+        """Lookup by name, repo-first then global. Empty repo_id sees global only."""
         ...
 
     def list_prompt_templates(
@@ -1764,8 +1765,8 @@ class StorageBackend(Protocol):
         """
         ...
 
-    def get_skill_by_name(self, name: str) -> dict[str, Any] | None:
-        """Lookup skill (prompt template) by name. Returns dict or None."""
+    def get_skill_by_name(self, name: str, repo_id: str = "") -> dict[str, Any] | None:
+        """Lookup skill by name, repo-first then global. Returns dict or None."""
         ...
 
     def get_skill_by_source_url(self, source_url: str) -> dict[str, Any] | None:

@@ -148,6 +148,7 @@ def _create_template(db, template_id, name, content, **kwargs):
         enabled=kwargs.get("enabled", True),
         allowed_tools=kwargs.get("allowed_tools", "[]"),
         priority=kwargs.get("priority", 0),
+        repo_id=kwargs.get("repo_id", ""),
     )
 
 
@@ -284,6 +285,59 @@ class TestSkillStorage:
     def test_get_skill_by_name_nonexistent(self, db):
         """get_skill_by_name returns None for missing names."""
         assert db.get_skill_by_name("nonexistent") is None
+
+
+class TestRepoScopedSkills:
+    """Skills are scoped to a repo, with global ones still possible.
+
+    The old `name UNIQUE` constraint read like a clean key and behaved like a
+    landfill: one namespace for every project, so nothing was ever scoped to
+    anything and nothing ever had a reason to be removed. Uniqueness is now
+    (name, repo_id).
+    """
+
+    def test_two_repos_can_hold_the_same_name(self, db):
+        # The point of the change. Under the old constraint the second insert
+        # raised, so a project could not tune a skill without renaming it.
+        _create_template(db, "s1", "deploy", "repo A steps", repo_id="repo-a")
+        _create_template(db, "s2", "deploy", "repo B steps", repo_id="repo-b")
+        assert db.get_skill_by_name("deploy", "repo-a")["content"] == "repo A steps"
+        assert db.get_skill_by_name("deploy", "repo-b")["content"] == "repo B steps"
+
+    def test_the_repos_own_skill_wins_over_a_global_one(self, db):
+        _create_template(db, "g", "review", "generic review", repo_id="")
+        _create_template(db, "r", "review", "tuned for this repo", repo_id="repo-a")
+        assert db.get_skill_by_name("review", "repo-a")["content"] == "tuned for this repo"
+
+    def test_a_repo_still_sees_global_skills(self, db):
+        # Scoping must not cut a project off from the shared set.
+        _create_template(db, "g", "review", "generic review", repo_id="")
+        assert db.get_skill_by_name("review", "repo-a")["content"] == "generic review"
+
+    def test_no_repo_sees_global_only_not_someone_elses(self, db):
+        """A caller with no repo must not be handed another project's skill.
+
+        This is the sharp edge of the change. A bare `name ==` lookup used to
+        be unambiguous; now that two repos may share a name it would return
+        whichever row the database happened to reach first — meaning a
+        session could silently execute another project's instructions.
+        """
+        _create_template(db, "r", "deploy", "repo A steps", repo_id="repo-a")
+        assert db.get_skill_by_name("deploy") is None
+        assert db.get_skill_by_name("deploy", "") is None
+
+    def test_existing_rows_are_global(self, db):
+        # Rows predating scoping were authored when every session could see
+        # them; narrowing them silently would remove capability.
+        _create_template(db, "s1", "legacy", "content")
+        assert db.get_skill_by_name("legacy", "any-repo")["template_id"] == "s1"
+
+    def test_the_same_name_twice_in_one_repo_still_conflicts(self, db):
+        from pebble.core.storage._protocol import StorageConflictError
+
+        _create_template(db, "s1", "deploy", "first", repo_id="repo-a")
+        with pytest.raises(StorageConflictError):
+            _create_template(db, "s2", "deploy", "second", repo_id="repo-a")
 
     def test_new_fields_have_defaults(self, db):
         """Creating a template without new params uses sensible defaults."""

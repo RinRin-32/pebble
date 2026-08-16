@@ -3756,6 +3756,7 @@ class SQLiteBackend:
         hidden_from_menu: bool = False,
         arguments: str = "[]",
         argument_hint: str = "",
+        repo_id: str = "",
     ) -> None:
         # Sync is_default from activation when activation is explicitly set
         if activation == "default":
@@ -3774,6 +3775,10 @@ class SQLiteBackend:
                     {
                         "template_id": template_id,
                         "name": name,
+                        # "" = global. Defaulting to global keeps every
+                        # existing caller's behaviour unchanged; scoping is
+                        # something a caller opts into.
+                        "repo_id": repo_id,
                         "category": category,
                         "content": content,
                         "variables": variables,
@@ -3834,15 +3839,28 @@ class SQLiteBackend:
                 )
             return None
 
-    def get_prompt_template_by_name(self, name: str) -> dict[str, Any] | None:
+    def get_prompt_template_by_name(self, name: str, repo_id: str = "") -> dict[str, Any] | None:
+        """A skill by name, resolved repo-first then global.
+
+        The repo's own row wins over a global one of the same name, which is
+        the point of scoping: a project can tune a skill without renaming it
+        and without affecting anyone else.  A caller that passes no repo sees
+        only global skills — NOT an arbitrary repo's, which is what a bare
+        ``name ==`` lookup would now return once two repos share a name.
+        """
         with self._conn() as conn:
-            row = conn.execute(
-                sa.select(prompt_templates).where(prompt_templates.c.name == name)
-            ).fetchone()
-            if row:
-                return _row_to_dict(
-                    row, "is_default", "readonly", "auto_approve", "enabled", "hidden_from_menu"
-                )
+            wanted = [repo_id, ""] if repo_id else [""]
+            for scope in wanted:
+                row = conn.execute(
+                    sa.select(prompt_templates).where(
+                        prompt_templates.c.name == name,
+                        prompt_templates.c.repo_id == scope,
+                    )
+                ).fetchone()
+                if row:
+                    return _row_to_dict(
+                        row, "is_default", "readonly", "auto_approve", "enabled", "hidden_from_menu"
+                    )
             return None
 
     def list_prompt_templates(
@@ -4068,8 +4086,8 @@ class SQLiteBackend:
                 for r in rows
             ]
 
-    def get_skill_by_name(self, name: str) -> dict[str, Any] | None:
-        return self.get_prompt_template_by_name(name)
+    def get_skill_by_name(self, name: str, repo_id: str = "") -> dict[str, Any] | None:
+        return self.get_prompt_template_by_name(name, repo_id)
 
     def get_skill_by_source_url(self, source_url: str) -> dict[str, Any] | None:
         with self._conn() as conn:

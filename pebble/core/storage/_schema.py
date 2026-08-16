@@ -627,7 +627,15 @@ prompt_templates = sa.Table(
     "prompt_templates",
     metadata,
     sa.Column("template_id", sa.Text, primary_key=True),
-    sa.Column("name", sa.Text, nullable=False, unique=True),
+    # NOT globally unique: uniqueness is (name, repo_id), see migration 078.
+    # One flat namespace across every project is what let junk accumulate and
+    # stopped two repos from each having a differently-tuned skill under the
+    # same obvious name.
+    sa.Column("name", sa.Text, nullable=False),
+    #: "" means global — visible to every repo.  Rows predating scoping are
+    #: global by migration, because narrowing them would silently remove
+    #: capability from sessions relying on them.
+    sa.Column("repo_id", sa.Text, nullable=False, server_default=""),
     sa.Column("category", sa.Text, nullable=False, server_default="general"),
     sa.Column("content", sa.Text, nullable=False),
     sa.Column("variables", sa.Text, nullable=False, server_default="[]"),  # JSON array
@@ -679,7 +687,10 @@ prompt_templates = sa.Table(
     sa.Column("priority", sa.Integer, nullable=False, server_default="0"),
     sa.Column("created", sa.Text, nullable=False),
     sa.Column("updated", sa.Text, nullable=False),
+    sa.UniqueConstraint("name", "repo_id", name="uq_prompt_templates_name_repo"),
 )
+
+sa.Index("idx_prompt_templates_repo", prompt_templates.c.repo_id, prompt_templates.c.name)
 
 # ---------------------------------------------------------------------------
 # Skill resources — bundled files (scripts/, references/, assets/)

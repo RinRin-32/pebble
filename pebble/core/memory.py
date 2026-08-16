@@ -526,12 +526,19 @@ def load_last_error(ws_id: str) -> str:
 # -- Skills -------------------------------------------------------------------
 
 
-def get_skill_by_name(name: str) -> dict[str, Any] | None:
-    """Lookup skill by name (reads from prompt_templates table)."""
+def get_skill_by_name(name: str, repo_id: str = "") -> dict[str, Any] | None:
+    """Lookup skill by name (reads from prompt_templates table).
+
+    Resolved repo-first then global, so a project can tune a skill without
+    renaming it.  Callers that do not know their repo get global skills only —
+    deliberately, because now that two repos may share a name, a bare lookup
+    that fell back to "whichever row matched" would hand a session another
+    project's instructions.
+    """
     try:
-        return get_storage().get_prompt_template_by_name(name)
+        return get_storage().get_prompt_template_by_name(name, repo_id)
     except Exception:
-        log.warning("Failed to get skill name=%s", name, exc_info=True)
+        log.warning("Failed to get skill name=%s repo=%s", name, repo_id, exc_info=True)
         return None
 
 
