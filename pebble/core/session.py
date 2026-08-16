@@ -2348,7 +2348,7 @@ class ChatSession:
         """
         skill_data: dict[str, Any] | None = None
         if self._skill_name:
-            skill_data = get_skill_by_name(self._skill_name)
+            skill_data = get_skill_by_name(self._skill_name, self._bound_repo_id())
             if skill_data:
                 self._skill_resources = self._load_skill_resources(
                     skill_data.get("template_id", "")
@@ -10856,7 +10856,7 @@ class ChatSession:
         skill_arg = (args.get("skill") or "").strip()
         skill_data: dict[str, Any] | None = None
         if skill_arg:
-            skill_data = get_skill_by_name(skill_arg)
+            skill_data = get_skill_by_name(skill_arg, self._bound_repo_id())
             if skill_data is None:
                 return {
                     "call_id": call_id,
@@ -18530,7 +18530,7 @@ class ChatSession:
                 )
                 self.ui.on_info("Skill cleared; using defaults.")
             else:
-                tpl = get_skill_by_name(arg.strip())
+                tpl = get_skill_by_name(arg.strip(), self._bound_repo_id())
                 if tpl:
                     self.set_skill(tpl["name"])
                     self._append_system_turn(
