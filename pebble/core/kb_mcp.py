@@ -42,12 +42,39 @@ log = get_logger(__name__)
 #: SDK reshuffles its context plumbing.
 _current_user: ContextVar[str] = ContextVar("kb_mcp_user", default="")
 
+#: What that caller is ALLOWED to do.  Carried alongside the identity because
+#: one HTTP path serves every tool here: ``required_scope()`` keys on the
+#: path, so it cannot tell ``kb_search`` from ``kb_delete`` and resolves the
+#: whole mount to ``read``.  A read-only token could therefore write a note,
+#: delete one, and archive a skill — verified against the live console before
+#: this existed.  Per-tool enforcement has to live where the tools do.
+_current_scopes: ContextVar[frozenset[str]] = ContextVar("kb_mcp_scopes", default=frozenset())
+
 _MAX_BODY = 100_000
 _MAX_RESULTS = 50
 
 
 def current_user() -> str:
     return _current_user.get()
+
+
+def _denied(scope: str = "write") -> dict[str, Any] | None:
+    """``None`` when the caller holds *scope*, else an error to return.
+
+    Fails CLOSED: a request that arrives with no resolved scopes at all —
+    a plumbing change, a middleware that did not run — is refused rather than
+    waved through.  "We could not tell" must not read as "allowed", which is
+    exactly how the gap this closes came to exist.
+    """
+    if scope in _current_scopes.get():
+        return None
+    return {
+        "ok": False,
+        "error": (
+            f"this token lacks the {scope!r} scope. Reading the vault needs 'read'; "
+            f"changing it needs 'write'."
+        ),
+    }
 
 
 class UserScopeMiddleware:
@@ -68,10 +95,12 @@ class UserScopeMiddleware:
         state = scope.get("state") or {}
         auth = state.get("auth_result")
         token = _current_user.set(getattr(auth, "user_id", "") or "")
+        scopes = _current_scopes.set(frozenset(getattr(auth, "scopes", None) or ()))
         try:
             await self.app(scope, receive, send)
         finally:
             _current_user.reset(token)
+            _current_scopes.reset(scopes)
 
 
 def _sync_index() -> None:
@@ -269,6 +298,10 @@ def build_server() -> Any:
         append: bool = False,
         color: str = "",
     ) -> dict[str, Any]:
+        # writes a note
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.knowledge import (
             KnowledgeError,
             Note,
@@ -328,6 +361,10 @@ def build_server() -> Any:
         repo: str = "",
         commit: str = "",
     ) -> dict[str, Any]:
+        # writes a note
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.knowledge import Note, extract_links, write_note
 
         if not (title or "").strip():
@@ -365,6 +402,10 @@ def build_server() -> Any:
         )
     )
     def kb_interview(topic: str, context: str, repo: str = "") -> dict[str, Any]:
+        # opens a stored conversation that ends in a written note
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.interview import start
 
         storage, config_store = _storage_and_config()
@@ -388,6 +429,10 @@ def build_server() -> Any:
         )
     )
     def kb_interview_answer(interview_id: str, answers: str) -> dict[str, Any]:
+        # advances it, and writes the note
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.interview import answer
 
         storage, config_store = _storage_and_config()
@@ -413,6 +458,10 @@ def build_server() -> Any:
         )
     )
     def kb_plan(goal: str, context: str = "", repo: str = "") -> dict[str, Any]:
+        # opens a stored conversation
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.planning import start
 
         storage, config_store = _storage_and_config()
@@ -437,6 +486,10 @@ def build_server() -> Any:
         )
     )
     def kb_plan_reply(plan_id: str, message: str) -> dict[str, Any]:
+        # advances a stored conversation
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.planning import reply
 
         storage, config_store = _storage_and_config()
@@ -460,6 +513,10 @@ def build_server() -> Any:
         )
     )
     def kb_plan_close(plan_id: str, write_note: bool = False) -> dict[str, Any]:
+        # closes it, optionally writing a note
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.planning import close
 
         storage, config_store = _storage_and_config()
@@ -509,6 +566,10 @@ def build_server() -> Any:
         )
     )
     def kb_delete(title: str) -> dict[str, Any]:
+        # deletes a note
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.knowledge import KnowledgeError, delete_note
 
         try:
@@ -529,6 +590,10 @@ def build_server() -> Any:
         )
     )
     def kb_rename(old: str, new: str) -> dict[str, Any]:
+        # moves a note and rewrites links
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.knowledge import KnowledgeError, rename_note
 
         try:
@@ -574,6 +639,10 @@ def build_server() -> Any:
     def kb_skills_archive(
         names: list[str], repo: str = "", restore: bool = False
     ) -> dict[str, Any]:
+        # hides skills from every device
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.janitor import archive_skills
 
         storage, _config = _storage_and_config()
@@ -615,6 +684,10 @@ def build_server() -> Any:
         )
     )
     def kb_skills_hook(report_url: str = "") -> dict[str, Any]:
+        # MINTS A CREDENTIAL for an edge device
+        denied = _denied("write")
+        if denied:
+            return denied
         from pebble.core.auth import SKILL_REPORT_PATH
         from pebble.core.skill_transfer import REPORT_TOKEN_HOURS, hook_config, mint_report_token
 

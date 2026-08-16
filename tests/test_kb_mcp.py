@@ -18,7 +18,26 @@ import pytest
 from pebble.core import kb_mcp
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def _authorised() -> Iterator[None]:
+    """Call the tools as a caller who may write.
+
+    `_call` invokes tools directly, skipping the middleware that normally
+    pins the request's scopes — and the write gate fails closed, so without
+    this every mutating tool here is refused. These tests are about what the
+    tools DO; that they check authority at all is pinned separately in
+    test_kb_mcp_scopes.py, including the fails-closed behaviour that makes
+    this fixture necessary.
+    """
+    token = kb_mcp._current_scopes.set(frozenset({"read", "write"}))
+    try:
+        yield
+    finally:
+        kb_mcp._current_scopes.reset(token)
 
 
 @pytest.fixture

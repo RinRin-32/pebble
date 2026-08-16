@@ -115,11 +115,21 @@ claude mcp add --transport http pebble https://<your-console>:<port>/mcp \
   --header "Authorization: Bearer ts_..."
 ```
 
-Tools: `kb_search` (scope with `repo`), `kb_read`, `kb_write`,
-`kb_record_experiment`, `kb_graph`, `kb_repos`. It **records** results; it never
-executes commands remotely — your session runs its own, then writes down what
-happened. The token needs `read` and `write` scopes; `write` is what the two
-writing tools use.
+Reading: `kb_search` (scope with `repo`), `kb_read`, `kb_graph`, `kb_repos`,
+`kb_plans`, `kb_janitor`, `kb_skills_pull`, `kb_skills_deletion_review`.
+Writing: `kb_write`, `kb_record_experiment`, `kb_delete`, `kb_rename`,
+`kb_skills_archive`, `kb_skills_hook`, and the `kb_interview*` / `kb_plan*`
+conversations.
+
+It **records** results; it never executes commands remotely — your session runs
+its own, then writes down what happened.
+
+A `read` token can read; the writing tools require `write`, checked per tool.
+That check lives in the tools rather than on the route because one path serves
+the whole mount, so the route-level rule resolves everything here to `read` —
+which for a while meant a read-only token could write and delete. Fixed, and
+pinned by a test that asserts every tool is in exactly one of the two lists
+above.
 
 Two things bite when the console is behind a proxy, and neither error says so:
 
