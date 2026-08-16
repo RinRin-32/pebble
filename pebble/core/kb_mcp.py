@@ -674,6 +674,48 @@ def build_server() -> Any:
 
     @mcp.tool(
         description=(
+            "Publish a skill from this repo into pebble's shared store, so other "
+            "projects and devices can pull it. Repo-scoped only — global skills "
+            "ship everywhere and are made in the console. Needs the "
+            "'skill_publish' capability, which is separate from write access "
+            "because a skill is instructions other agents will follow. The body "
+            "is read by a policy check first and refused if it directs an agent "
+            "to touch credentials, exfiltrate, destroy files, fetch-and-execute, "
+            "or override its own instructions. Tool permissions are assigned "
+            "server-side: publish what a skill DOES, not what it may reach."
+        )
+    )
+    def kb_skills_publish(
+        name: str,
+        body: str,
+        repo: str,
+        description: str = "",
+        tags: list[str] | None = None,
+        paths: list[str] | None = None,
+    ) -> dict[str, Any]:
+        # installs instructions other sessions will follow
+        denied = _denied("write")
+        if denied:
+            return denied
+        from pebble.core.skill_publish import publish
+
+        storage, config_store = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return publish(
+            storage,
+            config_store,
+            user_id=current_user(),
+            name=name or "",
+            body=body or "",
+            repo=repo or "",
+            description=description or "",
+            tags=list(tags or []),
+            paths=list(paths or []),
+        )
+
+    @mcp.tool(
+        description=(
             "Get the telemetry hook to install alongside a skill bundle, so pebble "
             "learns which skills actually get invoked rather than only which get "
             "shipped. Returns settings.json JSON containing a short-lived token "
