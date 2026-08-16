@@ -87,6 +87,7 @@ class TestEveryMutatingToolIsGated:
         "kb_plan_reply",
         "kb_plan_close",
         "kb_skills_hook",
+        "kb_skills_publish",
     ]
 
     READ_ONLY = [
