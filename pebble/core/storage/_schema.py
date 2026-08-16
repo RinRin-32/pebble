@@ -692,6 +692,29 @@ prompt_templates = sa.Table(
 
 sa.Index("idx_prompt_templates_repo", prompt_templates.c.repo_id, prompt_templates.c.name)
 
+skill_events = sa.Table(
+    "skill_events",
+    metadata,
+    sa.Column("event_id", sa.Text, primary_key=True),
+    # Kept alongside name+repo, not instead of them: a pull stays evidence
+    # after the skill is deleted, and a foreign key would erase exactly the
+    # history the janitor needs to explain what it removed.
+    sa.Column("skill_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("name", sa.Text, nullable=False, server_default=""),
+    sa.Column("repo_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("user_id", sa.Text, nullable=False, server_default=""),
+    # "pulled" (pebble sent it) | "invoked" (the edge ran it).  Never
+    # "worked"/"failed": outcome is not observable from a tool-call boundary,
+    # and inventing it would have the janitor delete on fabricated evidence.
+    sa.Column("event", sa.Text, nullable=False),
+    sa.Column("session_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("created", sa.Text, nullable=False),
+)
+
+sa.Index("idx_skill_events_skill", skill_events.c.skill_id, skill_events.c.event)
+sa.Index("idx_skill_events_name_repo", skill_events.c.name, skill_events.c.repo_id)
+
+
 # ---------------------------------------------------------------------------
 # Skill resources — bundled files (scripts/, references/, assets/)
 # ---------------------------------------------------------------------------

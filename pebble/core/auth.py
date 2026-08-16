@@ -78,7 +78,14 @@ JWT_AUD_CONSOLE = "turnstone-console"
 JWT_AUD_CHANNEL = "turnstone-channel"
 _MIN_SECRET_LENGTH = 32  # 256 bits minimum for HMAC-SHA256
 
-VALID_SCOPES: frozenset[str] = frozenset({"read", "write", "approve", "service"})
+#: ``skills.report`` is deliberately OUTSIDE the read/write/approve ladder.
+#: It is minted short-lived at skill-transfer time and embedded in a hook on
+#: an edge device we do not control, so it must buy nothing except the right
+#: to say "this skill was invoked".  A token holding only this scope fails the
+#: ``read`` check that every other path requires, which is what bounds the
+#: worst case for a leaked hook config to forged usage data rather than read
+#: access to the vault.
+VALID_SCOPES: frozenset[str] = frozenset({"read", "write", "approve", "service", "skills.report"})
 
 # Scopes a principal may be GRANTED via a user-facing token mint (the admin
 # token API / ``pebble-admin create-token``).  ``service`` is deliberately
@@ -135,7 +142,12 @@ SCOPE_HIERARCHY: dict[str, frozenset[str]] = {
     "read": frozenset({"read"}),
     "write": frozenset({"read", "write"}),
     "approve": frozenset({"read", "write", "approve"}),
-    "service": frozenset({"read", "write", "approve", "service"}),
+    "service": frozenset({"read", "write", "approve", "service", "skills.report"}),
+    # Expands to ITSELF ONLY.  Putting it under "write" would make every
+    # ordinary token able to forge usage data, and — far worse — putting
+    # "read" under it would make a hook token on an untrusted laptop able to
+    # read the vault.  It sits off the ladder in both directions on purpose.
+    "skills.report": frozenset({"skills.report"}),
 }
 
 # ---------------------------------------------------------------------------
@@ -640,6 +652,12 @@ APPROVE_PATHS: frozenset[str] = frozenset(
 )
 ADMIN_PREFIX = "/api/admin/"
 
+#: Where an edge device reports that it invoked a skill.  Named here rather
+#: than inlined so the scope rule and the route cannot drift apart — a path
+#: typo would silently fall through to the ``read`` default, which a hook
+#: token does not have, and the telemetry would just stop.
+SKILL_REPORT_PATH = "/api/skills/report"
+
 # Matches DELETE /api/workstreams/{ws_id}/attachments/{attachment_id}
 # with exactly one path segment for each parameter.
 _ATTACHMENT_DELETE_RE = re.compile(r"^/api/workstreams/[^/]+/attachments/[^/]+$")
@@ -971,6 +989,14 @@ def required_scope(method: str, path: str) -> str:
     """
     normalized = _strip_version_prefix(path)
     normalized = normalized.rstrip("/") if normalized != "/" else normalized
+
+    # The one path a hook token may reach.  Checked BEFORE the admin prefix
+    # and before the write list, because the whole design depends on this
+    # endpoint requiring a scope that grants nothing else — a token minted for
+    # an edge device must not satisfy "write" here and thereby satisfy it
+    # anywhere else.
+    if method == "POST" and normalized == SKILL_REPORT_PATH:
+        return "skills.report"
 
     # Admin endpoints require approve scope
     if normalized.startswith(ADMIN_PREFIX):

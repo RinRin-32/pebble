@@ -475,6 +475,75 @@ def build_server() -> Any:
 
     @mcp.tool(
         description=(
+            "Pull the skills that apply to a codebase, as a bundle you install "
+            "locally. Pebble decides what you may SEE (this repo's skills plus "
+            "global ones); you decide what applies, by matching each skill's "
+            "`paths` globs against your own working tree — pebble never asks for "
+            "your file listing. Skills you name explicitly are always included, "
+            "even if their globs would not match. The bundle is capped by token "
+            "budget and reports which skills were left out so you can ask for them "
+            "by name."
+        )
+    )
+    def kb_skills_pull(repo: str = "", names: list[str] | None = None) -> dict[str, Any]:
+        from pebble.core.skill_transfer import build_bundle
+
+        storage, _config = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return build_bundle(
+            storage,
+            user_id=current_user(),
+            repo=(repo or "").strip(),
+            names=list(names or []),
+        )
+
+    @mcp.tool(
+        description=(
+            "Get the telemetry hook to install alongside a skill bundle, so pebble "
+            "learns which skills actually get invoked rather than only which get "
+            "shipped. Returns settings.json JSON containing a short-lived token "
+            "that can ONLY report invocations — it cannot read the vault or reach "
+            "any other endpoint, which is what makes it safe to leave on a laptop. "
+            "It reports that a skill RAN, not whether it worked; that is not "
+            "observable from where the hook sits."
+        )
+    )
+    def kb_skills_hook(report_url: str = "") -> dict[str, Any]:
+        from pebble.core.auth import SKILL_REPORT_PATH
+        from pebble.core.skill_transfer import REPORT_TOKEN_HOURS, hook_config, mint_report_token
+
+        storage, _config = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        user = current_user()
+        if not user:
+            return {"ok": False, "error": "no authenticated user"}
+        url = (report_url or "").strip()
+        if not url:
+            base = (os.environ.get("PEBBLE_PUBLIC_URL") or "").strip().rstrip("/")
+            if not base:
+                # Guessing a hostname would produce a hook that silently
+                # reports nowhere, which looks exactly like a skill nobody
+                # uses — the failure this telemetry exists to prevent.
+                return {
+                    "ok": False,
+                    "error": (
+                        "pass report_url (the console URL you reach pebble on, e.g. "
+                        "https://host:9443) — set PEBBLE_PUBLIC_URL to make it the default"
+                    ),
+                }
+            url = base
+        token = mint_report_token(storage, user)
+        return {
+            "ok": True,
+            "settings_json": hook_config(f"{url.rstrip('/')}/v1{SKILL_REPORT_PATH}", token),
+            "expires_hours": REPORT_TOKEN_HOURS,
+            "note": "Merge into .claude/settings.json. Reports invocation only, not outcome.",
+        }
+
+    @mcp.tool(
+        description=(
             "List your planning conversations, open ones first. Use this to pick up "
             "a conversation from an earlier session — the transcript is kept server "
             "side, so a plan survives the session that started it."
