@@ -517,6 +517,143 @@ def list_notes() -> list[Note]:
     return out
 
 
+def _inbound_sources(target_id: str) -> list[str]:
+    """Titles of notes whose links resolve to *target_id*.
+
+    Compared on the SLUG, not the display text: ``[[Foo Bar]]`` and
+    ``[[foo bar]]`` are the same edge because the wikilink identity is the
+    slug, and a comparison on the raw text would miss half the graph.
+    """
+    out: list[str] = []
+    for note in list_notes():
+        if any(note_id_for(link) == target_id for link in note.links):
+            out.append(note.title)
+    return out
+
+
+def delete_note(title: str) -> dict[str, object]:
+    """Delete one note, and report what now points at nothing.
+
+    Inbound links are deliberately NOT rewritten.  A link to a note that does
+    not exist is this vault's frontier marker — the same shape as a name
+    someone reached for and never wrote — so silently editing other people's
+    notes to tidy up after a deletion would both destroy their text and hide
+    that something was removed.  They are reported instead, which is the
+    honest version of the same information.
+
+    Returns the exact frontmatter title that was removed alongside the slug it
+    resolved to: after a collision those two can differ, and "deleted
+    'Foo Bar'" is not good enough when the file was ``foo-bar.md`` and the
+    caller meant a different Foo Bar.
+    """
+    wanted = (title or "").strip()
+    if not wanted:
+        raise KnowledgeError("title is required")
+    note_id = note_id_for(wanted)
+    path = vault_root() / f"{note_id}.md"
+    if not path.is_file():
+        # Loud, not silent. A delete that matched nothing reads exactly like
+        # one that worked, and the caller would believe the vault changed.
+        raise KnowledgeError(f"no note resolves to {note_id!r} (from {wanted!r})")
+    existing = parse_note(path.read_text(encoding="utf-8", errors="replace"), fallback_title=wanted)
+    dangling = [t for t in _inbound_sources(note_id) if t != existing.title]
+    path.unlink()
+    _commit_vault(f"delete note: {existing.title}")
+    return {
+        "deleted": existing.title,
+        "note_id": note_id,
+        "now_dangling_in": dangling,
+    }
+
+
+def rename_note(old: str, new: str) -> dict[str, object]:
+    """Rename a note, reporting WHICH of the two renames happened.
+
+    Identity here is the slug, and the display title lives in frontmatter, so
+    a rename is one of two quite different operations:
+
+    ``title-only`` — the slug is unchanged (a capitalisation or punctuation
+    edit).  The frontmatter title is updated; no file moves and no link is
+    touched, because every existing ``[[link]]`` still resolves.
+
+    ``moved`` — the slug changes.  The file moves and inbound links are
+    rewritten to the new target, preserving any ``[[target|alias]]`` display
+    text.
+
+    The caller is told which branch ran, because a title edit that silently
+    crossed into a file move is exactly the surprise this reports away: at 80
+    characters the slug truncates, so two visibly different titles can share
+    one, and one character decides whether the graph is rewritten.
+
+    A slug collision with a DIFFERENT note fails rather than overwriting.
+    ``write_note`` overwrites on collision, which is tolerable when a caller
+    is authoring a note and not when they are moving one — the second note
+    would be destroyed by a rename that looked successful.
+    """
+    src, dst = (old or "").strip(), (new or "").strip()
+    if not src or not dst:
+        raise KnowledgeError("both old and new titles are required")
+    if len(dst) > MAX_TITLE:
+        raise KnowledgeError(f"title too long (max {MAX_TITLE})")
+    old_id, new_id = note_id_for(src), note_id_for(dst)
+    old_path = vault_root() / f"{old_id}.md"
+    if not old_path.is_file():
+        raise KnowledgeError(f"no note resolves to {old_id!r} (from {src!r})")
+    note = parse_note(old_path.read_text(encoding="utf-8", errors="replace"), fallback_title=src)
+
+    if old_id == new_id:
+        note.title = dst
+        old_path.write_text(render_note(note), encoding="utf-8")
+        _commit_vault(f"rename note: {src} -> {dst}")
+        return {"branch": "title-only", "title": dst, "note_id": new_id, "links_rewritten": 0}
+
+    new_path = vault_root() / f"{new_id}.md"
+    if new_path.exists():
+        raise KnowledgeError(
+            f"{dst!r} already resolves to {new_id!r} — refusing to overwrite it. "
+            "Rename or delete that note first."
+        )
+
+    # Runtime import: the module-level one is under TYPE_CHECKING, and the
+    # rewrite below actually opens files.
+    from pathlib import Path as _Path
+
+    rewritten: list[str] = []
+    for other in list_notes():
+        if other.title == note.title or not other.path:
+            continue
+        if not any(note_id_for(link) == old_id for link in other.links):
+            continue
+        text = _Path(other.path).read_text(encoding="utf-8", errors="replace")
+
+        def _swap(match: re.Match[str]) -> str:
+            target = match.group(1).strip()
+            if note_id_for(target) != old_id:
+                return match.group(0)
+            # Keep the alias: it is the author's display text, not a copy of
+            # the title, and rewriting it would edit their prose.
+            rest = match.group(0)[2 + len(match.group(1)) : -2]
+            return f"[[{dst}{rest}]]"
+
+        updated = _WIKILINK.sub(_swap, text)
+        if updated != text:
+            _Path(other.path).write_text(updated, encoding="utf-8")
+            rewritten.append(other.title)
+
+    note.title = dst
+    new_path.write_text(render_note(note), encoding="utf-8")
+    old_path.unlink()
+    _commit_vault(f"rename note: {src} -> {dst}")
+    return {
+        "branch": "moved",
+        "title": dst,
+        "note_id": new_id,
+        "from_note_id": old_id,
+        "links_rewritten": len(rewritten),
+        "rewritten_in": rewritten,
+    }
+
+
 def repos() -> list[tuple[str, int]]:
     """Codebases the vault holds notes about, with counts, most-noted first.
 

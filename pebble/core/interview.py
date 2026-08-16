@@ -170,7 +170,9 @@ SUMMARY: <one line someone can scan>
 BODY: <markdown. Lead with what was measured or decided and the evidence for it. Include
 what was tried and rejected. Call out the failure mode the next person will hit. Reference
 related notes as [[Wiki Links]] — a link to a note that does not exist yet is useful, it
-marks where research should go next.>
+marks where research should go next. But when you link a note that DOES exist, use its
+title exactly as given: appending a kind or a parenthetical points the link at nothing
+and files a note that already exists as unwritten research.>
 
 Write what is supported by the debrief. Do not invent measurements. If something important
 was never answered, say so in the body rather than papering over it.

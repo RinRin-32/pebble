@@ -85,7 +85,11 @@ TITLE: <the decision or approach settled on, not "plan for X">
 SUMMARY: <one line someone can scan>
 BODY: <markdown. What was decided and why. What was considered and rejected, \
 with the reason — that is the part nobody can reconstruct later. What is still \
-open. Reference related notes as [[Wiki Links]].>
+open. Reference related notes as [[Wiki Links]], using each note's title \
+EXACTLY as it was given to you — do not append a kind, a category or any \
+parenthetical. A link whose title you altered points at nothing, and this \
+vault treats a link to a missing note as unwritten research, so an invented \
+suffix files a real note as a gap.>
 
 Record what the conversation actually established. If it ended without \
 settling something important, say so in the body rather than inventing a \

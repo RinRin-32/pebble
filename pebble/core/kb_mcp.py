@@ -500,6 +500,46 @@ def build_server() -> Any:
 
     @mcp.tool(
         description=(
+            "Delete a note from the vault. Inbound links are NOT rewritten — a link "
+            "to a missing note is this vault's frontier marker, and quietly editing "
+            "other notes to tidy up would both change their text and hide that "
+            "something was removed. They are reported back instead. Fails loudly if "
+            "nothing resolves to that title, because a delete that matched nothing "
+            "reads exactly like one that worked."
+        )
+    )
+    def kb_delete(title: str) -> dict[str, Any]:
+        from pebble.core.knowledge import KnowledgeError, delete_note
+
+        try:
+            out = delete_note(title or "")
+        except KnowledgeError as exc:
+            return {"ok": False, "error": str(exc)}
+        _sync_index()
+        return {"ok": True, **out}
+
+    @mcp.tool(
+        description=(
+            "Rename a note, and be told WHICH rename happened. Identity is the slug "
+            "and the display title lives in frontmatter, so a capitalisation edit is "
+            "a title-only change (nothing moves, no link touched) while a real "
+            "rename moves the file and rewrites inbound links, preserving any "
+            "[[target|alias]] display text. Refuses to overwrite a different note "
+            "that already occupies the new slug."
+        )
+    )
+    def kb_rename(old: str, new: str) -> dict[str, Any]:
+        from pebble.core.knowledge import KnowledgeError, rename_note
+
+        try:
+            out = rename_note(old or "", new or "")
+        except KnowledgeError as exc:
+            return {"ok": False, "error": str(exc)}
+        _sync_index()
+        return {"ok": True, **out}
+
+    @mcp.tool(
+        description=(
             "What has stopped earning its place — skills nothing invokes and no note "
             "supports, plus untidiness in the vault. Every finding carries its "
             "evidence (pulled/invoked counts, age, note support) so you can disagree "
