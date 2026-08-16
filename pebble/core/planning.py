@@ -53,10 +53,16 @@ MAX_MESSAGE_CHARS = 12_000
 MAX_VAULT_NOTES = 8
 MAX_VAULT_CHARS = 6000
 
-#: Output allowance per reply.  Sized like the interview's for the same
-#: reason: a reasoning model bills thinking against this ceiling, so a budget
-#: fitted to the visible answer gets truncated replies.
-REPLY_TOKENS = 4000
+#: Output allowance per reply.  A reasoning model bills thinking against this
+#: ceiling, so a budget fitted to the visible answer gets truncated replies.
+#:
+#: Higher than the interview's because a planning prompt is bigger — it
+#: carries the engineer's context AND a vault search on every turn — and
+#: reasoning scales with the prompt: 4_000 was measured fine on a 2_700-char
+#: prompt and returned zero content twice on a real console-design one.
+#: `_ask_model` also DOUBLES this on a truncated attempt, so this is a
+#: starting point rather than a limit.
+REPLY_TOKENS = 8000
 MIN_REPLY_CHARS = 60
 
 _SYSTEM = """You are pebble, planning a piece of work with an engineer who is \
