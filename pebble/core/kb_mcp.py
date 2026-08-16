@@ -403,6 +403,92 @@ def build_server() -> Any:
 
     @mcp.tool(
         description=(
+            "Think a plan through with pebble before you build it. You are in one "
+            "codebase; pebble remembers all of them, so this is where 'we already "
+            "solved this in another project, here is the note' comes from. Describe "
+            "the goal and your current thinking; pebble pushes back, names relevant "
+            "notes by title, and says what it does not know. It shapes the plan and "
+            "does not write code. Good in plan mode. Continue with kb_plan_reply, and "
+            "finish with kb_plan_close — which writes a note only if you ask it to."
+        )
+    )
+    def kb_plan(goal: str, context: str = "", repo: str = "") -> dict[str, Any]:
+        from pebble.core.planning import start
+
+        storage, config_store = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return start(
+            storage,
+            config_store,
+            user_id=current_user(),
+            goal=(goal or "").strip(),
+            context=context or "",
+            repo=(repo or "").strip(),
+        )
+
+    @mcp.tool(
+        description=(
+            "Continue a planning conversation. The vault is searched again on every "
+            "turn against what you just said, so notes written since the conversation "
+            "opened are visible — tell pebble when you have just recorded something. "
+            "Each reply reports the turn count and token spend; the conversation ends "
+            "when you close it, not on a round limit."
+        )
+    )
+    def kb_plan_reply(plan_id: str, message: str) -> dict[str, Any]:
+        from pebble.core.planning import reply
+
+        storage, config_store = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return reply(
+            storage,
+            config_store,
+            plan_id=(plan_id or "").strip(),
+            message=message or "",
+            user_id=current_user(),
+        )
+
+    @mcp.tool(
+        description=(
+            "Close a planning conversation. Pass write_note=true to have pebble write "
+            "up what was decided, what was rejected and why, and what is still open — "
+            "worth doing when the conversation settled something, and worth skipping "
+            "when it did not. An abandoned plan should not leave a confident note "
+            "behind claiming a decision nobody made."
+        )
+    )
+    def kb_plan_close(plan_id: str, write_note: bool = False) -> dict[str, Any]:
+        from pebble.core.planning import close
+
+        storage, config_store = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        return close(
+            storage,
+            config_store,
+            plan_id=(plan_id or "").strip(),
+            write_note=bool(write_note),
+            user_id=current_user(),
+        )
+
+    @mcp.tool(
+        description=(
+            "List your planning conversations, open ones first. Use this to pick up "
+            "a conversation from an earlier session — the transcript is kept server "
+            "side, so a plan survives the session that started it."
+        )
+    )
+    def kb_plans(limit: int = 20) -> dict[str, Any]:
+        storage, _config = _storage_and_config()
+        if storage is None:
+            return {"ok": False, "error": "storage unavailable"}
+        rows = storage.list_plans(current_user(), limit=max(1, min(int(limit or 20), 100)))
+        return {"ok": True, "count": len(rows), "plans": rows}
+
+    @mcp.tool(
+        description=(
             "The shape of the pebble knowledge vault: how many notes and links, "
             "which notes are hubs, and the frontier — names that were linked to but "
             "never written. The frontier is the useful part: it is where research "

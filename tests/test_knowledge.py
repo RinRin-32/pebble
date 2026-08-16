@@ -46,6 +46,25 @@ class TestSlugAndLinks:
     def test_extract_links_none(self) -> None:
         assert kb.extract_links("plain prose, no links") == []
 
+    def test_links_inside_code_spans_are_syntax_not_references(self) -> None:
+        """A note explaining the link format is the normal case in this vault.
+
+        Observed: a planning note describing `[[target|alias]]` filed "target"
+        and "..." as real notes, which then showed up on the graph's frontier
+        as research nobody had asked for. The frontier is only useful if
+        everything on it is a name someone actually reached for.
+        """
+        body = (
+            "Reference notes as `[[Wiki Links]]`, preserving `[[target|alias]]`.\n\n"
+            "```\nkb_write(links=[[Example]])\n```\n\n"
+            "But [[Silent failure is the default failure mode]] is a real one."
+        )
+        assert kb.extract_links(body) == ["Silent failure is the default failure mode"]
+
+    def test_punctuation_only_targets_are_dropped(self) -> None:
+        # "[[...]]" appears in prose as an ellipsis, not a note name.
+        assert kb.extract_links("see [[...]] and [[Real Note]]") == ["Real Note"]
+
 
 class TestWriteRead:
     def test_roundtrip(self) -> None:

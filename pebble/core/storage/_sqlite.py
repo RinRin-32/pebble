@@ -41,6 +41,7 @@ from pebble.core.storage._schema import (
     kb_interviews,
     kb_links,
     kb_notes,
+    kb_plans,
     mcp_oauth_pending,
     mcp_pending_consent,
     mcp_servers,
@@ -2139,6 +2140,112 @@ class SQLiteBackend:
                 )
             )
             conn.commit()
+
+    # ---- planning conversations -------------------------------------------
+
+    def create_plan(self, plan_id: str, *, user_id: str, repo: str, goal: str) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                sa.insert(kb_plans).values(
+                    plan_id=plan_id,
+                    user_id=user_id,
+                    repo=repo,
+                    goal=goal,
+                    state="open",
+                    turns=0,
+                    tokens=0,
+                    transcript="[]",
+                    note_title="",
+                    created=now,
+                    updated=now,
+                )
+            )
+            conn.commit()
+
+    def get_plan(self, plan_id: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                sa.select(
+                    kb_plans.c.plan_id,
+                    kb_plans.c.user_id,
+                    kb_plans.c.repo,
+                    kb_plans.c.goal,
+                    kb_plans.c.state,
+                    kb_plans.c.turns,
+                    kb_plans.c.tokens,
+                    kb_plans.c.transcript,
+                    kb_plans.c.note_title,
+                ).where(kb_plans.c.plan_id == plan_id)
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "plan_id": row[0],
+                "user_id": row[1],
+                "repo": row[2],
+                "goal": row[3],
+                "state": row[4],
+                "turns": int(row[5] or 0),
+                "tokens": int(row[6] or 0),
+                "transcript": row[7],
+                "note_title": row[8],
+            }
+
+    def update_plan(
+        self,
+        plan_id: str,
+        *,
+        transcript: str,
+        turns: int,
+        tokens: int,
+        state: str = "open",
+        note_title: str = "",
+    ) -> None:
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        with self._conn() as conn:
+            conn.execute(
+                sa.update(kb_plans)
+                .where(kb_plans.c.plan_id == plan_id)
+                .values(
+                    transcript=transcript,
+                    turns=turns,
+                    tokens=tokens,
+                    state=state,
+                    note_title=note_title,
+                    updated=now,
+                )
+            )
+            conn.commit()
+
+    def list_plans(self, user_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Open conversations first, newest first — a caller reconnecting wants
+        the one they were in the middle of, not the one they finished."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                sa.select(
+                    kb_plans.c.plan_id,
+                    kb_plans.c.repo,
+                    kb_plans.c.goal,
+                    kb_plans.c.state,
+                    kb_plans.c.turns,
+                    kb_plans.c.updated,
+                )
+                .where(kb_plans.c.user_id == user_id)
+                .order_by(kb_plans.c.state.asc(), kb_plans.c.updated.desc())
+                .limit(max(1, limit))
+            ).fetchall()
+        return [
+            {
+                "plan_id": r[0],
+                "repo": r[1],
+                "goal": r[2],
+                "state": r[3],
+                "turns": int(r[4] or 0),
+                "updated": r[5],
+            }
+            for r in rows
+        ]
 
     def list_interviews(self, limit: int = 50) -> list[dict[str, Any]]:
         """Recent interviews, newest first — for the console."""

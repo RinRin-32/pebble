@@ -159,12 +159,27 @@ def note_id_for(title: str) -> str:
     return slugify(title)
 
 
+#: Fenced blocks and inline code spans, which are quoted syntax rather than
+#: prose.  A note that DESCRIBES the link format — "reference notes as
+#: ``[[Wiki Links]]``" — is the normal case in this vault, not an edge case.
+_CODE_SPAN = re.compile(r"```.*?```|~~~.*?~~~|`[^`\n]*`", re.DOTALL)
+
+
 def extract_links(body: str) -> list[str]:
-    """Distinct wikilink targets in *body*, in first-seen order."""
+    """Distinct wikilink targets in *body*, in first-seen order.
+
+    Code spans are stripped first.  A wikilink inside backticks is an example
+    of the syntax, not a reference: a planning note explaining
+    ``[[target|alias]]`` was filing "target", "alias" and "..." as real notes,
+    which then appeared on the graph's frontier as research nobody had asked
+    for.  The frontier is only useful if everything on it is a name someone
+    actually reached for.
+    """
     seen: dict[str, None] = {}
-    for match in _WIKILINK.finditer(body):
+    for match in _WIKILINK.finditer(_CODE_SPAN.sub(" ", body)):
         target = match.group(1).strip()
-        if target:
+        # "..." and friends: punctuation-only targets cannot name a note.
+        if target and any(ch.isalnum() for ch in target):
             seen.setdefault(target, None)
     return list(seen)
 
