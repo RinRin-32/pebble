@@ -34,6 +34,7 @@ import { authFetch } from "./auth.js";
 // would 404 and abort the whole shell module.
 import { createInteractivePane } from "./interactive.js";
 import { createPreviewPane } from "./preview.js";
+import { RightPanel, attachRailResize } from "./frame.js";
 
 function make(tag, className, text) {
   const node = document.createElement(tag);
@@ -112,7 +113,11 @@ function buildShell(caps) {
   const tail = make("div", "tabbar-right"); // right-floated tab-bar chrome (the [+])
   tabbar.append(burger, tabstrip, tail);
   const panes = make("div", "panes");
-  content.append(tabbar, panes);
+  // The workspace row: the pane host, then (added by mountShell) the right
+  // panel's drag handle and the panel itself (frame.js).
+  const workspace = make("div", "pb-workspace");
+  workspace.append(panes);
+  content.append(tabbar, workspace);
 
   // Backdrop scrim for the mobile drawer — fixed overlay between content and
   // the off-canvas rail; decorative (the burger/Escape carry the semantics).
@@ -133,6 +138,7 @@ function buildShell(caps) {
     tabstrip,
     tail,
     panes,
+    workspace,
     clusterSec,
     workspacesSec,
     manageSec,
@@ -652,6 +658,58 @@ async function mountShell() {
   syncSplitControls();
   shell.tail.append(splitRightBtn, splitDownBtn, unsplitBtn);
 
+  // ----- App frame: rail drag-resize + right side panel (frame.js) -----
+  // The rail only takes a grid column on desktop; at the drawer breakpoint it
+  // overlays, so it doesn't count against the centre's width.
+  const railWidth = () =>
+    window.innerWidth <= 768 ? 0 : shell.rail.getBoundingClientRect().width;
+  const rightPanel = new RightPanel(shell.workspace, { railWidth });
+  attachRailResize(shell.app, shell.rail, () => rightPanel.layout());
+  window.addEventListener("resize", () => rightPanel.layout());
+  // The preview pane hosted in the side panel: the same factory as the
+  // split-cell preview, mounted into the panel body instead of a pane cell.
+  const previewBody = rightPanel.addTab("preview", "Preview");
+  let sidePreviewPane = null;
+  const sidePreview = () => {
+    if (!sidePreviewPane) {
+      sidePreviewPane = createPreviewPane(null, {
+        persistMeta: () => {},
+        setTitle: (text) => rightPanel.setTabLabel("preview", text),
+      });
+      sidePreviewPane.el = previewBody;
+      sidePreviewPane.bodyEl = previewBody;
+      sidePreviewPane.onMount();
+      sidePreviewPane._mounted = true;
+    }
+    return sidePreviewPane;
+  };
+  const sideBtn = tbBtn(
+    "tb-side",
+    "▥",
+    "Toggle side panel (" + PANE_MOD_LABEL + "+Shift+B)",
+  );
+  sideBtn.addEventListener("click", () => {
+    sidePreview();
+    rightPanel.toggle();
+  });
+  shell.tail.append(sideBtn);
+  // pane-mod+B collapses the rail, pane-mod+Shift+B toggles the side panel
+  // (DeepSeek Harness's Mod+B pair on Pebble's pane modifier — plain Ctrl+B
+  // is the browser's bookmarks shortcut).  Inside a text field on macOS
+  // Ctrl+B is a Cocoa editing binding, so yield there.
+  document.addEventListener("keydown", (e) => {
+    if (!paneModDown(e) || e.key.toLowerCase() !== "b") return;
+    if (IS_MAC && inEditable(e.target)) return;
+    if (document.querySelector("dialog:modal")) return;
+    e.preventDefault();
+    if (e.shiftKey) {
+      sidePreview();
+      rightPanel.toggle();
+    } else if (window.innerWidth > 768) {
+      shell.collapseBtn.click();
+    }
+  });
+
   // Dashboard pane (step 1): a singleton that ADOPTS the legacy #main so the
   // console renders unchanged inside the new shell.  Real pane types (admin,
   // coordinator, interactive) register in steps 2-5.
@@ -1032,6 +1090,13 @@ async function mountShell() {
   // the same node proxy the session streams from.
   const openPreview = (descriptor, ctx) => {
     if (!descriptor) return;
+    // Prefer the side panel (the conversation keeps its full cell); with no
+    // room for it, fall back to a split cell beside the conversation.
+    if (rightPanel.hasRoom()) {
+      rightPanel.show("preview");
+      sidePreview().showPreview(descriptor, ctx || null);
+      return;
+    }
     const pane = pm.openPaneBeside("preview");
     if (pane && typeof pane.showPreview === "function") {
       pane.showPreview(descriptor, ctx || null);

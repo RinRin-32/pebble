@@ -83,6 +83,7 @@ from pebble.core.session_routes import (
     make_rewind_handler,
     make_send_handler,
     make_set_title_handler,
+    make_spans_handler,
     make_unified_saved_handler,
     register_coord_verbs,
     register_session_routes,
@@ -15026,6 +15027,7 @@ def create_app(
             ),
             events=make_events_handler(coord_endpoint_config),  # lifted: shared body
             history=make_history_handler(coord_endpoint_config),  # lifted: shared body
+            spans=make_spans_handler(coord_endpoint_config),  # Trajectory timing
             export=make_export_handler(  # lifted: shared body (#613, conversation-only)
                 coord_endpoint_config
             ),

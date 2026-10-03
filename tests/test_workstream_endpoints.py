@@ -35,6 +35,7 @@ from pebble.core.session_routes import (
     make_retry_handler,
     make_rewind_handler,
     make_set_title_handler,
+    make_spans_handler,
 )
 from pebble.core.storage._sqlite import SQLiteBackend
 from pebble.core.workstream import WorkstreamKind
@@ -2137,3 +2138,71 @@ class TestHistoryReasoningRehydration:
         assert r.status_code == 200
         assistant = next(m for m in r.json()["messages"] if m.get("role") == "assistant")
         assert assistant["reasoning"] == "default-true wins"
+
+
+# ---------------------------------------------------------------------------
+# GET /v1/api/workstreams/{ws_id}/spans — Trajectory timing
+# ---------------------------------------------------------------------------
+
+
+def _build_spans_app(mock_mgr: Any, storage: Any) -> TestClient:
+    handler = make_spans_handler(_interactive_endpoint_cfg(mock_mgr))
+    app = Starlette(
+        routes=[
+            Mount(
+                "/v1",
+                routes=[Route("/api/workstreams/{ws_id}/spans", handler, methods=["GET"])],
+            ),
+        ],
+        middleware=[Middleware(_InjectAuthMiddleware)],
+    )
+    app.state.workstreams = mock_mgr
+    app.state.auth_storage = storage
+    return TestClient(app)
+
+
+class TestSpansEndpoint:
+    def _mgr(self, loaded: bool) -> MagicMock:
+        mgr = MagicMock()
+        mgr.get.return_value = MagicMock() if loaded else None
+        return mgr
+
+    def test_returns_spans_oldest_first(self, _inject_storage):
+        ws_id = "ws-sp"
+        _inject_storage.register_workstream(ws_id, kind="interactive", user_id="test-user")
+        _inject_storage.save_spans(
+            ws_id,
+            [
+                {"kind": "tool", "started_at": 30, "ended_at": 40, "call_id": "c1"},
+                {"kind": "llm", "started_at": 10, "ended_at": 25, "ttft_ms": 3},
+            ],
+        )
+        r = _build_spans_app(self._mgr(True), _inject_storage).get(
+            f"/v1/api/workstreams/{ws_id}/spans"
+        )
+        assert r.status_code == 200
+        spans = r.json()["spans"]
+        assert [sp["kind"] for sp in spans] == ["llm", "tool"]
+        assert spans[0]["ttft_ms"] == 3 and spans[1]["call_id"] == "c1"
+
+    def test_since_and_cold_storage(self, _inject_storage):
+        ws_id = "ws-sp-cold"
+        _inject_storage.register_workstream(ws_id, kind="interactive", user_id="test-user")
+        _inject_storage.save_spans(
+            ws_id,
+            [
+                {"kind": "tool", "started_at": 5, "ended_at": 6},
+                {"kind": "tool", "started_at": 50, "ended_at": 60},
+            ],
+        )
+        r = _build_spans_app(self._mgr(False), _inject_storage).get(
+            f"/v1/api/workstreams/{ws_id}/spans?since=10"
+        )
+        assert r.status_code == 200
+        assert [sp["started_at"] for sp in r.json()["spans"]] == [50]
+
+    def test_404_unknown_and_cross_kind(self, _inject_storage):
+        _inject_storage.register_workstream("ws-coord", kind="coordinator", user_id="test-user")
+        client = _build_spans_app(self._mgr(False), _inject_storage)
+        assert client.get("/v1/api/workstreams/nope/spans").status_code == 404
+        assert client.get("/v1/api/workstreams/ws-coord/spans").status_code == 404

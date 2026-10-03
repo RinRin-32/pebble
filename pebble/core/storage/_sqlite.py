@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from pebble.core.trajectory import Turn
 
 from pebble.core.log import get_logger
+from pebble.core.storage import _spans
 from pebble.core.storage._protocol import (
     USER_SCOPED_AUTH_TYPES,
     MCPOAuthPendingState,
@@ -1222,6 +1223,7 @@ class SQLiteBackend:
             release_attachment_refs(conn, ref_ids)
             conn.execute(sa.delete(conversations).where(conversations.c.ws_id == ws_id))
             conn.execute(sa.delete(workstream_config).where(workstream_config.c.ws_id == ws_id))
+            _spans.delete_spans(conn, ws_id)
             conn.execute(
                 sa.delete(workstream_overrides).where(workstream_overrides.c.ws_id == ws_id)
             )
@@ -4395,6 +4397,16 @@ class SQLiteBackend:
             return result.rowcount
 
     # -- Usage events ----------------------------------------------------------
+
+    def save_spans(self, ws_id: str, spans: list[dict[str, Any]]) -> int:
+        with self._conn() as conn:
+            n = _spans.save_spans(conn, ws_id, spans)
+            conn.commit()
+            return n
+
+    def list_spans(self, ws_id: str, since: int = 0, limit: int = 5000) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            return _spans.list_spans(conn, ws_id, since, limit)
 
     def record_usage_event(
         self,

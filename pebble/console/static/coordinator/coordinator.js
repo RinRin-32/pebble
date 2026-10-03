@@ -44,6 +44,7 @@ import {
   indexLabel,
 } from "/shared/conversation.js";
 import { redactCredentials } from "/shared/redact_credentials.js";
+import { ProcessController, TodoDock } from "/shared/process_view.js";
 import {
   createQueueController,
   parsePriority,
@@ -234,8 +235,15 @@ function createCoordinatorPane(root, wsId, opts) {
   buildCoordChrome(root, opts);
 
   const messagesEl = root.querySelector("#coord-messages");
+  // Process tracking (grouped tool calls, durations, turn fold) — shared
+  // with the interactive pane.
+  const proc = new ProcessController(messagesEl);
   const coordMain = root.querySelector("#coord-main");
   const composerMount = root.querySelector("#coord-composer-mount");
+  // Plan dock stacked just above the composer, fed by the same /tasks data
+  // as the sidebar list.
+  const todoDock = new TodoDock();
+  composerMount.parentNode.insertBefore(todoDock.root, composerMount);
   const composer = new Composer(composerMount, {
     sendGlyph: "\u2191",
     layout: "stacked",
@@ -1639,6 +1647,7 @@ function createCoordinatorPane(root, wsId, opts) {
           _appendJudgePendingLineTo(entry.row);
         }
       });
+      proc.noteItems(items);
       return existing;
     }
 
@@ -1733,7 +1742,7 @@ function createCoordinatorPane(root, wsId, opts) {
       batch.appendChild(_buildStatusPill(opts.resolved));
     }
 
-    messagesEl.appendChild(batch);
+    proc.placeTool(batch, items);
     _scheduleScroll();
     return batch;
   }
@@ -1783,6 +1792,10 @@ function createCoordinatorPane(root, wsId, opts) {
     // don't mix in the main assistant buffer.
     if (!currentReasoningEl) {
       currentReasoningEl = appendMsg("reasoning", "", { label: "reasoning" });
+      // appendMsg appended it at the bottom; let it join an open process
+      // group instead (it stands alone when there is none).
+      currentReasoningEl.remove();
+      proc.placeReasoning(currentReasoningEl);
       currentReasoningBuf = "";
       messagesEl.setAttribute("aria-live", "off");
     }
@@ -2774,6 +2787,7 @@ function createCoordinatorPane(root, wsId, opts) {
           ev.output || "",
           !!ev.is_error,
         );
+        proc.noteResult(ev.call_id || "", ev);
         // tasks mutations change persisted state the sidebar reads
         // from GET /tasks — re-fetch so the operator sees
         // add/update/remove/reorder without clicking the refresh icon.
@@ -2833,8 +2847,15 @@ function createCoordinatorPane(root, wsId, opts) {
             _setBatchRunning(target);
           }
         }
+        proc.refresh();
         break;
       }
+      case "turn_start":
+        proc.onTurnStart(ev.turn_id, ev._ts);
+        break;
+      case "turn_end":
+        proc.onTurnEnd(ev.turn_id, ev.status, ev.duration_ms);
+        break;
       case "intent_verdict":
         // Cache the verdict so a late-arriving approve_request (or a
         // SSE replay reorder) still surfaces it.  _cacheJudgeVerdict
@@ -4165,6 +4186,7 @@ function createCoordinatorPane(root, wsId, opts) {
       tasks.forEach((t) => tasksEl.appendChild(renderTaskRow(t)));
     }
     tasksCountEl.textContent = tasks.length ? "(" + tasks.length + ")" : "";
+    todoDock.update(tasks);
   }
 
   async function loadChildren({ replace = false } = {}) {
@@ -5038,6 +5060,7 @@ function createCoordinatorPane(root, wsId, opts) {
       hist = null;
     }
     messagesEl.replaceChildren();
+    proc.reset();
     toolRows.clear();
     activeBatch = null;
     renderedSystemEventIds.clear();
@@ -5234,6 +5257,7 @@ function createCoordinatorPane(root, wsId, opts) {
           (callId && toolNameByCallId.get(callId)) || m.tool_name || "tool";
         const isError = callOutcomes.get(callId) === "error";
         appendToolResult(toolName, callId, content || "", isError);
+        if (callId) proc.noteResult(callId, { is_error: isError });
         // Tool-channel metacog nudges + queued interjections that used to
         // splice into the tool result now follow it as first-class
         // operator-context ``system`` rows and render via the ``system``
@@ -5250,6 +5274,8 @@ function createCoordinatorPane(root, wsId, opts) {
         // a thinking lane.
         if (typeof m.reasoning === "string" && m.reasoning.length) {
           const rEl = appendMsg("reasoning", "", { label: "reasoning" });
+          rEl.remove();
+          proc.placeReasoning(rEl);
           const rBody = rEl && rEl.querySelector(".msg-body");
           if (rBody) rBody.textContent = m.reasoning;
         }
@@ -5334,6 +5360,21 @@ function createCoordinatorPane(root, wsId, opts) {
     // live-turn-ends case — without this a reloaded or rewound coordinator
     // showed assistant turns with no retry button.
     _refreshRetryButton();
+    proc.finishHistory();
+    loadSpans();
+  }
+
+  // Timing spans for the rendered history (tool durations, turn controls).
+  // Best-effort: a failed fetch leaves them blank.
+  async function loadSpans() {
+    try {
+      const data = await getJSON(
+        "/v1/api/workstreams/" + encodeURIComponent(wsId) + "/spans",
+      );
+      if (data && Array.isArray(data.spans)) proc.applySpans(data.spans);
+    } catch (_) {
+      /* spans are decoration only */
+    }
   }
 
   // Re-arm the stream after a 401 re-auth: reset backoff + reconnect now.

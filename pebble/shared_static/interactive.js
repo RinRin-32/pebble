@@ -53,6 +53,9 @@ import {
   settleSendResponse,
 } from "./composer_queue.js";
 import { StatusBar } from "./status_bar.js";
+import { ProcessController } from "./process_view.js";
+import { TimelineView } from "./timeline_view.js";
+import { spanFromEvent } from "./timeline_model.js";
 import { streamingRender, streamingRenderFinalize } from "./renderer.js";
 import { setMarkdown, operatorSourceLabel } from "./utils.js";
 import {
@@ -1115,7 +1118,36 @@ class Pane {
       });
       this._resizeObs.observe(this.messagesEl);
     }
+    // Chat | Trajectory view tabs (DeepSeek Harness's centre header).  The
+    // Trajectory view is built on first open and fed from /spans plus the
+    // live timing events; the composer stays put under either view.
+    this._viewTabs = document.createElement("div");
+    this._viewTabs.className = "pb-viewtabs";
+    this._viewTabs.setAttribute("role", "tablist");
+    this._viewTabs.setAttribute("aria-label", "Workstream view");
+    this._viewBtns = {};
+    for (const [id, label] of [
+      ["chat", "Chat"],
+      ["trajectory", "Trajectory"],
+    ]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pb-viewtab";
+      b.textContent = label;
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", id === "chat" ? "true" : "false");
+      b.addEventListener("click", () => this.showView(id));
+      this._viewBtns[id] = b;
+      this._viewTabs.appendChild(b);
+    }
+    this._timelineHost = document.createElement("div");
+    this._timelineHost.className = "pb-timeline-host";
+    this._timelineHost.hidden = true;
+    this._timeline = null;
+    this._spans = null;
+    this.el.appendChild(this._viewTabs);
     this.el.appendChild(this.messagesEl);
+    this.el.appendChild(this._timelineHost);
 
     // Per-workstream status bar (above input)
     this.statusBarEl = document.createElement("div");
@@ -1141,6 +1173,14 @@ class Pane {
     this.statusBarEl.appendChild(this._sbTokens);
     this.statusBarEl.appendChild(this._sbTools);
     this.statusBarEl.appendChild(this._sbTurns);
+    // Process tracking: groups tool batches, per-call durations, the
+    // per-turn "Completed in …" fold and the running timer.  The timer is
+    // aria-hidden — it ticks every second inside this polite live region.
+    this._proc = new ProcessController(this.messagesEl, {
+      isTransient: (n) => n === this._thinkingEl,
+    });
+    this._proc.timerEl.setAttribute("aria-hidden", "true");
+    this.statusBarEl.appendChild(this._proc.timerEl);
     this.el.appendChild(this.statusBarEl);
 
     // Input area — DOM + behavior comes from shared/composer.js.  The
@@ -1663,6 +1703,7 @@ class Pane {
       this._replayQueue.events.push(evt);
       return;
     }
+    this._captureSpan(evt);
     switch (evt.type) {
       case "thinking_start":
         this.isThinking = true;
@@ -1681,7 +1722,7 @@ class Pane {
         if (!this.currentReasoningEl) {
           this.currentReasoningEl = document.createElement("div");
           this.currentReasoningEl.className = "msg reasoning";
-          this.messagesEl.appendChild(this.currentReasoningEl);
+          this._proc.placeReasoning(this.currentReasoningEl);
         }
         this.currentReasoningEl.textContent += evt.text;
         this.scrollToBottom();
@@ -1906,6 +1947,15 @@ class Pane {
           evt.is_error,
           evt.preview,
         );
+        this._proc.noteResult(evt.call_id || "", evt);
+        break;
+
+      case "turn_start":
+        this._proc.onTurnStart(evt.turn_id, evt._ts);
+        break;
+
+      case "turn_end":
+        this._proc.onTurnEnd(evt.turn_id, evt.status, evt.duration_ms);
         break;
 
       case "status":
@@ -2046,6 +2096,7 @@ class Pane {
         const token = this._historyLoadToken;
         this._beginReplayQuiesce(token);
         this.messagesEl.replaceChildren();
+        this._proc.reset();
         this._resetStreamingRefs();
         this._refetchHistory(this.wsId, token)
           .then(() => {
@@ -2765,6 +2816,10 @@ class Pane {
 
   replayHistory(messages) {
     this.messagesEl.replaceChildren();
+    this._proc.reset();
+    // Spans are reloaded with the history (see _loadSpans).
+    this._spans = null;
+    if (this._timeline) this._timeline.setSpans([]);
     // The rebuild just orphaned any in-flight streaming targets — reset them,
     // and release the agent-card/orphan maps whose entries now point at
     // replaced subtrees (detached-DOM retention).
@@ -2822,7 +2877,7 @@ class Pane {
           const reasonEl = document.createElement("div");
           reasonEl.className = "msg reasoning";
           reasonEl.textContent = msg.reasoning;
-          this.messagesEl.appendChild(reasonEl);
+          this._proc.placeReasoning(reasonEl);
           lastToolBlock = null;
         }
         // Render content BEFORE the tool block so the visual order
@@ -2906,7 +2961,7 @@ class Pane {
                 wasDenied ? { approved: false } : { approved: true },
               ),
             );
-            this.messagesEl.appendChild(block);
+            this._proc.placeTool(block, msg.tool_calls.map(synthToolItem));
             lastToolBlock = block;
           }
         }
@@ -2984,6 +3039,9 @@ class Pane {
               delete pendingAssessments[msg.tool_call_id];
             }
           }
+          if (msg.tool_call_id) {
+            this._proc.noteResult(msg.tool_call_id, { is_error: isToolError });
+          }
           // Task-agent recall: flip its card done/error from the task's OWN
           // result (matching the live appendToolOutput) — NOT from sub-step
           // errors, since a sub-tool can fail and the agent still synthesize.
@@ -3025,6 +3083,8 @@ class Pane {
         _buildOutputWarningEl(leftover.assessment),
       );
     }
+    this._proc.finishHistory();
+    this._loadSpans();
     this._attachRetryToLastAssistant();
     this.scrollToBottom();
     // Focus the input so keyboard users land on the next-action target
@@ -3047,6 +3107,75 @@ class Pane {
     }
     // Restore live-region semantics now that the batch build is done.
     this.messagesEl.removeAttribute("aria-busy");
+  }
+
+  // Chat | Trajectory.  The timeline is built on first open; its data is the
+  // /spans fetch plus live timing events (_captureSpan).
+  showView(id) {
+    const traj = id === "trajectory";
+    for (const [k, b] of Object.entries(this._viewBtns)) {
+      b.setAttribute("aria-selected", k === id ? "true" : "false");
+    }
+    this.messagesEl.hidden = traj;
+    this._timelineHost.hidden = !traj;
+    if (!traj) return;
+    if (!this._timeline) {
+      this._timeline = new TimelineView({
+        onReveal: (callId) => {
+          this.showView("chat");
+          const row = this.messagesEl.querySelector(
+            '.conv-row[data-call-id="' + CSS.escape(callId) + '"]',
+          );
+          if (row) {
+            const group = row.closest(".pb-pgroup");
+            if (group && group.dataset.open !== "true") {
+              const head = group.querySelector(".pb-pgroup-head");
+              if (head) head.click();
+            }
+            row.scrollIntoView({ block: "center" });
+          }
+        },
+      });
+      this._timelineHost.appendChild(this._timeline.root);
+    }
+    if (this._spans) this._timeline.setSpans(this._spans);
+    else this._loadSpans();
+  }
+
+  _captureSpan(evt) {
+    const sp = spanFromEvent(evt);
+    if (!sp) return;
+    if (!this._spans) this._spans = [];
+    // A reconnect replays the ring buffer — don't count a span twice.
+    const same = (o) =>
+      o.kind === sp.kind &&
+      o.started_at === sp.started_at &&
+      (o.call_id || "") === (sp.call_id || "") &&
+      (o.turn_id || "") === (sp.turn_id || "");
+    if (this._spans.some(same)) return;
+    this._spans.push(sp);
+    if (this._timeline && !this._timelineHost.hidden) this._timeline.setSpans(this._spans);
+  }
+
+  // Timing spans for the rendered history: durations on tool rows and turn
+  // fold controls now, and the Trajectory view's data.  Best-effort — a
+  // node without the endpoint (or a failed fetch) just leaves them blank.
+  async _loadSpans() {
+    const wsId = this.wsId;
+    const token = this._historyLoadToken;
+    let spans = null;
+    try {
+      const r = await authFetch(
+        this._base + "/v1/api/workstreams/" + encodeURIComponent(wsId) + "/spans",
+      );
+      if (r && r.ok) spans = (await r.json()).spans || [];
+    } catch (_) {
+      spans = null;
+    }
+    if (!spans || wsId !== this.wsId || token !== this._historyLoadToken) return;
+    this._spans = spans;
+    this._proc.applySpans(spans);
+    if (this._timeline) this._timeline.setSpans(spans);
   }
 
   _attachRetryToLastAssistant() {
@@ -3150,7 +3279,7 @@ class Pane {
       }
     });
     this.announcedBlocks.set(key, block);
-    this.messagesEl.appendChild(block);
+    this._proc.placeTool(block, list);
     this._relinkAgentCards(list);
     this.scrollToBottom(stick);
     toolAnnounce(_toolAnnounceText(list));
@@ -3276,7 +3405,8 @@ class Pane {
     // (!blockEls.some(el => el.isConnected)), so a freshly-built block
     // (not yet in the DOM) would be mistaken for an orphan and immediately
     // pruned if we registered before appending.
-    if (!announced) this.messagesEl.appendChild(block);
+    if (!announced) this._proc.placeTool(block, items);
+    else this._proc.noteItems(items);
     if (!autoApproved) {
       this._registerApprovalCycle(cycleId, [block], items);
       const fb = block.querySelector(".conv-feedback");
@@ -3290,6 +3420,7 @@ class Pane {
       }
     }
     this._relinkAgentCards(items);
+    this._proc.refresh();
     this.scrollToBottom(stick);
   }
 
@@ -3322,6 +3453,7 @@ class Pane {
     }
 
     this._syncApprovalState();
+    this._proc.refresh();
     if (!this.pendingApproval) this.inputEl.focus();
 
     // POST to server (skip when server already resolved, e.g. timeout).
