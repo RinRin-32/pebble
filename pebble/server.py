@@ -85,6 +85,7 @@ from pebble.core.session_routes import (
     make_saved_handler,
     make_send_handler,
     make_set_title_handler,
+    make_spans_handler,
     register_session_routes,
 )
 from pebble.core.session_ui_base import (
@@ -4770,6 +4771,7 @@ def create_app(
             retry=retry_handler,  # lifted: shared body (#549)
             events=events_handler,  # lifted: shared body
             history=history_handler,  # lifted: shared body (interactive feature gain)
+            spans=make_spans_handler(interactive_endpoint_config),  # Trajectory timing
             export=export_handler,  # lifted: shared body (#613, conversation-only)
             attachments=attachment_handlers,  # lifted: shared body (P1.5)
         ),

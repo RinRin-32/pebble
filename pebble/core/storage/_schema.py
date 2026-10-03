@@ -825,6 +825,30 @@ sa.Index("idx_usage_events_user", usage_events.c.user_id, usage_events.c.timesta
 sa.Index("idx_usage_events_model", usage_events.c.model, usage_events.c.timestamp)
 sa.Index("idx_usage_events_ws", usage_events.c.ws_id)
 
+workstream_spans = sa.Table(
+    "workstream_spans",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("ws_id", sa.Text, nullable=False),
+    sa.Column("turn_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("step", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("call_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("parent_call_id", sa.Text, nullable=False, server_default=""),
+    sa.Column("name", sa.Text, nullable=False, server_default=""),
+    sa.Column("started_at", sa.BigInteger, nullable=False),
+    sa.Column("ended_at", sa.BigInteger, nullable=False),
+    sa.Column("ttft_ms", sa.Integer, nullable=True),
+    sa.Column("status", sa.Text, nullable=False, server_default=""),
+    sa.Column("tok_in", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("tok_out", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("tok_cache_read", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("tok_cache_write", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("created", sa.Text, nullable=False),
+)
+
+sa.Index("idx_workstream_spans_ws", workstream_spans.c.ws_id, workstream_spans.c.started_at)
+
 audit_events = sa.Table(
     "audit_events",
     metadata,

@@ -49,6 +49,7 @@ from pebble.api.server_schemas import (
     UploadAttachmentResponse,
     WorkstreamDetailResponse,
     WorkstreamHistoryResponse,
+    WorkstreamSpansResponse,
 )
 
 SERVER_ENDPOINTS: list[EndpointSpec] = [
@@ -252,6 +253,34 @@ SERVER_ENDPOINTS: list[EndpointSpec] = [
                 "Max conversation rows to fetch from storage (default 100, max 500).",
                 schema_type="integer",
                 default=100,
+            ),
+        ],
+        error_codes=[400, 404, 500, 503],
+        tags=["Workstreams"],
+    ),
+    EndpointSpec(
+        "/v1/api/workstreams/{ws_id}/spans",
+        "GET",
+        "Read the workstream's timing spans (turns, LLM calls, tool runs)",
+        description=(
+            "Timing for the Trajectory view: one row per turn, LLM call (with "
+            "time-to-first-token and token usage) and timed tool execution, "
+            "oldest first.  Timing only; join tool spans to ``/history`` rows "
+            "on ``call_id``."
+        ),
+        response_model=WorkstreamSpansResponse,
+        query_params=[
+            QueryParam(
+                "since",
+                "Only spans starting at or after this epoch-ms time (default 0).",
+                schema_type="integer",
+                default=0,
+            ),
+            QueryParam(
+                "limit",
+                "Max spans (default 5000, max 20000).",
+                schema_type="integer",
+                default=5000,
             ),
         ],
         error_codes=[400, 404, 500, 503],
@@ -519,6 +548,7 @@ _ALL_MODELS: list[type[BaseModel]] = [
     ListWorkstreamsResponse,
     WorkstreamDetailResponse,
     WorkstreamHistoryResponse,
+    WorkstreamSpansResponse,
     DashboardResponse,
     ListSavedWorkstreamsResponse,
     UploadAttachmentResponse,

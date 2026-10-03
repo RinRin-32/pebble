@@ -471,6 +471,27 @@ class SessionUIBase:
         # own lock so the hot fan-out path never serializes on ``_listeners_lock``.
         self._agent_children: dict[str, str] = {}
         self._agent_children_lock = threading.Lock()
+        # Process-tracking stamps.  ``_enqueue_direct`` adds ``_ts`` (epoch
+        # ms) to every event, and ``_turn_id`` / ``_step`` while a turn is
+        # running, so the web UI can show durations and lay out a timeline
+        # without any per-call-site plumbing.  ``_cur_turn_id`` is set by
+        # :meth:`on_turn_begin` and cleared by :meth:`on_turn_end`;
+        # ``_cur_step`` counts LLM calls within the turn (bumped in
+        # :meth:`on_turn_start`, which fires once per agent-loop iteration).
+        # Plain attribute reads/writes — the worker thread is the only writer.
+        self._cur_turn_id: str = ""
+        self._cur_step: int = 0
+        # call_id -> {started_at, duration_ms}, stashed by note_tool_timing and
+        # merged into the matching tool_result event.
+        self._tool_timing: dict[str, dict[str, int]] = {}
+        self._tool_timing_lock = threading.Lock()
+        # Timing spans awaiting persistence (``workstream_spans``) so a
+        # reopened workstream can rebuild its Trajectory timeline.  Tool spans
+        # arrive from the parallel tool pool; flushed at each step and at turn
+        # end, never per tool.
+        self._span_buf: list[dict[str, Any]] = []
+        self._span_lock = threading.Lock()
+        self._turn_started_at_ms: int = 0
         # Recall store: a finished task agent's projected sub-trajectory (step
         # items: id/name/arguments/output/is_error), keyed by its (parent)
         # call_id, so /history can rebuild the collapsible card after a fresh
@@ -769,6 +790,11 @@ class SessionUIBase:
         """
         if "ws_id" not in data:
             data = {**data, "ws_id": self.ws_id}
+        stamps: dict[str, Any] = {"_ts": int(time.time() * 1000)}
+        if self._cur_turn_id:
+            stamps["_turn_id"] = self._cur_turn_id
+            stamps["_step"] = self._cur_step
+        data = {**data, **stamps}
         # Only events that can carry a child step — a top-level ``call_id`` or an
         # ``items`` list — need the parent-tag lookup; skip the lock+scan for the
         # high-frequency rest (content / reasoning / status / info / …).
@@ -2955,6 +2981,51 @@ class SessionUIBase:
         with self._ws_lock:
             self._discard_pending_tokens_locked()
             self._reset_inflight_buffers_locked()
+        if self._cur_turn_id:
+            self._cur_step += 1
+
+    def on_turn_begin(self, turn_id: str) -> None:
+        """Open a user turn: stamp its id on every event until :meth:`on_turn_end`.
+
+        One ``send()`` call is one turn; its agent-loop iterations (LLM
+        calls) are its steps, counted by :meth:`on_turn_start`.
+        """
+        self._cur_turn_id = turn_id
+        self._cur_step = 0
+        self._turn_started_at_ms = int(time.time() * 1000)
+        self._enqueue({"type": "turn_start", "turn_id": turn_id})
+
+    def on_turn_end(self, turn_id: str, status: str, duration_ms: int) -> None:
+        """Close the turn opened by :meth:`on_turn_begin`.
+
+        *status* is ``completed``, ``stopped`` (cancelled / interrupted) or
+        ``failed``.  The web UI renders it as the turn's "Completed in …"
+        fold control.
+        """
+        self._enqueue(
+            {
+                "type": "turn_end",
+                "turn_id": turn_id,
+                "status": status,
+                "duration_ms": duration_ms,
+                "steps": self._cur_step,
+            }
+        )
+        if self._cur_turn_id == turn_id:
+            ended = int(time.time() * 1000)
+            self._add_span(
+                {
+                    "kind": "turn",
+                    "turn_id": turn_id,
+                    "step": self._cur_step,
+                    "started_at": self._turn_started_at_ms or ended - duration_ms,
+                    "ended_at": ended,
+                    "status": status,
+                }
+            )
+            self._cur_turn_id = ""
+            self._cur_step = 0
+        self._flush_spans()
 
     def on_turn_committed(self) -> None:
         """Reset inflight buffers right after the assistant message commits.
@@ -3091,7 +3162,81 @@ class SessionUIBase:
             event["is_error"] = True
         if preview:
             event["preview"] = preview
+        with self._tool_timing_lock:
+            timing = self._tool_timing.pop(call_id, None)
+        if timing:
+            event.update(timing)
+            with self._agent_children_lock:
+                parent = self._agent_children.get(call_id, "")
+            started = int(timing.get("started_at", 0))
+            self._add_span(
+                {
+                    "kind": "tool",
+                    "turn_id": self._cur_turn_id,
+                    "step": self._cur_step,
+                    "call_id": call_id,
+                    "parent_call_id": parent,
+                    "name": name,
+                    "started_at": started,
+                    "ended_at": started + int(timing.get("duration_ms", 0)),
+                    "status": "error" if is_error else "ok",
+                }
+            )
         self._enqueue(event)
+
+    def note_tool_timing(self, call_id: str, timing: dict[str, int]) -> None:
+        """Stash execution timing for *call_id*'s upcoming ``tool_result``.
+
+        The session calls this right before :meth:`on_tool_result`, so the
+        ``started_at`` / ``duration_ms`` ride the same event without
+        widening the ``on_tool_result`` signature every UI implements.
+        Called from the parallel tool pool, hence the lock.
+        """
+        with self._tool_timing_lock:
+            self._tool_timing[call_id] = timing
+
+    def on_step_timing(self, timing: dict[str, Any]) -> None:
+        """One finished LLM call: request start, TTFT, total, token usage."""
+        self._enqueue({"type": "step_timing", **timing})
+        started = timing.get("started_at")
+        if isinstance(started, int):
+            tok = timing.get("tokens") or {}
+            self._add_span(
+                {
+                    "kind": "llm",
+                    "turn_id": self._cur_turn_id,
+                    "step": self._cur_step,
+                    "name": str(timing.get("model") or ""),
+                    "started_at": started,
+                    "ended_at": started + int(timing.get("completed_ms") or 0),
+                    "ttft_ms": timing.get("first_token_ms"),
+                    "status": "ok",
+                    "tok_in": tok.get("input", 0),
+                    "tok_out": tok.get("output", 0),
+                    "tok_cache_read": tok.get("cache_read", 0),
+                    "tok_cache_write": tok.get("cache_write", 0),
+                }
+            )
+        self._flush_spans()
+
+    def _add_span(self, span: dict[str, Any]) -> None:
+        with self._span_lock:
+            self._span_buf.append(span)
+
+    def _flush_spans(self) -> None:
+        """Persist buffered spans; storage failures are logged, never raised."""
+        with self._span_lock:
+            batch, self._span_buf = self._span_buf, []
+        if not batch or not self.ws_id:
+            return
+        try:
+            from pebble.core.storage._registry import get_storage
+
+            storage = get_storage()
+            if storage is not None:
+                storage.save_spans(self.ws_id, batch)
+        except Exception:
+            log.warning("Failed to record timing spans", exc_info=True)
 
     def on_tool_output_chunk(self, call_id: str, chunk: str) -> None:
         self._enqueue({"type": "tool_output_chunk", "call_id": call_id, "chunk": chunk})

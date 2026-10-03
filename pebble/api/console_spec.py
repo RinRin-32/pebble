@@ -145,6 +145,7 @@ from pebble.api.server_schemas import (
     UploadAttachmentResponse,
     WorkstreamDetailResponse,
     WorkstreamHistoryResponse,
+    WorkstreamSpansResponse,
 )
 
 CONSOLE_ENDPOINTS: list[EndpointSpec] = [
@@ -1462,6 +1463,34 @@ CONSOLE_ENDPOINTS: list[EndpointSpec] = [
         tags=["Coordinator"],
     ),
     EndpointSpec(
+        "/v1/api/workstreams/{ws_id}/spans",
+        "GET",
+        "Read the workstream's timing spans (turns, LLM calls, tool runs)",
+        description=(
+            "Timing for the Trajectory view: one row per turn, LLM call (with "
+            "time-to-first-token and token usage) and timed tool execution, "
+            "oldest first.  Timing only; join tool spans to ``/history`` rows "
+            "on ``call_id``."
+        ),
+        response_model=WorkstreamSpansResponse,
+        query_params=[
+            QueryParam(
+                "since",
+                "Only spans starting at or after this epoch-ms time (default 0).",
+                schema_type="integer",
+                default=0,
+            ),
+            QueryParam(
+                "limit",
+                "Max spans (default 5000, max 20000).",
+                schema_type="integer",
+                default=5000,
+            ),
+        ],
+        error_codes=[400, 403, 404, 500, 503],
+        tags=["Coordinator"],
+    ),
+    EndpointSpec(
         "/v1/api/workstreams/{ws_id}/export",
         "GET",
         "Export the coordinator's conversation as OpenAI messages JSON",
@@ -1723,6 +1752,7 @@ _ALL_MODELS: list[type[BaseModel]] = [
     ListSkillSummaryResponse,
     WorkstreamDetailResponse,
     WorkstreamHistoryResponse,
+    WorkstreamSpansResponse,
 ]
 
 

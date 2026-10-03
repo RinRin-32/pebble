@@ -1839,6 +1839,22 @@ class StorageBackend(Protocol):
         """Delete all version snapshots for a skill. Returns count deleted."""
         ...
 
+    # -- Workstream timing spans -----------------------------------------------
+
+    def save_spans(self, ws_id: str, spans: list[dict[str, Any]]) -> int:
+        """Persist timing spans (turn / llm / tool) for the Trajectory view.
+
+        Each span is ``{kind, started_at, ended_at}`` (epoch ms) plus optional
+        ``turn_id, step, call_id, parent_call_id, name, status, ttft_ms,
+        tok_in, tok_out, tok_cache_read, tok_cache_write``.  Malformed spans
+        are dropped.  Returns the number of rows written.
+        """
+        ...
+
+    def list_spans(self, ws_id: str, since: int = 0, limit: int = 5000) -> list[dict[str, Any]]:
+        """Spans for *ws_id* starting at or after *since* (epoch ms), oldest first."""
+        ...
+
     # -- Usage events ----------------------------------------------------------
 
     def record_usage_event(

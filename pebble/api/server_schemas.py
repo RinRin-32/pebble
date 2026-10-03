@@ -552,6 +552,31 @@ class WorkstreamDetailResponse(BaseModel):
     )
 
 
+class WorkstreamSpan(BaseModel):
+    """One timed unit of work: a turn, an LLM call, or a tool execution."""
+
+    turn_id: str = ""
+    step: int = 0
+    kind: str = Field(description="``turn``, ``llm`` or ``tool``.")
+    call_id: str = ""
+    parent_call_id: str = Field(default="", description="Set on a task agent's sub-tool calls.")
+    name: str = Field(default="", description="Tool name, or the model for an ``llm`` span.")
+    started_at: int = Field(description="Epoch milliseconds.")
+    ended_at: int = Field(description="Epoch milliseconds.")
+    ttft_ms: int | None = Field(default=None, description="Time to first token (``llm`` only).")
+    status: str = ""
+    tok_in: int = 0
+    tok_out: int = 0
+    tok_cache_read: int = 0
+    tok_cache_write: int = 0
+
+
+class WorkstreamSpansResponse(BaseModel):
+    """Response body for ``GET /v1/api/workstreams/{ws_id}/spans``."""
+
+    spans: list[WorkstreamSpan] = Field(default_factory=list)
+
+
 class WorkstreamHistoryResponse(BaseModel):
     """Response body for ``GET /v1/api/workstreams/{ws_id}/history``.
 

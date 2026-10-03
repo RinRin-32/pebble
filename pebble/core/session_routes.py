@@ -534,6 +534,7 @@ class SharedSessionVerbHandlers:
     retry: Handler | None = None  # POST {prefix}/{ws_id}/retry
     events: Handler | None = None  # GET  {prefix}/{ws_id}/events (SSE)
     history: Handler | None = None  # GET  {prefix}/{ws_id}/history
+    spans: Handler | None = None  # GET  {prefix}/{ws_id}/spans
     export: Handler | None = None  # GET  {prefix}/{ws_id}/export
 
     # Attachments — the four handlers come together or not at all.
@@ -627,6 +628,8 @@ def register_session_routes(
         routes.append(Route(f"{p}/{{ws_id}}/events", handlers.events, methods=["GET"]))
     if handlers.history is not None:
         routes.append(Route(f"{p}/{{ws_id}}/history", handlers.history, methods=["GET"]))
+    if handlers.spans is not None:
+        routes.append(Route(f"{p}/{{ws_id}}/spans", handlers.spans, methods=["GET"]))
     if handlers.export is not None:
         routes.append(Route(f"{p}/{{ws_id}}/export", handlers.export, methods=["GET"]))
 
@@ -3737,6 +3740,78 @@ def make_history_handler(cfg: SessionEndpointConfig) -> Handler:
         return JSONResponse({"ws_id": ws_id, "messages": messages, "cursor": cursor})
 
     return history
+
+
+def make_spans_handler(cfg: SessionEndpointConfig) -> Handler:
+    """``GET {prefix}/{ws_id}/spans`` — timing spans for the Trajectory view.
+
+    Returns ``{"spans": [...]}``, oldest first: one row per turn, LLM call
+    (``kind="llm"``, with TTFT and token usage) and timed tool execution
+    (``kind="tool"``).  Timing only — the UI joins tool spans to the
+    ``/history`` rows it already holds on ``call_id``.  The live stream
+    carries the same data for an open pane; this endpoint exists because SSE
+    does not replay history.
+
+    Same gates as :func:`make_history_handler`: permission gate, fail-closed
+    ``list_kind``, tenant check, then in-memory or storage-row existence with
+    the kind check.  ``?since=<epoch ms>`` and ``?limit=`` (≤ 20000) page it.
+    """
+
+    async def spans(request: Request) -> Response:
+        import asyncio
+
+        if cfg.permission_gate is not None:
+            err = cfg.permission_gate(request)
+            if err is not None:
+                return err
+        if cfg.list_kind is None:
+            log.error("ws.spans.misconfigured_no_list_kind")
+            return JSONResponse({"error": "spans handler misconfigured"}, status_code=500)
+
+        mgr_opt, err503 = cfg.manager_lookup(request)
+        if err503 is not None:
+            return err503
+        mgr = cast("SessionManager", mgr_opt)
+
+        ws_id = request.path_params.get("ws_id", "")
+        if not ws_id:
+            return JSONResponse({"error": "ws_id is required"}, status_code=400)
+        if cfg.tenant_check is not None:
+            err_tenant = await asyncio.to_thread(cfg.tenant_check, request, ws_id, mgr)
+            if err_tenant is not None:
+                return err_tenant
+
+        storage = getattr(request.app.state, "auth_storage", None)
+        if mgr.get(ws_id) is None:
+            if storage is None:
+                return JSONResponse({"error": cfg.not_found_label}, status_code=404)
+            try:
+                row = await asyncio.to_thread(storage.get_workstream, ws_id)
+            except Exception:
+                log.debug("ws.spans.lookup_failed ws=%s", ws_id[:8], exc_info=True)
+                return JSONResponse({"error": cfg.not_found_label}, status_code=404)
+            if row is None or row.get("kind") != cfg.list_kind:
+                return JSONResponse({"error": cfg.not_found_label}, status_code=404)
+        if storage is None:
+            return JSONResponse({"spans": []})
+
+        try:
+            since = max(0, int(request.query_params.get("since", "0")))
+        except (TypeError, ValueError):
+            since = 0
+        try:
+            limit = int(request.query_params.get("limit", "5000"))
+        except (TypeError, ValueError):
+            limit = 5000
+        limit = max(1, min(limit, 20000))
+        try:
+            rows = await asyncio.to_thread(storage.list_spans, ws_id, since, limit)
+        except Exception:
+            log.warning("ws.spans.load_failed ws=%s", ws_id[:8], exc_info=True)
+            return JSONResponse({"error": "could not load spans"}, status_code=500)
+        return JSONResponse({"spans": rows})
+
+    return spans
 
 
 def make_export_handler(cfg: SessionEndpointConfig) -> Handler:

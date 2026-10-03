@@ -1633,6 +1633,16 @@ class ChatSession:
         # Turns→dicts at that boundary until those layers migrate.
         self.messages: list[Turn] = []
         self._last_usage: dict[str, int] | None = None
+        # Per-LLM-call timing for the web UI's process tracking / timeline
+        # (see _emit_step_timing).  Wall-clock start for placement, monotonic
+        # marks for the durations.
+        self._step_started_at_ms = 0
+        self._step_t0 = 0.0
+        self._step_first_token_t: float | None = None
+        # Tool execution start marks, keyed by call_id.  Written by run_one on
+        # the parallel tool pool, read back by _report_tool_result.
+        self._tool_started: dict[str, tuple[int, float]] = {}
+        self._tool_started_lock = threading.Lock()
         self._msg_tokens: list[int] = []  # parallel to self.messages
         self._system_tokens = 0  # tokens for system_messages
         # Workstream template metadata
@@ -3205,6 +3215,10 @@ class ChatSession:
             self._tool_error_flags[call_id] = True
         if status is not None:
             self._tool_status[call_id] = status
+        timing = self._pop_tool_timing(call_id)
+        note = getattr(self.ui, "note_tool_timing", None) if timing else None
+        if note is not None:
+            note(call_id, timing)
         self.ui.on_tool_result(call_id, name, output, is_error=is_error, preview=preview)
 
     def _ui_event_id(self) -> int | None:
@@ -6015,6 +6029,9 @@ class ChatSession:
         ):
             self._init_system_messages()
 
+        turn_id = ""
+        turn_t0 = time.monotonic()
+        turn_status = "completed"
         try:
             # Bail an orphaned/superseded send BEFORE the pre-send compaction below
             # can mutate history.  The old code's first in-try act was the loop-top
@@ -6025,6 +6042,13 @@ class ChatSession:
             # the live generation's history.  A stale thread raises here and the
             # except-GenerationCancelled handler returns without touching state.
             self._check_cancelled(my_generation)
+            # Open the turn for the UI's process tracking only once this send
+            # is known to be live, so a stale send never stamps its id on the
+            # current generation's events.
+            turn_id = uuid.uuid4().hex[:12]
+            begin = getattr(self.ui, "on_turn_begin", None)
+            if begin is not None:
+                begin(turn_id)
 
             # Proactive pre-send compaction (Layer A): a rehydrated resume — or a
             # session that never compacted under a larger-window model before a
@@ -6068,6 +6092,9 @@ class ChatSession:
                 self._emit_state("thinking")
                 self.ui.on_thinking_start()
                 try:
+                    self._step_started_at_ms = int(time.time() * 1000)
+                    self._step_t0 = time.monotonic()
+                    self._step_first_token_t = None
                     try:
                         stream = self._create_stream_with_retry(msgs)
                     except Exception as ctx_err:
@@ -6120,6 +6147,7 @@ class ChatSession:
                 # actually counted.
                 self._update_token_table(assistant_msg, msgs=msgs)
                 self._print_status_line()  # Report usage for EVERY API call
+                self._emit_step_timing()
                 self.messages.append(turn_from_dict(assistant_msg))
                 # Clear per-turn inflight buffers — the assistant
                 # message is now in the history list a refresh would
@@ -6469,6 +6497,7 @@ class ChatSession:
                 if not pre_attempted_compact:
                     self._maybe_compact_midturn(my_generation)
         except GenerationCancelled:
+            turn_status = "stopped"
             # If a newer send() has started (force cancel), this thread is
             # orphaned — skip all message mutations and state changes.
             if self._generation != my_generation:
@@ -6528,17 +6557,21 @@ class ChatSession:
             # Do NOT re-raise — return normally so server worker thread
             # completes cleanly.
         except KeyboardInterrupt as exc:
+            turn_status = "stopped"
             self._synthesize_cancelled_results("Interrupted by user.")
             self._flush_queued_messages()
             self._drain_pending_advisories()
             self._record_fatal_error(exc)
             raise
         except Exception as exc:
+            turn_status = "failed"
             self._flush_queued_messages()
             self._drain_pending_advisories()
             self._record_fatal_error(exc)
             raise
         finally:
+            if turn_id:
+                self._end_turn(turn_id, turn_status, turn_t0, my_generation)
             # Release the per-send wire-part memo (it can hold large rasterized
             # PDF page-images) so it is GC'd at send end rather than retained on
             # an idle session until the next send.  Restores the "None outside a
@@ -6887,6 +6920,7 @@ class ChatSession:
             """Stop the spinner on first real content. Call is idempotent."""
             nonlocal first_token
             if first_token:
+                self._step_first_token_t = time.monotonic()
                 self.ui.on_thinking_stop()
                 first_token = False
 
@@ -7355,6 +7389,74 @@ class ChatSession:
                 self.ui.on_info(f"Token budget 80% consumed ({total:,}/{self._token_budget:,})")
             if total >= self._token_budget:
                 self._budget_exhausted = True
+
+    def _end_turn(self, turn_id: str, status: str, t0: float, my_generation: int) -> None:
+        """Close the UI turn opened in :meth:`send` (optional ``on_turn_end`` hook).
+
+        Never raises: it runs in ``send``'s ``finally`` and must not mask the
+        real exception.  Leftover tool start marks are dropped only while this
+        generation is still current, so an orphaned send can't erase a newer
+        turn's in-flight marks.
+        """
+        if self._generation == my_generation:
+            with self._tool_started_lock:
+                self._tool_started.clear()
+        end = getattr(self.ui, "on_turn_end", None)
+        if end is None:
+            return
+        try:
+            end(turn_id, status, int((time.monotonic() - t0) * 1000))
+        except Exception:
+            log.debug("on_turn_end failed", exc_info=True)
+
+    def _emit_step_timing(self) -> None:
+        """Report the LLM call that just finished to the UI's timeline.
+
+        ``first_token_ms`` / ``completed_ms`` are offsets from the request
+        start (``started_at``, epoch ms), so TTFT is ``first_token_ms`` and
+        decoding time is ``completed_ms - first_token_ms``.  Optional hook:
+        UIs without a timeline simply don't define ``on_step_timing``.
+        """
+        emit = getattr(self.ui, "on_step_timing", None)
+        if emit is None or not self._step_started_at_ms:
+            return
+        now = time.monotonic()
+        first = self._step_first_token_t
+        usage = self._last_usage or {}
+        emit(
+            {
+                "started_at": self._step_started_at_ms,
+                "first_token_ms": (int((first - self._step_t0) * 1000) if first else None),
+                "completed_ms": int((now - self._step_t0) * 1000),
+                "model": self.model,
+                "tokens": {
+                    "input": int(usage.get("prompt_tokens", 0) or 0),
+                    "output": int(usage.get("completion_tokens", 0) or 0),
+                    "cache_read": int(usage.get("cache_read_tokens", 0) or 0),
+                    "cache_write": int(usage.get("cache_creation_tokens", 0) or 0),
+                },
+            }
+        )
+
+    def _mark_tool_started(self, call_id: str) -> None:
+        if not call_id:
+            return
+        with self._tool_started_lock:
+            self._tool_started[call_id] = (int(time.time() * 1000), time.monotonic())
+
+    def _pop_tool_timing(self, call_id: str) -> dict[str, int] | None:
+        """Execution timing for *call_id*, or None if it never executed.
+
+        Denied / errored-before-execution calls never pass through
+        ``_mark_tool_started`` and report without timing.  Approval wait is
+        excluded because the mark is taken after the approval phase.
+        """
+        with self._tool_started_lock:
+            mark = self._tool_started.pop(call_id, None)
+        if mark is None:
+            return None
+        started_at, t0 = mark
+        return {"started_at": started_at, "duration_ms": int((time.monotonic() - t0) * 1000)}
 
     def _print_status_line(self) -> None:
         """Emit status info via the UI."""
@@ -9580,6 +9682,7 @@ class ChatSession:
                     is_error=True,
                 )
                 return item["call_id"], msg
+            self._mark_tool_started(item.get("call_id", ""))
             try:
                 result: tuple[str, str | list[dict[str, Any]]] = item["execute"](item)
                 return result
@@ -15966,6 +16069,7 @@ class ChatSession:
                         # to the old on_info turn-leg.  Approval-gated tools
                         # paint via approve_tools instead.
                         self._paint_agent_step(parent_call_id, prepared)
+                        self._mark_tool_started(tc_dict["id"])
                         _, output = prepared["execute"](prepared)
                         is_tool_error = self._tool_error_flags.pop(tc_dict["id"], False)
                     # Tools not in auto_tools require user approval.
@@ -16030,6 +16134,7 @@ class ChatSession:
                                 or "Denied by user"
                             )
                         else:
+                            self._mark_tool_started(tc_dict["id"])
                             _, output = prepared["execute"](prepared)
                             is_tool_error = self._tool_error_flags.pop(tc_dict["id"], False)
                     else:

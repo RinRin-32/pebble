@@ -77,8 +77,12 @@ def test_enqueue_fans_out_to_all_listeners() -> None:
     # events (``hello`` isn't ``content`` / ``reasoning``) skip
     # ``_seq``.  Both listeners observe the SAME dict reference
     # (covered by ``test_listeners_share_dict_reference_warning``).
-    assert lq1.get_nowait() == {"type": "hello", "ws_id": "ws-1", "_event_id": 1}
-    assert lq2.get_nowait() == {"type": "hello", "ws_id": "ws-1", "_event_id": 1}
+    # ``_ts`` (epoch ms) is stamped on every event too; outside a turn
+    # there is no ``_turn_id`` / ``_step``.
+    for lq in (lq1, lq2):
+        ev = dict(lq.get_nowait())
+        assert isinstance(ev.pop("_ts"), int)
+        assert ev == {"type": "hello", "ws_id": "ws-1", "_event_id": 1}
 
 
 def test_enqueue_preserves_existing_ws_id() -> None:
@@ -2370,7 +2374,9 @@ class TestAgentScopeInfoSuppression:
         ui = _make_ui()
         lq = ui._register_listener()
         ui.on_info("top-level status")
-        assert lq.get_nowait() == {
+        ev = dict(lq.get_nowait())
+        assert isinstance(ev.pop("_ts"), int)
+        assert ev == {
             "type": "info",
             "message": "top-level status",
             "ws_id": "ws-1",
