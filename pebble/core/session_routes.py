@@ -2818,18 +2818,35 @@ def make_create_handler(
                     # picks the first alias alphabetically — which was a dead
                     # one, turning "start a session" into a 503 that named a
                     # model nobody had selected.
+                    #
+                    # The configured default (model.default_alias) goes in as
+                    # the preferred fallback — passing "" here skipped it, so a
+                    # restricted user always landed on the alphabetically first
+                    # allowed alias.  The speech roles (audio.stt/tts) are
+                    # dropped from the fallback candidates: a transcription or
+                    # voice model can't run a conversation.  An explicit request
+                    # for one is still honoured as asked.
                     _known: set[str] | None = None
+                    _default_alias = ""
                     try:
                         _reg = getattr(request.app.state, "registry", None)
                         if _reg is not None:
                             _known = set(_reg.list_aliases())
+                            _default_alias = str(getattr(_reg, "default", "") or "")
+                            _cs = getattr(request.app.state, "config_store", None)
+                            if _cs is not None:
+                                for _role_key in (
+                                    "audio.stt_model_alias",
+                                    "audio.tts_model_alias",
+                                ):
+                                    _known.discard(str(_cs.get(_role_key) or "").strip())
                     except Exception:
                         _known = None
                     _eff_model, _model_err = resolve_allowed_model(
                         _stm,
                         enforcement_uid,
                         _requested_model,
-                        "",
+                        _default_alias,
                         known_aliases=_known,
                     )
                     if _model_err:
