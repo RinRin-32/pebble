@@ -1061,6 +1061,11 @@ _CONST_GUARD_BUNDLES = _SWEPT_BUNDLES + [
     _REPO_ROOT / "pebble/shared_static/interactive.js",
     _REPO_ROOT / "pebble/shared_static/conversation.js",
     _REPO_ROOT / "pebble/shared_static/redact_credentials.js",
+    _REPO_ROOT / "pebble/shared_static/process.js",
+    _REPO_ROOT / "pebble/shared_static/process_view.js",
+    _REPO_ROOT / "pebble/shared_static/frame.js",
+    _REPO_ROOT / "pebble/shared_static/timeline_model.js",
+    _REPO_ROOT / "pebble/shared_static/timeline_view.js",
 ]
 
 
@@ -2034,7 +2039,9 @@ def test_early_paint_tool_pending_wiring() -> None:
     # showInlineToolBlock reuses the announced shell rather than always
     # creating + appending a fresh block (the duplicate-card bug).
     assert "this._takeAnnouncedBlock(items)" in body
-    assert "if (!announced) this.messagesEl.appendChild(block);" in body
+    # (placement goes through the process-tracking controller, which puts
+    # the block into the current tool-call group).
+    assert "if (!announced) this._proc.placeTool(block, items);" in body
 
 
 def test_task_agent_steps_never_escape_their_card() -> None:

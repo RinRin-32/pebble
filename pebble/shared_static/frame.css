@@ -1,0 +1,191 @@
+/* App frame: rail drag handle, the workspace row (pane host + right panel),
+ * the right panel's tabs, and its fullscreen mode on narrow screens.
+ * Structure only — colours come from pb-tokens.css.  Rules after DeepSeek
+ * Harness (MIT, Copyright (c) 2026 DeepSeek): AppFrame / SidebarRight.
+ */
+
+/* --- rail drag handle --------------------------------------------------- */
+/* Desktop only: at the drawer breakpoint the rail is position: fixed
+ * (shell.css) and must stay that way. */
+@media (min-width: 769px) {
+  .rail {
+    position: relative;
+  }
+}
+@media (max-width: 768px) {
+  .pb-rail-handle {
+    display: none;
+  }
+}
+.pb-rail-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 11;
+}
+.pb-rail-handle:hover,
+.app[data-dragging] .pb-rail-handle {
+  background: linear-gradient(
+    to right,
+    transparent 3px,
+    var(--pb-focus) 3px,
+    var(--pb-focus) 5px,
+    transparent 5px
+  );
+}
+.app[data-dragging] {
+  cursor: col-resize;
+  user-select: none;
+}
+.app.rail-collapsed .pb-rail-handle {
+  display: none;
+}
+
+/* --- workspace row: pane host | handle | right panel -------------------- */
+.pb-workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pb-right-w, 0px);
+  min-height: 0;
+  position: relative;
+}
+.pb-workspace[data-right="open"] {
+  grid-template-columns: minmax(400px, 1fr) var(--pb-right-w, 0px);
+}
+.pb-workspace[data-animating] {
+  transition: grid-template-columns 0.2s ease;
+}
+.pb-workspace[data-dragging] {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pb-workspace[data-animating] {
+    transition: none;
+  }
+}
+.pb-workspace > .panes {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pb-right-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--pb-right-w, 0px) - 4px);
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 11;
+}
+.pb-right-handle:hover,
+.pb-workspace[data-dragging] .pb-right-handle {
+  background: linear-gradient(
+    to right,
+    transparent 3px,
+    var(--pb-focus) 3px,
+    var(--pb-focus) 5px,
+    transparent 5px
+  );
+}
+
+.pb-rightbar {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--pb-hair);
+  background: var(--pb-surface);
+}
+.pb-rightbar[hidden] {
+  display: none;
+}
+.pb-right-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 28px;
+  padding: 6px 6px 0 10px;
+  border-bottom: 1px solid var(--pb-hair);
+}
+.pb-right-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  overflow-x: auto;
+}
+.pb-right-tab {
+  flex: none;
+  min-width: 80px;
+  max-width: 170px;
+  padding: 4px 10px 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--pb-fg-dim);
+  font: 500 12px/1.4 var(--pb-font-ui);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pb-right-tab[aria-selected="true"] {
+  color: var(--pb-fg-strong);
+  border-bottom-color: var(--pb-focus);
+}
+.pb-right-tab:focus-visible,
+.pb-right-close:focus-visible {
+  outline: 2px solid var(--pb-focus);
+  outline-offset: -2px;
+}
+.pb-right-close {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 3px;
+  border: 0;
+  border-radius: var(--pb-radius-sm);
+  background: transparent;
+  color: var(--pb-fg-dim);
+  font-size: 16px;
+  cursor: pointer;
+}
+.pb-right-close:hover {
+  background: var(--pb-hover);
+  color: var(--pb-fg);
+}
+.pb-right-bodies {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.pb-right-body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.pb-right-body[hidden] {
+  display: none;
+}
+
+/* Below 768px the panel covers the workspace instead of squeezing it. */
+.pb-workspace[data-right="fullscreen"] .pb-rightbar {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  border-left: 0;
+}

@@ -1,0 +1,54 @@
+/* Pebble process / frame / timeline tokens.
+ *
+ * THE reskin point for the process-tracking, app-frame and Trajectory UI:
+ * process.css, frame.css and timeline.css read ONLY these --pb-* variables
+ * (enforced by tests/test_pb_css_tokens.py).  Each one currently maps onto
+ * the existing base.css palette, so the new UI follows the light/dark theme
+ * toggle for free; to give it its own look, change the right-hand sides here.
+ *
+ * Not here on purpose: --pb-rail-w and --pb-right-w are column widths that
+ * frame.js sets at runtime from the drag handles.
+ *
+ * Layout rules ported from DeepSeek Harness (MIT, Copyright (c) 2026
+ * DeepSeek); its colours deliberately were not.
+ */
+:root {
+  /* Surfaces */
+  --pb-surface: var(--panel);
+  --pb-surface-2: var(--panel-2);
+  --pb-surface-raised: var(--bg-elevated);
+  --pb-hover: var(--bg-highlight);
+  --pb-hair: var(--hair);
+  --pb-hair-strong: var(--hair-2);
+
+  /* Text */
+  --pb-fg: var(--fg);
+  --pb-fg-dim: var(--ink-3);
+  --pb-fg-faint: var(--ink-4);
+  --pb-fg-strong: var(--fg-bright);
+
+  /* States */
+  --pb-running: var(--accent);
+  --pb-running-soft: var(--accent-dim);
+  --pb-ok: var(--ok);
+  --pb-error: var(--err);
+  --pb-error-soft: var(--err-soft);
+  --pb-stopped: var(--warn);
+  --pb-pending: var(--warn);
+  --pb-pending-soft: var(--warn-soft);
+  --pb-focus: var(--accent);
+
+  /* Timeline lanes */
+  --pb-lane-input: var(--blue);
+  --pb-lane-model: var(--magenta);
+  --pb-lane-ttft: var(--accent);
+  --pb-lane-tool: var(--yellow);
+
+  /* Shape + type */
+  --pb-radius-sm: var(--r-sm);
+  --pb-radius: var(--r-md);
+  --pb-radius-lg: var(--r-lg);
+  --pb-font-ui: var(--font-ui);
+  --pb-font-mono: var(--font-mono);
+  --pb-shadow: var(--shadow-sm);
+}

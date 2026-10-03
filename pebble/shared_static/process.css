@@ -1,0 +1,307 @@
+/* Process tracking: grouped tool calls, per-call state/duration, the
+ * per-turn fold control and the running timer.  Structure only — colours
+ * come from pb-tokens.css.  Layout after DeepSeek Harness (MIT,
+ * Copyright (c) 2026 DeepSeek): ChatGroupSeat / ToolRow / TurnProcessNode.
+ */
+
+/* --- process group ------------------------------------------------------ */
+.pb-pgroup {
+  margin: 4px 0;
+}
+.pb-pgroup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--pb-radius-sm);
+  background: transparent;
+  color: var(--pb-fg-dim);
+  font: 500 12.5px/1.4 var(--pb-font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.pb-pgroup-head:hover {
+  background: var(--pb-hover);
+  color: var(--pb-fg);
+}
+.pb-pgroup-head:focus-visible {
+  outline: 2px solid var(--pb-focus);
+  outline-offset: 1px;
+}
+.pb-pgroup-icon,
+.pb-pgroup-chev {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  font-family: var(--pb-font-mono);
+}
+/* Category icon gives way to a chevron on hover (and while open). */
+.pb-pgroup-chev {
+  display: none;
+  transition: transform 0.15s ease;
+}
+.pb-pgroup-head:hover .pb-pgroup-icon {
+  display: none;
+}
+.pb-pgroup-head:hover .pb-pgroup-chev {
+  display: inline-block;
+}
+.pb-pgroup[data-open="true"] .pb-pgroup-chev {
+  transform: rotate(90deg);
+}
+.pb-pgroup-label {
+  flex: none;
+}
+.pb-pgroup-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--pb-fg-faint);
+  font-family: var(--pb-font-mono);
+  font-size: 12px;
+}
+.pb-pgroup-flag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--pb-radius-sm);
+  background: var(--pb-pending-soft);
+  color: var(--pb-pending);
+  font: 600 10.5px/1.6 var(--pb-font-mono);
+}
+.pb-pgroup-flag:empty {
+  display: none;
+}
+.pb-pgroup-flag[data-risk="high"],
+.pb-pgroup-flag[data-risk="critical"] {
+  background: var(--pb-error-soft);
+  color: var(--pb-error);
+}
+.pb-pgroup-meta {
+  flex: none;
+  margin-left: auto;
+  color: var(--pb-fg-faint);
+  font: 11px/1.4 var(--pb-font-mono);
+}
+
+/* Live label shimmer while the group is working. */
+.pb-pgroup[data-state="running"] .pb-pgroup-label {
+  color: var(--pb-fg);
+  background: linear-gradient(
+      90deg,
+      var(--pb-fg-dim) 0%,
+      var(--pb-fg-strong) 50%,
+      var(--pb-fg-dim) 100%
+    )
+    0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: pb-shimmer 1.6s linear infinite;
+}
+.pb-pgroup[data-state="pending"] .pb-pgroup-label {
+  color: var(--pb-pending);
+}
+@keyframes pb-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pb-pgroup[data-state="running"] .pb-pgroup-label {
+    animation: none;
+  }
+}
+
+.pb-pgroup-body {
+  display: none;
+  margin: 2px 0 0 15px;
+  padding-left: 8px;
+  border-left: 1px solid var(--pb-hair);
+}
+.pb-pgroup[data-open="true"] > .pb-pgroup-body {
+  display: block;
+}
+/* While running, the body is a bounded window that follows the bottom,
+ * with soft fades at both edges.  A pending approval lifts the bound so
+ * the card is never clipped. */
+.pb-pgroup[data-state="running"] > .pb-pgroup-body {
+  max-height: min(400px, 50vh);
+  overflow-y: auto;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+}
+
+/* --- per-call decoration on the existing .conv-row ---------------------- */
+.pb-dur {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--pb-fg-faint);
+  font: 11px/1.4 var(--pb-font-mono);
+}
+.conv-row[data-pb-state="error"] .pb-dur {
+  color: var(--pb-error);
+}
+
+/* --- turn fold control -------------------------------------------------- */
+.pb-turn {
+  margin: 6px 0 2px;
+}
+.pb-turn-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--pb-radius-sm);
+  background: transparent;
+  color: var(--pb-fg-faint);
+  font: 500 12px/1.4 var(--pb-font-ui);
+  cursor: pointer;
+}
+.pb-turn-btn:hover:not(:disabled) {
+  background: var(--pb-hover);
+  color: var(--pb-fg);
+}
+.pb-turn-btn:disabled {
+  cursor: default;
+}
+.pb-turn-btn:disabled .pb-turn-chev {
+  visibility: hidden;
+}
+.pb-turn-btn:focus-visible {
+  outline: 2px solid var(--pb-focus);
+  outline-offset: 1px;
+}
+.pb-turn-chev {
+  font-family: var(--pb-font-mono);
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+}
+.pb-turn[data-folded="true"] .pb-turn-chev {
+  transform: none;
+}
+.pb-turn[data-status="stopped"] .pb-turn-label {
+  color: var(--pb-stopped);
+}
+.pb-turn[data-status="failed"] .pb-turn-label {
+  color: var(--pb-error);
+}
+.pb-folded {
+  display: none !important;
+}
+
+/* --- running timer (status bar) ----------------------------------------- */
+.pb-running {
+  color: var(--pb-running);
+  font: 11px/1.4 var(--pb-font-mono);
+}
+
+/* --- docks above the composer (todo) ------------------------------------ */
+.pb-dock {
+  margin: 0 auto 6px;
+  width: calc(100% - 16px);
+  border: 1px solid var(--pb-hair);
+  border-radius: var(--pb-radius);
+  background: var(--pb-surface);
+  font: 12px/1.4 var(--pb-font-ui);
+}
+.pb-todo-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--pb-fg-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pb-todo-head:hover {
+  color: var(--pb-fg);
+}
+.pb-todo-head:focus-visible {
+  outline: 2px solid var(--pb-focus);
+  outline-offset: -2px;
+}
+.pb-todo-chev {
+  font-family: var(--pb-font-mono);
+  transition: transform 0.15s ease;
+}
+.pb-todo[data-open="true"] .pb-todo-chev {
+  transform: rotate(90deg);
+}
+.pb-todo-title {
+  font-weight: 600;
+  color: var(--pb-fg);
+}
+.pb-todo-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pb-todo-summary {
+  flex: none;
+  margin-left: auto;
+  color: var(--pb-fg-faint);
+  font-family: var(--pb-font-mono);
+  font-size: 11px;
+}
+.pb-todo-list {
+  display: none;
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 2px 10px 8px 28px;
+  list-style: none;
+}
+.pb-todo[data-open="true"] .pb-todo-list {
+  display: block;
+}
+.pb-todo-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--pb-fg);
+}
+.pb-todo-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--pb-fg-faint);
+  border-radius: 50%;
+}
+.pb-todo-item[data-status="in_progress"] .pb-todo-dot {
+  border-color: var(--pb-running);
+  background: var(--pb-running);
+}
+.pb-todo-item[data-status="done"] .pb-todo-dot {
+  border-color: var(--pb-ok);
+  background: var(--pb-ok);
+}
+.pb-todo-item[data-status="done"] .pb-todo-text {
+  color: var(--pb-fg-faint);
+  text-decoration: line-through;
+}
+.pb-todo-item[data-status="blocked"] .pb-todo-dot {
+  border-color: var(--pb-error);
+}

@@ -1,0 +1,325 @@
+/* Chat | Trajectory view tabs and the Trajectory view: timing strip, event
+ * ledger and inspector.  Structure only — colours come from pb-tokens.css.
+ * Layout after DeepSeek Harness (MIT, Copyright (c) 2026 DeepSeek):
+ * ConversationRoot tabs, TrajectoryTimeline / TrajectoryTable.
+ */
+
+/* --- view tabs ---------------------------------------------------------- */
+.pb-viewtabs {
+  display: flex;
+  flex: none;
+  gap: 28px;
+  padding: 6px 16px 0;
+  border-bottom: 1px solid var(--pb-hair);
+}
+.pb-viewtab {
+  position: relative;
+  padding: 2px 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--pb-fg-dim);
+  font: 500 12.5px/1.3 var(--pb-font-ui);
+  cursor: pointer;
+}
+.pb-viewtab:hover {
+  color: var(--pb-fg);
+}
+.pb-viewtab[aria-selected="true"] {
+  color: var(--pb-fg-strong);
+}
+.pb-viewtab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--pb-focus);
+}
+.pb-viewtab:focus-visible {
+  outline: 2px solid var(--pb-focus);
+  outline-offset: 2px;
+}
+/* The transcript's own display rule would otherwise beat [hidden]. */
+.pane-messages[hidden] {
+  display: none !important;
+}
+.pb-timeline-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pb-timeline-host[hidden] {
+  display: none;
+}
+
+/* --- trajectory --------------------------------------------------------- */
+.pb-tl {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  color: var(--pb-fg);
+  font: 12px/1.4 var(--pb-font-ui);
+}
+.pb-tl:focus {
+  outline: none;
+}
+.pb-tl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pb-tl-modes {
+  display: inline-flex;
+  border: 1px solid var(--pb-hair);
+  border-radius: var(--pb-radius);
+  overflow: hidden;
+}
+.pb-tl-mode,
+.pb-tl-reset,
+.pb-tl-reveal,
+.pb-tl-insp-tab {
+  padding: 3px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--pb-fg-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.pb-tl-mode + .pb-tl-mode {
+  border-left: 1px solid var(--pb-hair);
+}
+.pb-tl-mode[aria-pressed="true"] {
+  background: var(--pb-surface-2);
+  color: var(--pb-fg-strong);
+}
+.pb-tl-stats {
+  color: var(--pb-fg-dim);
+  font-family: var(--pb-font-mono);
+  font-size: 11px;
+}
+.pb-tl-reset {
+  margin-left: auto;
+  border: 1px solid var(--pb-hair);
+  border-radius: var(--pb-radius);
+}
+.pb-tl-reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pb-tl-mode:focus-visible,
+.pb-tl-reset:focus-visible,
+.pb-tl-reveal:focus-visible,
+.pb-tl-insp-tab:focus-visible {
+  outline: 2px solid var(--pb-focus);
+  outline-offset: -2px;
+}
+
+/* Strip: 44px lane labels | plot.  Lanes are 14px apart, bars 8px tall. */
+.pb-tl-strip {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  flex: none;
+}
+.pb-tl-lanes-labels {
+  display: grid;
+  grid-auto-rows: 14px;
+  padding-top: 4px;
+  color: var(--pb-fg-faint);
+  font-size: 10px;
+}
+.pb-tl-plot {
+  position: relative;
+  height: 50px;
+  overflow: hidden;
+  border: 1px solid var(--pb-hair);
+  border-radius: var(--pb-radius);
+  background: var(--pb-surface);
+  cursor: crosshair;
+  touch-action: none;
+}
+.pb-tl-bars {
+  position: absolute;
+  inset: 4px 0 0;
+}
+.pb-tl-item {
+  position: absolute;
+  height: 8px;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--pb-lane-tool);
+  cursor: pointer;
+}
+.pb-tl-item[data-lane="0"] {
+  top: 0;
+  background: var(--pb-lane-input);
+}
+.pb-tl-item[data-lane="1"] {
+  top: 14px;
+  background: var(--pb-lane-model);
+}
+.pb-tl-item[data-lane="2"] {
+  top: 28px;
+}
+.pb-tl-item[data-error="true"] {
+  background: var(--pb-error);
+}
+.pb-tl-item[data-dim="true"] {
+  opacity: 0.2;
+}
+.pb-tl-item[data-selected="true"] {
+  outline: 2px solid var(--pb-fg-strong);
+  outline-offset: 1px;
+  z-index: 1;
+}
+/* The waiting-for-first-token part of an LLM call. */
+.pb-tl-ttft {
+  height: 100%;
+  border-radius: 2px 0 0 2px;
+  background: var(--pb-lane-ttft);
+}
+.pb-tl-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--pb-focus);
+  border-right: 1px solid var(--pb-focus);
+  background: var(--pb-running-soft);
+  pointer-events: none;
+}
+
+/* Ledger | inspector. */
+.pb-tl-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+}
+.pb-tl-ledger {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  border: 1px solid var(--pb-hair);
+  border-radius: var(--pb-radius);
+}
+.pb-tl-row {
+  display: grid;
+  grid-template-columns: 64px 52px minmax(0, 1fr) 64px minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--pb-hair);
+  cursor: pointer;
+  font-size: 12px;
+}
+.pb-tl-row:hover {
+  background: var(--pb-hover);
+}
+.pb-tl-row[aria-selected="true"] {
+  background: var(--pb-surface-2);
+  box-shadow: inset 2px 0 0 var(--pb-focus);
+}
+.pb-tl-row[data-focus="outside"] {
+  opacity: 0.35;
+}
+.pb-tl-row-at,
+.pb-tl-row-dur,
+.pb-tl-row-detail {
+  color: var(--pb-fg-dim);
+  font-family: var(--pb-font-mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pb-tl-row-kind {
+  color: var(--pb-fg-faint);
+  font-size: 11px;
+}
+.pb-tl-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--pb-font-mono);
+}
+.pb-tl-row[data-error="true"] .pb-tl-row-detail {
+  color: var(--pb-error);
+}
+.pb-tl-insp {
+  flex: none;
+  width: clamp(240px, 34%, 400px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--pb-hair);
+  border-radius: var(--pb-radius);
+  background: var(--pb-surface);
+}
+.pb-tl-insp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.pb-tl-insp-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.pb-tl-reveal {
+  flex: none;
+  margin-left: auto;
+  border: 1px solid var(--pb-hair);
+  border-radius: var(--pb-radius);
+}
+.pb-tl-insp-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--pb-hair);
+}
+.pb-tl-insp-tab[aria-selected="true"] {
+  color: var(--pb-fg-strong);
+  box-shadow: inset 0 -2px 0 var(--pb-focus);
+}
+.pb-tl-insp-body {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.pb-tl-insp-body dt {
+  color: var(--pb-fg-dim);
+}
+.pb-tl-insp-body dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--pb-font-mono);
+}
+.pb-tl-insp-empty,
+.pb-tl-empty {
+  color: var(--pb-fg-faint);
+}
+.pb-tl-empty {
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* Narrow panes: the inspector stacks under the ledger. */
+@media (max-width: 760px) {
+  .pb-tl-split {
+    flex-direction: column;
+  }
+  .pb-tl-insp {
+    width: auto;
+    max-height: 40%;
+  }
+}

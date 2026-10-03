@@ -16,7 +16,8 @@
 /* ===== The L: rail (|) + content (—) ===== */
 .app {
   display: grid;
-  grid-template-columns: 266px 1fr;
+  /* --pb-rail-w is set by the rail's drag handle (frame.js); unset = 266px. */
+  grid-template-columns: var(--pb-rail-w, 266px) 1fr;
   height: 100vh;
   overflow: hidden;
 }
