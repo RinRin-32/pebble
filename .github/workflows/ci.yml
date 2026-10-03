@@ -182,8 +182,8 @@ jobs:
         # application, not the library.  Turnstone generates its JWT
         # signing keys via the standard ``secrets`` module at
         # operator-controlled strength (see ``pebble/core/auth.py``),
-        # so the advisory does not apply.  pyjwt 2.12.1 is the current
-        # latest release; no fix version exists.
+        # so the advisory does not apply.  The advisory lists no fix
+        # version (still the case at the pinned pyjwt >= 2.15).
         run: >-
           uv export --no-emit-project --frozen
           | uv run pip-audit --strict --desc -r /dev/stdin
