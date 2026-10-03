@@ -7399,8 +7399,9 @@ class ChatSession:
         turn's in-flight marks.
         """
         if self._generation == my_generation:
-            with self._tool_started_lock:
-                self._tool_started.clear()
+            marks, lock = self._tool_marks()
+            with lock:
+                marks.clear()
         end = getattr(self.ui, "on_turn_end", None)
         if end is None:
             return
@@ -7418,10 +7419,10 @@ class ChatSession:
         UIs without a timeline simply don't define ``on_step_timing``.
         """
         emit = getattr(self.ui, "on_step_timing", None)
-        if emit is None or not self._step_started_at_ms:
+        if emit is None or not getattr(self, "_step_started_at_ms", 0):
             return
         now = time.monotonic()
-        first = self._step_first_token_t
+        first = getattr(self, "_step_first_token_t", None)
         usage = self._last_usage or {}
         emit(
             {
@@ -7438,11 +7439,24 @@ class ChatSession:
             }
         )
 
+    def _tool_marks(self) -> tuple[dict[str, tuple[int, float]], threading.Lock]:
+        """The tool start-mark map and its lock.
+
+        Created lazily as well as in ``__init__`` because tests (and a few
+        helpers) build bare sessions with ``ChatSession.__new__``; tool
+        execution must not depend on timing bookkeeping existing.
+        ``dict.setdefault`` is atomic, so racing pool threads share one lock.
+        """
+        lock = self.__dict__.setdefault("_tool_started_lock", threading.Lock())
+        marks = self.__dict__.setdefault("_tool_started", {})
+        return marks, lock
+
     def _mark_tool_started(self, call_id: str) -> None:
         if not call_id:
             return
-        with self._tool_started_lock:
-            self._tool_started[call_id] = (int(time.time() * 1000), time.monotonic())
+        marks, lock = self._tool_marks()
+        with lock:
+            marks[call_id] = (int(time.time() * 1000), time.monotonic())
 
     def _pop_tool_timing(self, call_id: str) -> dict[str, int] | None:
         """Execution timing for *call_id*, or None if it never executed.
@@ -7451,8 +7465,9 @@ class ChatSession:
         ``_mark_tool_started`` and report without timing.  Approval wait is
         excluded because the mark is taken after the approval phase.
         """
-        with self._tool_started_lock:
-            mark = self._tool_started.pop(call_id, None)
+        marks, lock = self._tool_marks()
+        with lock:
+            mark = marks.pop(call_id, None)
         if mark is None:
             return None
         started_at, t0 = mark
