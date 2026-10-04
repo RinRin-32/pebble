@@ -1002,6 +1002,16 @@ def test_compaction_advisory_is_registered():
             "The input token count (29000) exceeds the maximum number of tokens allowed (28000)",
             True,
         ),
+        # llama.cpp server: a prompt too big for one slot.
+        (
+            "request (300000 tokens) exceeds the available context size "
+            "(262144 tokens), try increasing it",
+            True,
+        ),
+        ("input (9000 tokens) is larger than the max context size (8192 tokens)", True),
+        # llama.cpp KV-pool exhaustion mid-decode is capacity contention, NOT an
+        # overflow — _is_kv_pool_exhausted owns it (back off, don't compact).
+        ("Context size has been exceeded.", False),
         # Retryable / unrelated — must NOT match (esp. token-quota 429s, which a
         # bare "input tokens" substring would false-match into a hard failure).
         ("rate limit exceeded: 40000 input tokens per minute", False),
