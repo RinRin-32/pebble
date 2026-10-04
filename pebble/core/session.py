@@ -17902,6 +17902,19 @@ class ChatSession:
         except Exception:
             log.debug("dispatch.agent_credential_failed", exc_info=True)
 
+        # An armed workstream runs its dispatched agent unattended too —
+        # otherwise the agent CLI's own permission gate refuses every command
+        # the operator already agreed not to be asked about.  Read per
+        # dispatch (fails closed), like the approval gate reads it per batch.
+        _unattended = False
+        try:
+            from pebble.core.full_access import is_armed
+            from pebble.core.storage import get_storage
+
+            _unattended = is_armed(get_storage(), self._ws_id)
+        except Exception:
+            log.debug("dispatch.full_access_unreadable", exc_info=True)
+
         result = run_agent(
             adapter,
             item["task"],
@@ -17913,6 +17926,7 @@ class ChatSession:
             wrap=env_dir or "",
             env=_agent_env,
             mcp_servers=_mcp_servers,
+            unattended=_unattended,
         )
 
         if result.session_id:

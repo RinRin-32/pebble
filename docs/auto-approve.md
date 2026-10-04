@@ -77,6 +77,17 @@ full-access row is not even read in that case. Behaviour for every existing
   only one question, "may this run without asking?" Everything that happens
   around a tool call still happens, and the judge still records its verdict.
 
+### Dispatched coding agents
+
+`dispatch_agent` runs a coding-agent CLI headless, so nobody can answer that
+CLI's own permission prompts. Under Claude Code's `acceptEdits` mode every
+shell command is refused, and the agent can write code but never run it or
+its tests. When the dispatching workstream is armed, it is checked once per
+dispatch and treated as not armed on any error. While armed, Claude Code is
+started with `--permission-mode auto`, where Claude Code's safety classifier
+lets routine commands through and still blocks risky ones. It is never
+started with `bypassPermissions`. Unarmed workstreams keep `acceptEdits`.
+
 ---
 
 ## Propagation: when arming and disarming take effect

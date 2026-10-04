@@ -154,6 +154,17 @@ class TestClaudeCodeParsing:
         assert cmd[cmd.index("--resume") + 1] == "abc"
         assert cmd[-1] == "go"
 
+    def test_attended_dispatch_is_edits_only(self) -> None:
+        cmd = self.a.build_command("go", cwd="/w")
+        assert cmd[cmd.index("--permission-mode") + 1] == "acceptEdits"
+
+    def test_unattended_dispatch_can_run_commands(self) -> None:
+        # An armed (full-access) workstream: headless acceptEdits would refuse
+        # every shell command, so the agent could never run its own tests.
+        cmd = self.a.build_command("go", cwd="/w", unattended=True)
+        assert cmd[cmd.index("--permission-mode") + 1] == "auto"
+        assert "bypassPermissions" not in cmd
+
     def test_bare_is_opt_in_so_subscriptions_work(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # --bare cannot read the OAuth login a Claude subscription uses, so it
         # must not be on by default or subscription auth is impossible.
@@ -199,7 +210,9 @@ class _FakeAgent(AgentAdapter):
         self._lines = lines
         self._exit = exit_code
 
-    def build_command(self, prompt, *, cwd, model="", session_id="", agent="") -> list[str]:
+    def build_command(
+        self, prompt, *, cwd, model="", session_id="", agent="", unattended=False
+    ) -> list[str]:
         script = "".join(f"printf '%s\\n' {json.dumps(line)}; " for line in self._lines)
         return ["sh", "-c", f"{script} exit {self._exit}"]
 
@@ -312,7 +325,9 @@ class TestChildEnvironment:
 
     def test_child_gets_system_path(self, tmp_path) -> None:
         class _EnvProbe(_FakeAgent):
-            def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
+            def build_command(
+                self, prompt, *, cwd, model="", session_id="", agent="", unattended=False
+            ):
                 # Emit the PATH the child actually received, as a text event.
                 return [
                     "sh",
@@ -326,7 +341,9 @@ class TestChildEnvironment:
     def test_blank_api_key_is_dropped(self, tmp_path) -> None:
         # An empty key must not shadow a subscription's OAuth login.
         class _KeyProbe(_FakeAgent):
-            def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
+            def build_command(
+                self, prompt, *, cwd, model="", session_id="", agent="", unattended=False
+            ):
                 return [
                     "sh",
                     "-c",
@@ -459,7 +476,9 @@ class TestMcpPlumbing:
 
     def test_runner_injects_flags_before_prompt(self, tmp_path) -> None:
         class _ShowArgv(_FakeAgent):
-            def build_command(self, prompt, *, cwd, model="", session_id="", agent=""):
+            def build_command(
+                self, prompt, *, cwd, model="", session_id="", agent="", unattended=False
+            ):
                 return ["sh", "-c", 'printf "%s\\n" ok']
 
             def mcp_payload(self, servers):
