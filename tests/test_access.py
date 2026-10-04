@@ -25,6 +25,45 @@ class _FakeStore:
         return list(self._personas)
 
 
+class _CapStore(_FakeStore):
+    def __init__(self, caps: dict[str, list[str]] | None = None, *, broken: bool = False):
+        super().__init__()
+        self._caps = caps or {}
+        self._broken = broken
+
+    def list_user_capabilities(self, user_id: str) -> list[str]:
+        if self._broken:
+            raise RuntimeError("db down")
+        return list(self._caps.get(user_id, []))
+
+
+class TestCanGrantFullAccess:
+    """Same failure shape as ``can_publish_skills``: off by default, fails closed."""
+
+    def test_off_by_default(self) -> None:
+        assert access.can_grant_full_access(_CapStore(), "u") is False
+
+    def test_granted(self) -> None:
+        assert access.can_grant_full_access(_CapStore({"u": ["full_access"]}), "u") is True
+
+    def test_other_capabilities_do_not_imply_it(self) -> None:
+        # write-ish grants must not stand in for the gate-off one.
+        s = _CapStore({"u": ["skill_publish", "code_dispatch", "code_push"]})
+        assert access.can_grant_full_access(s, "u") is False
+
+    def test_empty_user_is_refused(self) -> None:
+        assert access.can_grant_full_access(_CapStore({"": ["full_access"]}), "") is False
+
+    def test_unreadable_storage_fails_closed(self) -> None:
+        assert access.can_grant_full_access(_CapStore(broken=True), "u") is False
+
+    def test_matches_can_publish_skills_on_every_failure(self) -> None:
+        cases = [(_CapStore(), "u"), (_CapStore(broken=True), "u"), (_CapStore(), "")]
+        for store, uid in cases:
+            expected = access.can_publish_skills(store, uid)
+            assert access.can_grant_full_access(store, uid) is expected
+
+
 class TestResolveAllowedModel:
     def test_empty_allowlist_is_unrestricted(self) -> None:
         s = _FakeStore(models=[])

@@ -2837,3 +2837,245 @@ def test_late_stale_generation_verdict_stamps_superseded() -> None:
             judge_event=gen_b,
         )
     storage.update_intent_verdict.assert_any_call("v-b-late", user_decision="approved")
+
+
+# ---------------------------------------------------------------------------
+# Full access — an operator arms the workstream at runtime (full_access.py).
+# The gate reads the stored row on every batch; these tests flip that row
+# exactly as a committed arm / disarm would and watch the NEXT batch.
+# ---------------------------------------------------------------------------
+
+
+def _fa_storage(*, armed: bool = False, holder: str = "u1") -> MagicMock:
+    """Storage stub whose ``workstream_config`` row is a real, mutable dict.
+
+    Everything else stays a MagicMock (verdict persistence, audit) so the
+    gate's other writes are observable but inert.
+    """
+    storage = MagicMock()
+    storage.fa_config = {}
+    storage.fa_caps = {holder: ["full_access"]}
+    storage.load_workstream_config.side_effect = lambda _ws_id: dict(storage.fa_config)
+    storage.list_user_capabilities.side_effect = lambda uid: list(storage.fa_caps.get(uid, []))
+    if armed:
+        _fa_set(storage, True, holder)
+    return storage
+
+
+def _fa_set(storage: MagicMock, armed: bool, by: str = "u1") -> None:
+    storage.fa_config.update({"full_access": "1" if armed else "0", "full_access_by": by})
+
+
+def _spawn_gate(ui: SessionUIBase, item: dict[str, Any]) -> tuple[threading.Thread, dict[str, Any]]:
+    box: dict[str, Any] = {}
+
+    def _run() -> None:
+        box["result"] = ui.approve_tools([item])
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return t, box
+
+
+def _teardown_gate(ui: SessionUIBase, t: threading.Thread) -> None:
+    stop = time.monotonic() + 5.0
+    while t.is_alive() and time.monotonic() < stop:
+        ui.resolve_all_approvals(False, "test teardown")
+        time.sleep(0.01)
+    t.join(timeout=1.0)
+
+
+def test_auto_approve_reason_gains_full_access_and_all_stays_complete() -> None:
+    from pebble.core.session_ui_base import AutoApproveReason
+
+    assert AutoApproveReason.FULL_ACCESS == "full_access"
+    members = {v for k, v in vars(AutoApproveReason).items() if k.isupper() and k != "ALL"}
+    # Every constant is in ALL and ALL holds nothing else.
+    assert members == AutoApproveReason.ALL
+    assert len(AutoApproveReason.ALL) == 7
+
+
+def test_full_access_drains_pending_without_a_prompt() -> None:
+    ui = _make_ui()
+    lq = ui._register_listener()
+    item = _pending_item("c1")
+    with _patch_get_storage(_fa_storage(armed=True)), _patch_policies({}):
+        assert ui.approve_tools([item]) == (True, None)
+    assert item["auto_approved"] is True
+    assert item["auto_approve_reason"] == "full_access"
+    assert not ui._approval_cycles
+    assert not [e for e in _drain(lq) if e.get("type") == "approve_request"]
+    # The dashboard ring buffer names full access, not blanket.
+    assert ui._recent_auto_approvals[-1]["auto_approve_reason"] == "full_access"
+
+
+def test_disarm_stops_auto_approval_on_the_very_next_batch() -> None:
+    """THE property: once a disarm has committed, nothing cached on the UI
+    can approve another batch."""
+    ui = _make_ui()
+    ui._APPROVAL_WAIT_TIMEOUT = 5.0
+    storage = _fa_storage(armed=True)
+    with _patch_get_storage(storage), _patch_policies({}):
+        first = _pending_item("c1")
+        assert ui.approve_tools([first]) == (True, None)
+        _fa_set(storage, False)
+        second = _pending_item("c2")
+        t, box = _spawn_gate(ui, second)
+        try:
+            _wait_for_cycles(ui, 1)
+            assert "auto_approved" not in second
+            ui.resolve_approval(False, "operator said no", call_id="c2")
+            t.join(timeout=5.0)
+        finally:
+            _teardown_gate(ui, t)
+    assert box["result"] == (False, "operator said no")
+
+
+def test_arm_and_disarm_flip_the_gate_with_no_lag() -> None:
+    # Many alternations, each read straight after the write: a cache that
+    # drained late would show up as a stale answer on some iteration.
+    ui = _make_ui()
+    storage = _fa_storage()
+    with _patch_get_storage(storage):
+        for i in range(50):
+            _fa_set(storage, i % 2 == 0)
+            assert ui._full_access_armed() is (i % 2 == 0), i
+
+
+def test_blanket_keeps_its_own_reason_and_never_reads_full_access() -> None:
+    # Existing auto_approve stays bit-compatible: blanket decides first, the
+    # full-access row is not even read, and the pill still says "blanket".
+    ui = _make_ui()
+    ui.auto_approve = True
+    item = _pending_item("c1")
+    storage = _fa_storage(armed=True)
+    with _patch_get_storage(storage), _patch_policies({}):
+        assert ui.approve_tools([item]) == (True, None)
+    assert item["auto_approve_reason"] == "blanket"
+    storage.load_workstream_config.assert_not_called()
+
+
+def test_full_access_never_clears_a_budget_override() -> None:
+    ui = _make_ui()
+    ui._APPROVAL_WAIT_TIMEOUT = 5.0
+    ui._FULL_ACCESS_POLL_SECONDS = 0.01
+    item = _pending_item("c1", func_name="__budget_override__")
+    with _patch_get_storage(_fa_storage(armed=True)), _patch_policies({}):
+        t, box = _spawn_gate(ui, item)
+        try:
+            _wait_for_cycles(ui, 1)
+            time.sleep(0.1)  # ten poll intervals: still parked on a person
+            assert t.is_alive()
+            assert "auto_approved" not in item
+        finally:
+            _teardown_gate(ui, t)
+    assert box["result"][0] is False
+
+
+def test_arming_drains_a_card_that_is_already_waiting() -> None:
+    """The motivating case: the approval card is up, nobody is there, and the
+    operator arms the session instead of letting it time out an hour later."""
+    ui = _make_ui()
+    ui._APPROVAL_WAIT_TIMEOUT = 5.0
+    ui._FULL_ACCESS_POLL_SECONDS = 0.01
+    lq = ui._register_listener()
+    item = _pending_item("c1")
+    storage = _fa_storage()
+    with _patch_get_storage(storage), _patch_policies({}):
+        t, box = _spawn_gate(ui, item)
+        try:
+            _wait_for_cycles(ui, 1)
+            _fa_set(storage, True)
+            t.join(timeout=5.0)
+            assert not t.is_alive(), "arming did not drain the waiting card"
+        finally:
+            _teardown_gate(ui, t)
+    assert box["result"] == (True, None)
+    assert item["auto_approve_reason"] == "full_access"
+    resolved = [e for e in _drain(lq) if e.get("type") == "approval_resolved"]
+    assert resolved and resolved[0]["approved"] is True
+    audits = [
+        c.kwargs
+        for c in storage.record_audit_event.call_args_list
+        if c.kwargs.get("action") == "tool.auto_approved"
+    ]
+    assert audits and '"full_access"' in audits[-1]["detail"]
+
+
+def test_a_waiting_card_stays_with_a_person_while_disarmed() -> None:
+    ui = _make_ui()
+    ui._APPROVAL_WAIT_TIMEOUT = 5.0
+    ui._FULL_ACCESS_POLL_SECONDS = 0.01
+    item = _pending_item("c1")
+    with _patch_get_storage(_fa_storage()), _patch_policies({}):
+        t, box = _spawn_gate(ui, item)
+        try:
+            _wait_for_cycles(ui, 1)
+            time.sleep(0.1)
+            assert t.is_alive()
+            ui.resolve_approval(True, "ok", call_id="c1")
+            t.join(timeout=5.0)
+        finally:
+            _teardown_gate(ui, t)
+    assert box["result"] == (True, "ok")
+    assert "auto_approved" not in item
+
+
+def test_full_access_read_fails_closed() -> None:
+    raising = MagicMock()
+    raising.load_workstream_config.side_effect = RuntimeError("db down")
+    # A bare MagicMock answers with a truthy non-dict; it must not arm.
+    not_a_dict = MagicMock()
+    wrong_value = _fa_storage()
+    wrong_value.fa_config.update({"full_access": "true", "full_access_by": "u1"})
+    no_armer = _fa_storage()
+    no_armer.fa_config.update({"full_access": "1"})
+    caps_unreadable = _fa_storage(armed=True)
+    caps_unreadable.list_user_capabilities.side_effect = RuntimeError("db down")
+    revoked = _fa_storage(armed=True)
+    revoked.fa_caps = {}
+    ui = _make_ui()
+    for storage in (None, raising, not_a_dict, wrong_value, no_armer, caps_unreadable, revoked):
+        with _patch_get_storage(storage):
+            assert ui._full_access_armed() is False, storage
+    # No ws_id (fixtures, eval): never armed, never reads.
+    with _patch_get_storage(_fa_storage(armed=True)):
+        assert _make_ui(ws_id="")._full_access_armed() is False
+
+
+def test_armed_state_survives_a_storage_restart(tmp_path: Any) -> None:
+    """Arm, drop the storage layer, bring it back: still armed, and a fresh
+    session built after the "restart" auto-approves.  Then the reverse."""
+    from pebble.core import full_access as fa
+    from pebble.core.auth import AuthResult, parse_scopes
+    from pebble.core.storage import init_storage, reset_storage
+
+    db = str(tmp_path / "fa.db")
+    auth = AuthResult(user_id="u1", scopes=parse_scopes("write"), token_source="database")
+    reset_storage()
+    try:
+        first = init_storage("sqlite", path=db, run_migrations=False)
+        first.register_workstream("ws-1", user_id="u1")
+        first.set_user_capabilities("u1", ["full_access"])
+        fa.perform(first, auth, "ws-1", "arm", surface="test")
+        reset_storage()
+
+        second = init_storage("sqlite", path=db, run_migrations=False)
+        assert second is not first
+        assert fa.is_armed(second, "ws-1") is True
+        ui = _make_ui(ws_id="ws-1", user_id="u1")
+        item = _pending_item("c1")
+        with _patch_policies({}):
+            assert ui.approve_tools([item]) == (True, None)
+        assert item["auto_approve_reason"] == "full_access"
+        fa.perform(second, auth, "ws-1", "disarm", surface="test")
+        reset_storage()
+
+        third = init_storage("sqlite", path=db, run_migrations=False)
+        assert fa.is_armed(third, "ws-1") is False
+        events = third.list_audit_events(resource_id="ws-1")
+        actions = sorted(e["action"] for e in events if e["action"].startswith("workstream."))
+        assert actions == ["workstream.full_access.arm", "workstream.full_access.disarm"]
+        assert all(e["user_id"] == "u1" for e in events if e["action"].startswith("workstream."))
+    finally:
+        reset_storage()

@@ -468,8 +468,12 @@ export function buildConvRow(item, opts) {
   name.textContent = item.func_name || "(unknown tool)";
   if (item.auto_approved) {
     const auto = document.createElement("span");
-    auto.className = "conv-row-auto";
     const reason = item.auto_approve_reason || "auto_approve_tools";
+    // Full access gets danger styling: nobody was asked, by design, and the
+    // row should say so as loudly as the pane's armed banner does.
+    auto.className =
+      "conv-row-auto" +
+      (reason === "full_access" ? " conv-row-auto--full-access" : "");
     auto.textContent = " auto: " + reason;
     auto.title = "Tool auto-approved (no operator prompt) -- reason: " + reason;
     name.appendChild(auto);

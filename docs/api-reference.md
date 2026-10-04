@@ -863,6 +863,81 @@ automatically approved without prompting.
 
 ---
 
+### `GET|POST /v1/api/workstreams/{ws_id}/full-access`
+
+Read, arm or disarm **full access** on a workstream: while armed, every tool
+call that would have prompted is approved without a person and tagged
+`auto_approve_reason: "full_access"`. A batch carrying `__budget_override__`
+still prompts and deny policies still deny. Full semantics:
+[auto-approve.md](auto-approve.md).
+
+This is the node route the interactive pane calls (the console reaches it
+through `/node/{node_id}/v1/api/...`). The node's private-project visibility
+check runs first.
+
+**Path parameters:**
+
+| Parameter | Type   | Required | Description          |
+|-----------|--------|----------|----------------------|
+| `ws_id`   | string | yes      | Target workstream ID |
+
+**Request body (`POST`):**
+
+```json
+{"armed": true}
+```
+
+| Field   | Type | Required | Description |
+|---------|------|----------|-------------|
+| `armed` | bool | yes      | `true` arms, `false` disarms. Must be a JSON boolean; `"false"` is a `400` |
+
+**Who may call it:**
+
+| Action | Requires |
+|--------|----------|
+| `GET` (status) | `read` scope |
+| arm | `write` scope **and** the `full_access` capability **and** ownership of the workstream; refused for coordinator-minted tokens |
+| disarm | `write` scope **and** (ownership **or** the `full_access` capability) |
+
+**Response (both methods):**
+
+```json
+{
+  "ok": true,
+  "ws_id": "ws-1",
+  "armed": true,
+  "suspended": false,
+  "changed_by": "u1",
+  "changed_at": "2026-10-03T12:00:00+00:00",
+  "budget_override_prompts": true
+}
+```
+
+`GET` adds `can_arm` (whether *this caller* may arm). `suspended` is `true`
+when the row says armed but the user who armed it no longer holds
+`full_access` — the gate is prompting again.
+
+**Errors:** `400` `armed` not a boolean; `401` no identity; `403` with
+`missing_scope` or `missing_capability`, or not the owner, or a coordinator
+token; `404` unknown workstream; `503` storage unavailable, the write did not
+commit (`"... was NOT recorded ..."`), or the state could not be read. A `503`
+on a disarm means the session **may still be armed**.
+
+Every arm and disarm writes a `workstream.full_access.arm` /
+`workstream.full_access.disarm` audit event naming the actor.
+
+---
+
+### `GET|POST /v1/api/route/workstreams/{ws_id}/full-access` (Console)
+
+The same operation as the node route above, with the same body, rules,
+response and errors, handled on the console itself rather than proxied: the
+state lives in the shared `workstream_config` table that every node's approval
+gate reads, so a disarm here works even when the owning node is down. The
+console applies the same private-project visibility check.
+
+---
+
 ### `POST /v1/api/command`
 
 Executes a slash command in the given workstream. Commands run on the
@@ -1869,6 +1944,307 @@ skill object.
 **Errors:** `400` invalid source or missing fields, `404` SKILL.md not found,
 `409` skill already installed (duplicate source_url or name), `502` source
 unreachable.
+
+---
+
+### Edge API (Console)
+
+HTTP access to skills and the knowledge vault for edge clients that are not
+MCP clients (e.g. `sediment`). Design, authorization model and failure modes:
+[edge-backend.md](edge-backend.md).
+
+Every route enforces its own scope (and, for publish and the `sessions/*`
+full-access routes, capability) in the handler; the path-keyed middleware rule resolves the whole prefix to `read` and
+is only a floor. A `skills.report` hook token reaches none of these routes.
+
+All responses use the `{"ok": true, ...}` / `{"ok": false, "error": "..."}`
+envelope. Refusals name what is missing:
+
+```json
+{
+  "ok": false,
+  "error": "this token lacks the 'write' scope, which kb.write requires. ...",
+  "missing_scope": "write"
+}
+```
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Malformed body or field (the error names the field) |
+| `401` | No token, or no identity resolved for the request |
+| `403` | Scope (`missing_scope`) or capability (`missing_capability`) missing |
+| `404` | `kb/read`: no note with that title; `sessions/*`: no such workstream, or not the caller's |
+| `422` | `skills/publish`: refused by the policy gate (`refused_by: "policy"`) |
+| `500` | Unexpected failure: `"<operation> failed: <ExceptionType>"` |
+| `503` | Storage unavailable |
+
+---
+
+### `GET /v1/api/edge/capabilities` (Console)
+
+Who the caller is and which edge operations it may use, computed with the same
+check the handlers run. Requires `read`.
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "user_id": "u1",
+  "scopes": ["read"],
+  "capabilities": [],
+  "operations": [
+    {
+      "name": "kb.write",
+      "method": "POST",
+      "path": "/v1/api/edge/kb/write",
+      "requires": {"scope": "write", "capability": null},
+      "available": false,
+      "missing": ["write"]
+    }
+  ]
+}
+```
+
+`capabilities` is `null` when the grant table could not be read; the
+per-operation checks still fail closed.
+
+The response also carries a `full_access` block:
+
+```json
+"full_access": {
+  "can_arm": true,
+  "budget_override_prompts": true,
+  "session": {"ws_id": "ws-1", "armed": true, "suspended": false, "changed_by": "u1", "changed_at": "..."}
+}
+```
+
+`session` is `null` unless the request names one of the caller's own
+workstreams with `?ws_id=`. It is `{"ws_id": ..., "armed": "unknown"}` when the
+state could not be read — never a guessed `false`.
+
+---
+
+### `POST /v1/api/edge/skills/pull` (Console)
+
+The skill bundle for a repo: the repo's skills plus globals, archived skills
+excluded, repo-scoped shadowing globals. The edge filters by each skill's
+`paths`. Records a `pulled` event per shipped skill (never `invoked`).
+Requires `read`.
+
+**Request body:**
+
+| Field        | Type     | Default  | Description |
+|--------------|----------|----------|-------------|
+| `repo`       | string   | `""`     | Repo whose skills to include alongside globals |
+| `names`      | string[] | `[]`     | Skills to include regardless of glob or budget |
+| `max_tokens` | int      | `30000`  | Budget; may be lowered, never raised past the default |
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "repo": "repo-a",
+  "count": 2,
+  "skills": [
+    {
+      "name": "deploy",
+      "description": "",
+      "content": "# deploy ...",
+      "version": "1.0.0",
+      "repo": "repo-a",
+      "global": false,
+      "allowed_tools": [],
+      "paths": ["**/*.py"],
+      "tags": [],
+      "activation": "named",
+      "token_estimate": 400,
+      "skill_id": "..."
+    }
+  ],
+  "token_estimate": 800,
+  "token_budget": 1000,
+  "truncated": ["s2", "s3"],
+  "not_found": ["ghost"]
+}
+```
+
+`truncated` lists every skill dropped by the budget — truncation is never
+silent.
+
+---
+
+### `POST /v1/api/edge/skills/publish` (Console)
+
+Publish one repo-scoped skill through the policy gate. Requires `write` **and**
+the `skill_publish` capability. Tool grants are assigned server-side.
+
+**Request body:**
+
+| Field         | Type     | Required | Description |
+|---------------|----------|----------|-------------|
+| `name`        | string   | yes      | Skill name (max 80 chars) |
+| `body`        | string   | yes      | Skill markdown (max 40,000 chars) |
+| `repo`        | string   | yes      | Repo to scope it to |
+| `description` | string   | no       | |
+| `tags`        | string[] | no       | |
+| `paths`       | string[] | no       | Globs the edge matches against its tree |
+| `global`      | bool     | no       | `true` is refused with `400` — globals are made in the console |
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "published": "build-and-test",
+  "repo": "repo-a",
+  "updated": false,
+  "verdict": "allow",
+  "policy_reason": "ordinary build instructions",
+  "note": "allowed_tools is assigned server-side; widen it in the console."
+}
+```
+
+**Errors:** `400` missing repo, global requested, oversize, or name collides
+with a global/imported skill; `403` missing scope or capability; `422` refused
+by policy.
+
+---
+
+### `POST /v1/api/edge/skills/hook` (Console)
+
+Mint a short-lived (`12` hour) token that can only call
+`POST /v1/api/skills/report`, and return the Claude Code hook that uses it.
+Requires `write` (same as the `kb_skills_hook` MCP tool).
+
+**Request body:**
+
+| Field        | Type   | Default              | Description |
+|--------------|--------|----------------------|-------------|
+| `report_url` | string | `$PEBBLE_PUBLIC_URL` | Console base URL the edge reaches pebble on |
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "settings_json": {"hooks": {"PostToolUse": [{"matcher": "Skill", "hooks": [{"type": "command", "command": "curl ..."}]}]}},
+  "expires_hours": 12,
+  "note": "Merge into .claude/settings.json. Reports invocation only, not outcome."
+}
+```
+
+**Error:** `400` if neither `report_url` nor `PEBBLE_PUBLIC_URL` is set — the
+URL is never guessed.
+
+---
+
+### `POST /v1/api/edge/kb/search` (Console)
+
+Rank vault notes against a query. Requires `read`.
+
+**Request body:** `query` (string, required), `limit` (int, default `10`, max
+`50`), `repo` (string, optional).
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "query": "flaky test",
+  "repo": "",
+  "count": 1,
+  "results": [
+    {"title": "Flaky CI", "kind": "note", "repo": "repo-a", "tags": [], "summary": "...", "links": [], "score": 7}
+  ]
+}
+```
+
+---
+
+### `POST /v1/api/edge/kb/read` (Console)
+
+One note by exact title, with its body. Requires `read`.
+
+**Request body:** `title` (string, required).
+
+**Response:** `{"ok": true, "found": true, "title": ..., "kind": ..., "repo": ..., "tags": [...], "summary": ..., "links": [...], "body": "..."}`
+
+**Error:** `404` with `{"ok": false, "found": false, "title": ...}` when no note
+has that title.
+
+---
+
+### `POST /v1/api/edge/kb/write` (Console)
+
+Write a note, or append to one. Attributed as `edge:<user_id>`. Requires
+`write`.
+
+**Request body:** `title` (required), `body`, `kind` (default `note`),
+`summary`, `tags` (string[]), `repo`, `append` (bool), `color` (`#rgb` /
+`#rrggbb`).
+
+**Response:**
+
+```json
+{"ok": true, "title": "Edge Note", "path": "/workspace/kb/edge-note.md", "appended": false, "links": ["Other"], "color": ""}
+```
+
+---
+
+### `POST /v1/api/edge/kb/experiment` (Console)
+
+Record an experiment the edge already ran. Pebble runs nothing. Requires
+`write`.
+
+**Request body:** `title` (required), `command` (required), `exit_code` (int,
+required), `hypothesis`, `output` (clipped to 4,000 chars),
+`duration_seconds`, `repo`, `commit`.
+
+**Response:**
+
+```json
+{"ok": true, "title": "Speed", "path": "/workspace/kb/speed.md", "verdict": "exit 2"}
+```
+
+---
+
+### `POST /v1/api/edge/sessions/arm-full-access` (Console)
+
+Arm full access on one of the caller's own workstreams so it runs unattended.
+Requires `write` **and** the `full_access` capability; refused for
+coordinator-minted tokens. See [auto-approve.md](auto-approve.md).
+
+**Request body:** `ws_id` (string, required).
+
+**Response:** the status object of
+[`/v1/api/workstreams/{ws_id}/full-access`](#getpost-v1apiworkstreamsws_idfull-access),
+plus `"ok": true`.
+
+**Errors:** `400` missing `ws_id`; `403` missing scope or capability;
+`404` the workstream does not exist **or belongs to someone else** (an edge
+client is confined to its own sessions); `503` the write did not commit.
+
+---
+
+### `POST /v1/api/edge/sessions/disarm-full-access` (Console)
+
+Disarm full access on one of the caller's own workstreams. Same requirements,
+body, response and errors as arming. A `503` here means the session **may
+still be armed** — retry, or disarm from the console.
+
+---
+
+### `POST /v1/api/edge/sessions/full-access-status` (Console)
+
+Whether one of the caller's own workstreams is armed, by whom and since when,
+plus `can_arm`. Requires `write` **and** `full_access`, like the other two
+(see [edge-backend.md](edge-backend.md#arming-a-session-full-access)).
+
+**Request body:** `ws_id` (string, required).
+
+**Response:** the status object, plus `"ok": true` and `can_arm`.
 
 ---
 

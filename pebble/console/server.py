@@ -57,6 +57,7 @@ from pebble.core.auth import (
     require_permission,
 )
 from pebble.core.deadline import DeadlineExceededError, run_with_deadline
+from pebble.core.edge_api import routes as edge_routes
 from pebble.core.mcp_crypto import is_user_scoped_auth
 from pebble.core.memory import get_workstream_display_names
 from pebble.core.rendezvous import NoAvailableNodeError
@@ -2641,6 +2642,33 @@ async def route_attachment_proxy(request: Request) -> Response:
             headers=response_headers,
         ),
     )
+
+
+def _full_access_ws_access(request: Request, ws_id: str) -> JSONResponse | None:
+    """Private-project visibility for the console's full-access route.
+
+    The same tenancy gate the node applies (``resolve_workstream_owner``);
+    the shared handler then enforces scope, capability and ownership.
+    """
+    from pebble.core.web_helpers import resolve_workstream_owner
+
+    _owner, err = resolve_workstream_owner(request, ws_id)
+    return err
+
+
+def _make_route_full_access() -> Any:
+    from pebble.core.full_access import make_http_handler
+
+    return make_http_handler(surface="console", ws_access=_full_access_ws_access)
+
+
+#: ``GET`` / ``POST /v1/api/route/workstreams/{ws_id}/full-access``.  Handled
+#: HERE rather than proxied to the owning node: the armed state lives in the
+#: shared ``workstream_config`` table and the node's approval gate reads it
+#: there, so the change lands without a node hop and still works when the
+#: owning node is down — which is exactly when an operator most wants to be
+#: able to disarm.
+route_full_access = _make_route_full_access()
 
 
 async def route_proxy(request: Request) -> Response:
@@ -7418,7 +7446,11 @@ async def admin_set_user_personas(request: Request) -> JSONResponse:
 
 async def admin_get_user_capabilities(request: Request) -> JSONResponse:
     """GET /v1/api/admin/users/{user_id}/capabilities — feature gates for a user."""
-    from pebble.core.access import CAPABILITY_CODE_DISPATCH, CAPABILITY_CODE_PUSH
+    from pebble.core.access import (
+        CAPABILITY_CODE_DISPATCH,
+        CAPABILITY_CODE_PUSH,
+        CAPABILITY_FULL_ACCESS,
+    )
     from pebble.core.auth import require_permission
     from pebble.core.web_helpers import require_storage_or_503
 
@@ -7445,6 +7477,15 @@ async def admin_get_user_capabilities(request: Request) -> JSONResponse:
                     "help": (
                         "Push and open PRs using the instance git token. Not needed "
                         "when the user has linked their own GitHub token below."
+                    ),
+                },
+                {
+                    "key": CAPABILITY_FULL_ACCESS,
+                    "label": "Arm full access",
+                    "help": (
+                        "Arm a session they own so every tool call in it runs without "
+                        "approval. Revoking this stops their armed sessions at the next "
+                        "tool call."
                     ),
                 },
             ],
@@ -15078,6 +15119,11 @@ def create_app(
                         methods=["POST"],
                     ),
                     Route(
+                        "/api/route/workstreams/{ws_id}/full-access",
+                        route_full_access,
+                        methods=["GET", "POST"],
+                    ),
+                    Route(
                         "/api/route/workstreams/{ws_id}/cancel",
                         route_proxy,
                         methods=["POST"],
@@ -15249,6 +15295,12 @@ def create_app(
                     # whose scope grants nothing else, and required_scope()
                     # matches this exact path.
                     Route("/api/skills/report", skills_report, methods=["POST"]),
+                    # Edge clients (sediment) reach skills and the vault over
+                    # HTTP here. required_scope() resolves the whole prefix to
+                    # 'read'; each handler enforces its own operation's scope
+                    # and capability, because a path-keyed rule is exactly
+                    # what let a read token write over /mcp.
+                    *edge_routes(),
                     Route("/api/admin/coding-jobs", admin_coding_jobs),
                     # Per-user access allow-lists (models + personas)
                     Route("/api/admin/users/{user_id}/models", admin_get_user_models),

@@ -43,6 +43,13 @@ CAPABILITY_CODE_PUSH = "code_push"
 #: notes must not thereby be able to install behaviour.
 CAPABILITY_SKILL_PUBLISH = "skill_publish"
 
+#: Capability gating arming FULL ACCESS on a workstream — every later tool call
+#: in it approved without a person.  Deliberately separate from ``write`` and
+#: from ``tools.approve``: whoever can send a session a message must not be able
+#: to turn its approval gate off, because the next message could then make it
+#: do anything without anyone being asked.  See ``docs/auto-approve.md``.
+CAPABILITY_FULL_ACCESS = "full_access"
+
 
 class _AccessStore(Protocol):
     def list_user_allowed_models(self, user_id: str) -> list[str]: ...
@@ -185,6 +192,23 @@ def can_publish_skills(storage: _AccessStore, user_id: str) -> bool:
     except Exception:
         # Matches the neighbours: this module has no logger by design, and the
         # caller is the one with the context worth logging.
+        return False
+
+
+def can_grant_full_access(storage: _AccessStore, user_id: str) -> bool:
+    """Whether *user_id* may arm full access on a workstream.
+
+    Same shape as :func:`can_publish_skills`: off by default and fails CLOSED.
+    A storage hiccup reading as a grant would switch off the approval gate
+    for every session the caller can reach.  The gate re-asks this about
+    whoever armed a session on every tool batch, so revoking the capability
+    also disarms that user's sessions in effect.
+    """
+    if not user_id:
+        return False
+    try:
+        return CAPABILITY_FULL_ACCESS in set(storage.list_user_capabilities(user_id))
+    except Exception:
         return False
 
 

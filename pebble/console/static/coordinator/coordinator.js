@@ -593,6 +593,7 @@ function createCoordinatorPane(root, wsId, opts) {
     "blanket",
     "auto_approve_tools",
     "smart_approval",
+    "full_access",
   ]);
   const UNKNOWN_AUTO_APPROVE_REASON = "unknown";
 
