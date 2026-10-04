@@ -513,3 +513,24 @@ class TestAgentModelRejection:
         from pebble.core.session import _is_agent_model_rejection
 
         assert not _is_agent_model_rejection(error)
+
+
+class TestDeriveExperimentTitle:
+    def test_prefers_hypothesis_first_line(self) -> None:
+        from pebble.core.session import _derive_experiment_title
+
+        assert (
+            _derive_experiment_title("pytest passes on [[sediment]]\nmore", "pytest -q")
+            == "pytest passes on sediment"
+        )
+
+    def test_falls_back_to_command_and_trims(self) -> None:
+        from pebble.core.session import _derive_experiment_title
+
+        title = _derive_experiment_title("", "cd /w && " + "x" * 100)
+        assert title.startswith("cd /w &&") and title.endswith("...") and len(title) <= 60
+
+    def test_empty_stays_empty_so_validation_still_fires(self) -> None:
+        from pebble.core.session import _derive_experiment_title
+
+        assert _derive_experiment_title("", "") == ""

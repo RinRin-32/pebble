@@ -1221,6 +1221,17 @@ def _is_agent_model_rejection(error: str) -> bool:
     )
 
 
+def _derive_experiment_title(hypothesis: str, command: str) -> str:
+    """A note title for a ``kb experiment`` called without one: the hypothesis's
+    first line, else the command's, trimmed to a readable wikilink."""
+    for source in (hypothesis, command):
+        line = next((ln.strip() for ln in source.splitlines() if ln.strip()), "")
+        line = re.sub(r"[\[\]|#^]", "", line).strip(" .:")
+        if line:
+            return line if len(line) <= 60 else line[:57].rstrip() + "..."
+    return ""
+
+
 def _coerce_event_id(value: Any) -> int | None:
     """Narrow a duck-typed hook return / attribute to a usable event id.
 
@@ -17229,6 +17240,13 @@ class ChatSession:
                 "error": f"Error: action must be one of {', '.join(sorted(valid))}",
             }
         title = (args.get("title") or "").strip()
+        if action == "experiment" and not title:
+            # Models routinely omit the title on experiments (the schema used
+            # to list it as required only for read/write/append/links) and then
+            # burn a turn on the rejection.  Name the note after what it tests.
+            title = _derive_experiment_title(
+                str(args.get("hypothesis") or ""), str(args.get("command") or "")
+            )
         query = (args.get("query") or "").strip()
         label = title or query or "(vault)"
         tags = args.get("tags")
