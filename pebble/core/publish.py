@@ -82,8 +82,27 @@ def commit_all(cwd: Path, cred: ResolvedCredential, message: str) -> str:
 
 
 def push_branch(cwd: Path, cred: ResolvedCredential, branch: str) -> str:
-    """Push *branch* to origin, setting upstream on first push."""
-    return _run(["git", "push", "-u", "origin", branch], cwd=cwd, cred=cred)
+    """Push *branch* to origin, setting upstream on first push.
+
+    Worktrees hang off a ``git clone --mirror`` (see ``workspace``), whose
+    config sets ``remote.origin.mirror=true`` — and git refuses ANY refspec
+    push to a mirror remote ("--mirror can't be combined with refspecs"), so
+    every publish failed.  Override it for this one push only: the shared
+    mirror config stays as-is for the fetches that rely on it.
+    """
+    return _run(
+        [
+            "git",
+            "-c",
+            "remote.origin.mirror=false",
+            "push",
+            "-u",
+            "origin",
+            f"{branch}:refs/heads/{branch}",
+        ],
+        cwd=cwd,
+        cred=cred,
+    )
 
 
 def remote_url(cwd: Path, cred: ResolvedCredential) -> str:

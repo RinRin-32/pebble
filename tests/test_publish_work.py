@@ -199,3 +199,62 @@ class TestSecretCipher:
         from pebble.core.secret_cipher import decrypt, encrypt
 
         assert decrypt(encrypt("hello")) == "hello"
+
+
+class TestPushFromMirrorWorktree:
+    """Worktrees hang off a ``git clone --mirror``; git refuses refspec pushes
+    to a mirror remote, which made every ``publish_work`` push fail."""
+
+    def test_branch_push_from_mirror_worktree(self, tmp_path: Any) -> None:
+        import subprocess
+
+        from pebble.core.publish import push_branch
+
+        def git(*args: str, cwd: Any = tmp_path) -> str:
+            return subprocess.run(
+                ["git", *args], cwd=str(cwd), check=True, capture_output=True, text=True
+            ).stdout.strip()
+
+        origin = tmp_path / "origin.git"
+        git("init", "-q", "--bare", "-b", "main", str(origin))
+        seed = tmp_path / "seed"
+        git("clone", "-q", str(origin), str(seed))
+        git(
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "seed",
+            cwd=seed,
+        )
+        git("push", "-q", "origin", "HEAD:main", cwd=seed)
+
+        mirror = tmp_path / "mirror.git"
+        git("clone", "-q", "--mirror", str(origin), str(mirror))
+        wt = tmp_path / "wt"
+        git("--git-dir", str(mirror), "worktree", "add", "-q", "-b", "pebble/x", str(wt), "main")
+        git(
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "work",
+            cwd=wt,
+        )
+
+        cred = ResolvedCredential(token="", host="github.com", login="", source="none")
+        push_branch(wt, cred, "pebble/x")
+
+        assert git("--git-dir", str(origin), "rev-parse", "pebble/x") == git(
+            "rev-parse", "HEAD", cwd=wt
+        )
+        # The shared mirror config is untouched for later fetches.
+        assert git("--git-dir", str(mirror), "config", "remote.origin.mirror") == "true"

@@ -7,6 +7,8 @@ and re-reading them is the behaviour that matters.
 from __future__ import annotations
 
 import contextlib
+import os
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -211,6 +213,32 @@ class TestExperiments:
     def test_timeout_is_recorded_not_raised(self, tmp_path: Path) -> None:
         res = kb.run_experiment("sleep 5", cwd=tmp_path, timeout=1)
         assert res.timed_out is True and res.ok is False
+
+    def test_background_child_does_not_hold_the_experiment_open(self, tmp_path: Path) -> None:
+        """A command that backgrounds a server (an integration check against a
+        stub) used to block until the timeout: the child inherited the output
+        pipe, so EOF never came."""
+        res = kb.run_experiment("sleep 30 & echo started", cwd=tmp_path, timeout=20)
+        assert res.timed_out is False and res.ok is True
+        assert "started" in res.output
+        assert res.duration_s < 10
+
+    def test_background_children_are_killed(self, tmp_path: Path) -> None:
+        marker = tmp_path / "pid"
+        kb.run_experiment(f"sleep 30 & echo $! > {marker}", cwd=tmp_path)
+        pid = int(marker.read_text().strip())
+        time.sleep(0.2)
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    def test_timeout_kills_the_whole_group(self, tmp_path: Path) -> None:
+        marker = tmp_path / "pid"
+        res = kb.run_experiment(f"sleep 30 & echo $! > {marker}; sleep 30", cwd=tmp_path, timeout=1)
+        assert res.timed_out is True
+        pid = int(marker.read_text().strip())
+        time.sleep(0.2)
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
 
     def test_note_carries_provenance(self, tmp_path: Path) -> None:
         res = kb.run_experiment("echo measured", cwd=tmp_path)

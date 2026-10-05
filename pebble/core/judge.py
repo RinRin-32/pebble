@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pebble.core.backend_gate import backend_gate, client_base_url, hold
 from pebble.core.deadline import (
     DeadlineCancelledError,
     DeadlineExceededError,
@@ -101,6 +102,9 @@ class JudgeConfig:
     output_guard_llm: bool = False  # enable LLM stage on tool output (issue #560 mitigation #1)
     output_guard_model: str = ""  # alias for the LLM stage; empty = inherit session model
     output_guard_llm_timeout: float = 60.0  # wall-clock budget for the LLM stage
+    # Concurrent judge calls per inference server, per process (0 = unlimited).
+    # Bounds judge fan-out so it can't exhaust a shared local KV pool.
+    max_concurrent_per_backend: int = 2
     redact_secrets: bool = True
     # True = the approval gate's resolution aborts remaining evaluations
     # (saves inference; undone items degrade to ``llm_fallback`` verdicts
@@ -1385,8 +1389,12 @@ class IntentJudge:
                 )
 
             # Per-turn timeout: each turn gets a fresh budget so local
-            # models aren't penalised for slow earlier turns.
+            # models aren't penalised for slow earlier turns.  Time spent
+            # queued on the backend gate counts against it.
             per_call_timeout = max(self._config.timeout, 5.0)  # at least 5s
+            gate = backend_gate(
+                client_base_url(lane.client), self._config.max_concurrent_per_backend
+            )
             try:
                 # Each turn runs on its own daemon worker (1s cancel polling).
                 # A timeout or cancel abandons the call without pinning a
@@ -1405,15 +1413,18 @@ class IntentJudge:
                 # iteration; the binding makes the per-turn capture explicit
                 # (and satisfies B023 in the loop).
                 def _sample(
-                    ref: StreamAbortRef, _tools: list[dict[str, Any]] | None = turn_tools
+                    ref: StreamAbortRef,
+                    _tools: list[dict[str, Any]] | None = turn_tools,
+                    _gate: threading.BoundedSemaphore | None = gate,
                 ) -> ModelTurnResult:
-                    return model_turn(
-                        lane,
-                        judge_turns,
-                        tools=_tools,
-                        max_tokens=2048,
-                        cancel_ref=ref,
-                    )
+                    with hold(_gate, ref):
+                        return model_turn(
+                            lane,
+                            judge_turns,
+                            tools=_tools,
+                            max_tokens=2048,
+                            cancel_ref=ref,
+                        )
 
                 result = run_abortable_with_deadline(
                     _sample,

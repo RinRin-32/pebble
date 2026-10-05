@@ -714,6 +714,20 @@ def _build_registry() -> dict[str, SettingDef]:
             "chosen output_guard_model's typical latency at the configured effort.",
         ),
         SettingDef(
+            "judge.max_concurrent_per_backend",
+            "int",
+            2,
+            "Concurrent judge calls per inference server",
+            "judge",
+            min_value=0,
+            help="Upper bound on simultaneous judge evaluations each node sends to one "
+            "inference server (0 = unlimited). Extra evaluations queue, and queue time "
+            "counts against judge.timeout. A local server whose parallel slots share "
+            "one KV cache (llama.cpp auto --parallel) can run out of cache when a "
+            "batch of tool calls fans out judges beside a long main-loop stream; "
+            "set 1 for a single local server.",
+        ),
+        SettingDef(
             "judge.redact_secrets",
             "bool",
             True,
