@@ -630,6 +630,8 @@ class TestCommandEvidence:
             _cc_text("Reading the module first."),
             _cc_text("Now writing tests."),
             json.dumps({"type": "result", "is_error": False, "result": "Done: 3 files."}),
+            # A stray message after the result must not displace it.
+            _cc_text("trailing chatter"),
         ]
         res = run_agent(_FakeClaude(lines), "go", cwd=str(tmp_path))
         assert res.final_answer == "Done: 3 files."

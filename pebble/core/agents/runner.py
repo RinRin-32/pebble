@@ -153,7 +153,7 @@ def run_agent(
     seen_session = session_id
 
     def _handle(ev: AgentEvent) -> None:
-        nonlocal total_cost, final_cost, seen_session
+        nonlocal total_cost, final_cost, seen_session, final_answer
         if ev.session_id:
             seen_session = ev.session_id
         # Cost semantics are per-adapter and not interchangeable: summing a
