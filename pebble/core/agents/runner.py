@@ -26,6 +26,7 @@ from pebble.core.agents.base import (
     AgentAdapter,
     AgentEvent,
     AgentResult,
+    CommandRun,
 )
 from pebble.core.git_identity import agent_env
 from pebble.core.log import get_logger
@@ -46,6 +47,35 @@ _SYSTEM_PATHS = ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "
 # Text events are joined for the final answer; cap so a runaway agent can't
 # balloon the tool result that goes back into the model's context.
 _MAX_FINAL_TEXT = 20_000
+
+#: Tool names that run a shell command, across the supported agent CLIs.
+_SHELL_TOOLS = frozenset({"bash", "shell", "exec_command", "run_command", "local_shell"})
+
+#: How the agent CLIs word a command their own permission gate refused.
+_DENIAL_MARKERS = (
+    "haven't granted",
+    "requires approval",
+    "permission denied by",
+    "was denied",
+    "not allowed to run",
+    "rejected by user",
+)
+
+
+def _shell_command(ev: AgentEvent) -> str:
+    if ev.tool_name.strip().lower() not in _SHELL_TOOLS:
+        return ""
+    cmd = ev.tool_input.get("command") or ev.tool_input.get("cmd") or ""
+    if isinstance(cmd, list):
+        cmd = " ".join(str(c) for c in cmd)
+    return str(cmd).strip()
+
+
+def _command_status(ev: AgentEvent) -> str:
+    out = ev.tool_output.lower()
+    if any(m in out for m in _DENIAL_MARKERS):
+        return "denied"
+    return "failed" if ev.is_error else "ok"
 
 
 def _normalized_path(path: str) -> str:
@@ -116,6 +146,8 @@ def run_agent(
         child_env.pop("ANTHROPIC_API_KEY", None)
 
     texts: list[str] = []
+    final_answer = ""
+    pending: list[tuple[str, CommandRun]] = []
     total_cost = 0.0
     final_cost = 0.0
     seen_session = session_id
@@ -135,8 +167,25 @@ def run_agent(
         result.output_tokens += ev.output_tokens
         if ev.kind == "tool_use":
             result.tool_calls += 1
+            command = _shell_command(ev)
+            if command:
+                run = CommandRun(command=command)
+                result.commands.append(run)
+                pending.append((ev.tool_id, run))
+        elif ev.kind == "tool_result" and pending:
+            # Pair by id when the CLI gives one; otherwise results arrive in
+            # call order.  Results of non-shell tools find no id match and,
+            # with ids present, must not consume a pending command.
+            idx = next((i for i, (tid, _) in enumerate(pending) if tid and tid == ev.tool_id), -1)
+            if idx < 0 and not ev.tool_id:
+                idx = 0
+            if idx >= 0:
+                _, run = pending.pop(idx)
+                run.status = _command_status(ev)
         elif ev.kind in {"text", "done"} and ev.text:
             texts.append(ev.text)
+            if ev.kind == "done":
+                final_answer = ev.text
         elif ev.kind == "error" and ev.error:
             result.error = ev.error
         if on_event is not None:
@@ -214,6 +263,7 @@ def run_agent(
     result.session_id = seen_session
     result.cost_usd = final_cost if adapter.cost_mode == COST_TOTAL else total_cost
     result.final_text = "\n".join(t for t in texts if t).strip()[:_MAX_FINAL_TEXT]
+    result.final_answer = (final_answer or (texts[-1] if texts else "")).strip()[:_MAX_FINAL_TEXT]
     if not result.error and result.exit_code not in (0, None):
         detail = " | ".join(stderr_tail[-5:]).strip()
         result.error = f"{adapter.name} exited {result.exit_code}{f': {detail}' if detail else ''}"

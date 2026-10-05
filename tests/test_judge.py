@@ -1162,3 +1162,50 @@ class TestModelAliasResolution:
         assert callback_results[0].tier == "llm"
         assert callback_results[0].tier != "llm_fallback"
         assert "did not return a verdict" not in callback_results[0].reasoning
+
+
+class TestHeuristicOnly:
+    """``llm=False``: an auto-approved batch's verdict can't change the outcome,
+    so the LLM tier is skipped rather than competing with the main loop."""
+
+    def test_no_daemon_no_model_call_and_done_fires(self) -> None:
+        provider = _make_mock_provider()
+        judge = _make_judge(provider)
+        done = []
+        callbacks = []
+        items = [{"func_name": "bash", "func_args": {"command": "ls"}, "call_id": "c1"}]
+        before = {t.name for t in threading.enumerate()}
+        verdicts = judge.evaluate(
+            items, [], callback=callbacks.append, done_callback=lambda: done.append(1), llm=False
+        )
+        assert len(verdicts) == 1 and verdicts[0].tier == "heuristic"
+        assert done == [1] and callbacks == []
+        assert "intent-judge" not in {t.name for t in threading.enumerate()} - before
+        provider.create_streaming.assert_not_called()
+
+
+class TestBatchAutoApproved:
+    def _session(self, ui: object) -> object:
+        from pebble.core.session import ChatSession
+
+        s = ChatSession.__new__(ChatSession)
+        s.ui = ui  # type: ignore[attr-defined]
+        return s
+
+    def test_blanket_and_armed_are_auto_approved(self) -> None:
+        from types import SimpleNamespace
+
+        assert self._session(SimpleNamespace(auto_approve=True))._batch_auto_approved()
+        armed = SimpleNamespace(auto_approve=False, _full_access_armed=lambda: True)
+        assert self._session(armed)._batch_auto_approved()
+
+    def test_unknown_or_failing_ui_is_not(self) -> None:
+        from types import SimpleNamespace
+
+        assert not self._session(SimpleNamespace())._batch_auto_approved()
+
+        def boom() -> bool:
+            raise RuntimeError
+
+        failing = SimpleNamespace(auto_approve=False, _full_access_armed=boom)
+        assert not self._session(failing)._batch_auto_approved()

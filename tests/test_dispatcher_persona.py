@@ -101,3 +101,40 @@ class TestDispatcherPersona:
         prompt = (dispatcher["base_prompt"] or "").lower()
         assert "do not write code" in prompt or "not write code" in prompt
         assert "dispatch_agent" in prompt
+
+
+def _flow_migration() -> Any:
+    path = (
+        Path(__file__).parent.parent
+        / "pebble/core/storage/migrations/versions/082_dispatcher_flow.py"
+    )
+    spec = importlib.util.spec_from_file_location("m082", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestDispatcherFlowPrompt:
+    """082: the dispatcher measured 44-60 exploration calls before dispatching
+    and 30-40 minutes re-verifying afterwards."""
+
+    def test_budgets_exploration_and_briefs(self) -> None:
+        prompt = _flow_migration().PROMPT.lower()
+        assert "at most 8 read/search calls" in prompt
+        assert "2,500 characters" in prompt
+        assert "done when" in prompt
+
+    def test_trusts_observed_results_and_amends_instead_of_rewriting(self) -> None:
+        prompt = _flow_migration().PROMPT.lower()
+        assert "trust a ✓" in prompt
+        assert "continue_session=true" in prompt and "never rewrite the whole brief" in prompt
+
+    def test_stops_on_repeated_failure_and_keeps_the_constraint(self) -> None:
+        prompt = _flow_migration().PROMPT.lower()
+        assert "fails twice" in prompt
+        assert "do not write code" in prompt and "dispatch_agent" in prompt
+
+    def test_only_replaces_the_shipped_prompt(self) -> None:
+        m = _flow_migration()
+        assert m._previous_prompt().strip() == _migration().PROMPT.strip()
+        assert m.down_revision == "081"

@@ -120,6 +120,7 @@ class ClaudeCodeAdapter(AgentAdapter):
                         tool_name=str(block.get("name") or ""),
                         tool_input=tool_input,
                         session_id=session_id,
+                        tool_id=str(block.get("id") or ""),
                     )
                 )
             elif btype == "tool_result":
@@ -133,6 +134,8 @@ class ClaudeCodeAdapter(AgentAdapter):
                         kind="tool_result",
                         tool_output=str(out or ""),
                         session_id=session_id,
+                        tool_id=str(block.get("tool_use_id") or ""),
+                        is_error=bool(block.get("is_error")),
                     )
                 )
         return events
