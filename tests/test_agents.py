@@ -553,3 +553,114 @@ class TestDeriveExperimentTitle:
         from pebble.core.session import _derive_experiment_title
 
         assert _derive_experiment_title("", "") == ""
+
+
+class _FakeClaude(_FakeAgent):
+    """Same canned-stream trick, parsed as Claude Code stream-json."""
+
+    def parse_line(self, line: str) -> list:
+        return get_adapter("claude").parse_line(line)  # type: ignore[union-attr]
+
+
+def _cc_tool_use(tid: str, name: str, command: str) -> str:
+    return json.dumps(
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "id": tid, "name": name, "input": {"command": command}}
+                ]
+            },
+        }
+    )
+
+
+def _cc_tool_result(tid: str, text: str, is_error: bool = False) -> str:
+    return json.dumps(
+        {
+            "type": "user",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tid,
+                        "content": text,
+                        "is_error": is_error,
+                    }
+                ]
+            },
+        }
+    )
+
+
+def _cc_text(text: str) -> str:
+    return json.dumps(
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}}
+    )
+
+
+class TestCommandEvidence:
+    """The dispatch result reports what the harness SAW the agent run, so the
+    dispatcher can trust "tests passed" instead of re-running everything."""
+
+    def test_commands_are_paired_with_their_outcomes(self, tmp_path) -> None:
+        lines = [
+            _cc_tool_use("a", "Bash", "uv run pytest"),
+            _cc_tool_use("b", "Read", ""),
+            _cc_tool_result("b", "file body"),
+            _cc_tool_result("a", "117 passed"),
+            _cc_tool_use("c", "Bash", "ruff check ."),
+            _cc_tool_result("c", "E501 ...", is_error=True),
+            _cc_tool_use("d", "Bash", "uv sync"),
+            _cc_tool_result(
+                "d",
+                "Claude requested permissions to use Bash, but you haven't granted it yet.",
+                is_error=True,
+            ),
+        ]
+        res = run_agent(_FakeClaude(lines), "go", cwd=str(tmp_path))
+        assert [(c.command, c.status) for c in res.commands] == [
+            ("uv run pytest", "ok"),
+            ("ruff check .", "failed"),
+            ("uv sync", "denied"),
+        ]
+
+    def test_final_answer_is_the_result_not_the_narration(self, tmp_path) -> None:
+        lines = [
+            _cc_text("Reading the module first."),
+            _cc_text("Now writing tests."),
+            json.dumps({"type": "result", "is_error": False, "result": "Done: 3 files."}),
+            # A stray message after the result must not displace it.
+            _cc_text("trailing chatter"),
+        ]
+        res = run_agent(_FakeClaude(lines), "go", cwd=str(tmp_path))
+        assert res.final_answer == "Done: 3 files."
+        assert "Reading the module" in res.final_text  # full narration still kept
+
+    def test_final_answer_falls_back_to_last_text(self, tmp_path) -> None:
+        res = run_agent(_FakeClaude([_cc_text("first"), _cc_text("last")]), "go", cwd=str(tmp_path))
+        assert res.final_answer == "last"
+
+
+class TestDispatchEvidence:
+    def _result(self, **kw):
+        from pebble.core.agents import AgentResult
+
+        return AgentResult(**kw)
+
+    def test_denials_point_an_unarmed_session_at_the_operator(self) -> None:
+        from pebble.core.agents import CommandRun
+        from pebble.core.session import _dispatch_evidence
+
+        res = self._result(commands=[CommandRun("pytest", "denied")], final_answer="ok")
+        text = "\n".join(_dispatch_evidence(res, unattended=False))
+        assert "⊘ pytest" in text
+        assert "arm" in text and "full access" in text
+
+    def test_answer_is_bounded(self) -> None:
+        from pebble.core.session import _DISPATCH_ANSWER_CHARS, _dispatch_evidence
+
+        res = self._result(final_answer="x" * 50_000)
+        text = "\n".join(_dispatch_evidence(res, unattended=True))
+        assert len(text) < _DISPATCH_ANSWER_CHARS + 200
+        assert "none observed" in text

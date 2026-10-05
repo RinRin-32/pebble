@@ -60,6 +60,61 @@ class RepeatDetector:
         self._count = 0
 
 
+class ErrorStreakDetector:
+    """Detect a tool failing the same way on consecutive calls, whatever the
+    arguments.
+
+    :class:`RepeatDetector` only catches IDENTICAL calls, and the loops seen in
+    practice vary their arguments: ``bind_repo`` retried four ways, ``kb``
+    resent four times without the field the error named.  Keyed on
+    ``(tool, normalized error)``: digits and paths vary between attempts, the
+    failure mode does not.  A success of that tool, or a different failure,
+    resets it.  (opencode's doom-loop guard is the identical-call version.)
+    """
+
+    def __init__(self) -> None:
+        self._key: tuple[str, str] | None = None
+        self._count = 0
+
+    @staticmethod
+    def _normalize(error: str) -> str:
+        first = next((ln.strip() for ln in error.splitlines() if ln.strip()), "")
+        first = re.sub(r"\d+", "#", first)
+        first = re.sub(r"(/[\w.\-]+)+", "<path>", first)
+        return first[:80].lower()
+
+    def record(self, tool: str, *, error: str | None) -> int:
+        """Record one call's outcome; return the current streak length
+        (0 after a success)."""
+        if error is None:
+            if self._key and self._key[0] == tool:
+                self.clear()
+            return 0
+        key = (tool, self._normalize(error))
+        if key == self._key:
+            self._count += 1
+        else:
+            self._key, self._count = key, 1
+        return self._count
+
+    def clear(self) -> None:
+        self._key = None
+        self._count = 0
+
+
+def error_streak_warning(tool: str, count: int) -> str:
+    """Inline warning appended to the failing tool's result."""
+    if count >= 3:
+        return (
+            f"\n\n⚠ `{tool}` has now failed the same way {count} times in a row. "
+            "Stop retrying it. Report the blocker and what would unblock it."
+        )
+    return (
+        f"\n\n⚠ `{tool}` failed the same way twice in a row. Do not retry with "
+        "variations — fix what the error names, or report the blocker."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Nudge messages (brief, model-facing hints)
 # ---------------------------------------------------------------------------

@@ -728,6 +728,17 @@ def _build_registry() -> dict[str, SettingDef]:
             "set 1 for a single local server.",
         ),
         SettingDef(
+            "judge.llm_when_auto_approved",
+            "bool",
+            False,
+            "Run the LLM judge on auto-approved batches",
+            "judge",
+            help="When a batch is approved regardless of the judge (the workstream's blanket "
+            "auto_approve, or full access armed), off records the heuristic verdict only and "
+            "skips the LLM call, which on a shared local model competes with the session's "
+            "own main loop. Turn on to keep an LLM verdict for every call in the audit trail.",
+        ),
+        SettingDef(
             "judge.redact_secrets",
             "bool",
             True,

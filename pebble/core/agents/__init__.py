@@ -14,6 +14,7 @@ from pebble.core.agents.base import (
     AgentAdapter,
     AgentEvent,
     AgentResult,
+    CommandRun,
 )
 from pebble.core.agents.claude_code import ClaudeCodeAdapter
 from pebble.core.agents.codex import CodexAdapter
@@ -47,6 +48,7 @@ __all__ = [
     "AgentAdapter",
     "AgentEvent",
     "AgentResult",
+    "CommandRun",
     "ClaudeCodeAdapter",
     "CodexAdapter",
     "OpenCodeAdapter",

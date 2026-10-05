@@ -75,7 +75,11 @@ full-access row is not even read in that case. Behaviour for every existing
   workstream is armed on its own `ws_id`.
 - **Tool errors, output guards, the judge's verdicts.** Full access answers
   only one question, "may this run without asking?" Everything that happens
-  around a tool call still happens, and the judge still records its verdict.
+  around a tool call still happens, and the judge still records a verdict.
+  By default that verdict is heuristic only. The LLM judge can't change what
+  happens to an armed or blanket batch, and on a shared local model it would
+  compete with the session's own main loop. Set
+  `judge.llm_when_auto_approved` to run the LLM tier anyway.
 
 ### Dispatched coding agents
 

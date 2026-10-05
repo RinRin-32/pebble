@@ -6162,6 +6162,49 @@ class TestApplyPostExecuteAdvisories:
                 )
         assert any(t == "repeat" for t, _ in _tool_pending(session))
 
+    def test_varied_args_same_failure_warns_and_skips_memory_nudge(self, tmp_db):
+        """The loop seen in dispatcher sessions: kb(experiment) resent with
+        different args, each time failing on the same missing field.  The
+        identical-sig detector can't see it; the error-streak one must, and
+        the generic 'check your memories' nudge must not pile on."""
+        session = _make_session()
+        self._prime(session)
+        outputs = []
+        with patch.object(session, "_visible_memory_count", return_value=5):
+            for i, args in enumerate(
+                ['{"command": "ls"}', '{"command": "pwd"}', '{"command": "id"}']
+            ):
+                tc_id = f"tc_{i}"
+                session._tool_error_flags[tc_id] = True
+                results = [(tc_id, "Error: title is required for experiment")]
+                if i == 0:
+                    session._metacog_state.clear()
+                session._apply_post_execute_advisories([self._tc(tc_id, "kb", args)], results)
+                outputs.append(results[0][1])
+                if i == 0:
+                    session._nudge_queue.clear()
+        assert "failed the same way" not in outputs[0]
+        assert "failed the same way twice" in outputs[1]
+        assert "3 times in a row" in outputs[2] and "Stop retrying" in outputs[2]
+        assert all(t != "tool_error" for t, _ in _tool_pending(session))
+
+    def test_success_breaks_the_error_streak(self, tmp_db):
+        session = _make_session()
+        self._prime(session)
+        seq = [(True, "Error: boom"), (False, "ok"), (True, "Error: boom")]
+        last = ""
+        with patch.object(session, "_visible_memory_count", return_value=0):
+            for i, (failed, out) in enumerate(seq):
+                tc_id = f"tc_{i}"
+                if failed:
+                    session._tool_error_flags[tc_id] = True
+                results = [(tc_id, out)]
+                session._apply_post_execute_advisories(
+                    [self._tc(tc_id, "bind_repo", f'{{"repo": "r{i}"}}')], results
+                )
+                last = results[0][1]
+        assert "failed the same way" not in last
+
     def test_intervening_different_sig_resets_streak(self, tmp_db):
         """Streak semantics: [A, A, B, A] does NOT fire — B breaks the run."""
         session = _make_session()

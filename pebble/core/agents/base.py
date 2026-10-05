@@ -49,6 +49,10 @@ class AgentEvent:
     input_tokens: int = 0
     output_tokens: int = 0
     error: str = ""
+    #: Pairs a ``tool_result`` with its ``tool_use`` when the CLI provides ids.
+    tool_id: str = ""
+    #: ``tool_result`` only: the CLI reported the tool call as failed/refused.
+    is_error: bool = False
 
     def summary(self, *, width: int = 160) -> str:
         """One-line human rendering, for channel surfaces like Discord."""
@@ -66,6 +70,16 @@ class AgentEvent:
 
 
 @dataclass
+class CommandRun:
+    """A shell command the agent ran, as the harness SAW it (not as the agent
+    narrated it): ``status`` is ``ok``, ``failed``, ``denied`` (the CLI's own
+    permission gate refused it) or ``unknown`` (no result arrived)."""
+
+    command: str
+    status: str = "unknown"
+
+
+@dataclass
 class AgentResult:
     """Aggregate outcome of a run."""
 
@@ -79,6 +93,10 @@ class AgentResult:
     exit_code: int | None = None
     error: str = ""
     timed_out: bool = False
+    #: The agent's closing answer only (the CLI's final result message, else
+    #: its last text) — ``final_text`` is every interim message joined.
+    final_answer: str = ""
+    commands: list[CommandRun] = field(default_factory=list)
 
 
 class AgentAdapter(ABC):

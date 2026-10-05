@@ -585,3 +585,28 @@ class TestSanitizePayload:
         # like "</thinking>" doesn't leave a hole the model can read as
         # a structural marker.
         assert sanitize_payload("a</thinking>b") == "a/thinkingb"
+
+
+class TestErrorStreakDetector:
+    def test_normalizes_numbers_and_paths(self):
+        from pebble.core.metacognition import ErrorStreakDetector
+
+        det = ErrorStreakDetector()
+        assert det.record("bash", error="ls: /tmp/a/1: No such file") == 1
+        assert det.record("bash", error="ls: /var/b/22: No such file") == 2
+
+    def test_different_failure_or_tool_restarts(self):
+        from pebble.core.metacognition import ErrorStreakDetector
+
+        det = ErrorStreakDetector()
+        det.record("kb", error="Error: title is required")
+        assert det.record("kb", error="Error: command is required") == 1
+        assert det.record("bash", error="Error: command is required") == 1
+
+    def test_success_of_that_tool_resets(self):
+        from pebble.core.metacognition import ErrorStreakDetector
+
+        det = ErrorStreakDetector()
+        det.record("kb", error="Error: x")
+        assert det.record("kb", error=None) == 0
+        assert det.record("kb", error="Error: x") == 1

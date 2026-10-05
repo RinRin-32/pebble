@@ -5254,6 +5254,7 @@ def main() -> None:
             output_guard_model=config_store.get("judge.output_guard_model"),
             output_guard_llm_timeout=config_store.get("judge.output_guard_llm_timeout"),
             max_concurrent_per_backend=config_store.get("judge.max_concurrent_per_backend"),
+            llm_when_auto_approved=config_store.get("judge.llm_when_auto_approved"),
             redact_secrets=config_store.get("judge.redact_secrets"),
         )
 

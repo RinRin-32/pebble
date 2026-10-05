@@ -105,6 +105,10 @@ class JudgeConfig:
     # Concurrent judge calls per inference server, per process (0 = unlimited).
     # Bounds judge fan-out so it can't exhaust a shared local KV pool.
     max_concurrent_per_backend: int = 2
+    # Run the LLM tier even when the batch is auto-approved regardless of its
+    # verdict (blanket auto_approve / full access).  Off: heuristic only, so
+    # an unattended session's judge doesn't compete with its own main loop.
+    llm_when_auto_approved: bool = False
     redact_secrets: bool = True
     # True = the approval gate's resolution aborts remaining evaluations
     # (saves inference; undone items degrade to ``llm_fallback`` verdicts
@@ -1109,8 +1113,15 @@ class IntentJudge:
         callback: Callable[[IntentVerdict], None],
         cancel_event: threading.Event | None = None,
         done_callback: Callable[[], None] | None = None,
+        *,
+        llm: bool = True,
     ) -> list[IntentVerdict]:
         """Evaluate tool calls. Returns heuristic verdicts immediately.
+
+        ``llm=False`` stops after the heuristic tier: no daemon, no model
+        call, and *done_callback* fires before returning.  Callers use it when
+        the batch's approval is already decided (blanket / full access), so
+        the LLM tier would only compete with the main loop for inference.
 
         Spawns a daemon thread for the LLM judge. When the LLM verdict
         is ready, *callback* is invoked (from the daemon thread) with
@@ -1156,6 +1167,14 @@ class IntentJudge:
                 func_name, func_args, approval_label, call_id, rules=registry_rules
             )
             heuristic_verdicts.append(verdict)
+
+        if not llm:
+            if done_callback is not None:
+                try:
+                    done_callback()
+                except Exception:
+                    log.debug("judge.done_callback_failed", exc_info=True)
+            return heuristic_verdicts
 
         # Spawn daemon thread for LLM judge
         thread = threading.Thread(

@@ -118,9 +118,11 @@ from pebble.core.metacognition import (
     MEMORY_NUDGE_TYPES,
     NUDGE_COMPACTION_RESUME,
     NUDGE_COMPACTION_RESUME_NO_RECALL,
+    ErrorStreakDetector,
     RepeatDetector,
     detect_completion,
     detect_correction,
+    error_streak_warning,
     format_nudge,
     sanitize_payload,
     should_nudge,
@@ -1204,6 +1206,58 @@ def _is_kv_pool_exhausted(exc: BaseException) -> bool:
     return "context size has been exceeded" in str(exc).lower()
 
 
+#: Inline diff budget for a dispatch result.  The full 60 KB diff used to be
+#: the single largest item in the dispatcher's context on every dispatch (and
+#: was always truncated anyway); the stat plus a bounded diff is enough to
+#: review, and read_file covers the rest.
+_DISPATCH_DIFF_BYTES = 12_000
+_DISPATCH_ANSWER_CHARS = 2_500
+_DISPATCH_COMMANDS_SHOWN = 15
+
+
+def _dispatch_evidence(result: Any, *, unattended: bool) -> list[str]:
+    """The dispatch result's middle: what the HARNESS saw the agent run, then
+    the agent's closing answer — not every interim message it narrated.
+
+    Commands come from the agent's tool events, so "pytest passed" here is an
+    observed fact the dispatcher can trust instead of re-running by hand.
+    """
+    parts: list[str] = []
+    commands = list(result.commands)
+    if commands:
+        marks = {"ok": "✓", "failed": "✗", "denied": "⊘", "unknown": "?"}
+        shown = commands[-_DISPATCH_COMMANDS_SHOWN:]
+        lines = [
+            f"Commands the agent ran (harness-observed, {len(commands)} total"
+            + (f", last {len(shown)} shown" if len(shown) < len(commands) else "")
+            + "):"
+        ]
+        for c in shown:
+            cmd = c.command.replace("\n", " ⏎ ")
+            lines.append(f"  {marks.get(c.status, '?')} {cmd[:160]}")
+        parts.append("\n" + "\n".join(lines))
+        denied = sum(1 for c in commands if c.status == "denied")
+        if denied:
+            hint = (
+                "It could not run or test its work."
+                if unattended
+                else "Its CLI refuses shell commands in a headless run unless this "
+                "workstream is armed for full access — ask the operator to arm it "
+                "rather than re-running everything by hand."
+            )
+            parts.append(
+                f"⊘ {denied} command(s) were refused by the agent's permission gate. {hint}"
+            )
+    else:
+        parts.append("\nCommands the agent ran: none observed.")
+    answer = (result.final_answer or "").strip()
+    if answer:
+        if len(answer) > _DISPATCH_ANSWER_CHARS:
+            answer = answer[: _DISPATCH_ANSWER_CHARS - 20].rstrip() + "\n... [truncated]"
+        parts.append(f"\nAgent's final answer:\n{answer}")
+    return parts
+
+
 def _is_agent_model_rejection(error: str) -> bool:
     """True when a coding-agent CLI refused to start because of its --model."""
     text = error.lower()
@@ -1786,6 +1840,7 @@ class ChatSession:
         # Also cleared after a write tool succeeds (state changed) or
         # after a warning fires (clean slate, re-fire on the next streak).
         self._repeat_detector = RepeatDetector()
+        self._error_streak = ErrorStreakDetector()
         # Tool error tracking: call_id → is_error for message persistence
         self._tool_error_flags: dict[str, bool] = {}
         # Typed effect disposition: call_id → EffectStatus, set by the producer
@@ -2079,6 +2134,7 @@ class ChatSession:
             output_guard_model=cs.get("judge.output_guard_model"),
             output_guard_llm_timeout=cs.get("judge.output_guard_llm_timeout"),
             max_concurrent_per_backend=cs.get("judge.max_concurrent_per_backend"),
+            llm_when_auto_approved=cs.get("judge.llm_when_auto_approved"),
             redact_secrets=cs.get("judge.redact_secrets"),
             cancel_on_approval=cs.get("judge.cancel_on_approval"),
         )
@@ -3669,6 +3725,7 @@ class ChatSession:
         self._reset_shared_state()
         self._read_files.clear()
         self._repeat_detector.clear()
+        self._error_streak.clear()
         self._last_usage = None
         self._calibrated_msg_count = 0
         self._title_generated = True  # don't re-title resumed workstreams
@@ -8488,6 +8545,7 @@ class ChatSession:
         # File contents are gone after compaction — force re-read before edit_file
         self._read_files.clear()
         self._repeat_detector.clear()
+        self._error_streak.clear()
 
         # Rebuild token table — summary turns + preserved-tail estimates.
         su_tok = max(1, int(self._msg_char_count(summary_user) / self._chars_per_token))
@@ -8687,6 +8745,19 @@ class ChatSession:
             )
             remaining -= len(old) + len(new)
         return projected
+
+    def _batch_auto_approved(self) -> bool:
+        """Whether the approval gate will clear this batch without asking —
+        blanket ``auto_approve`` or full access armed — so an LLM verdict
+        cannot change the outcome.  Duck-typed: UIs without the attributes
+        (CLI, test doubles) read as not auto-approved."""
+        if getattr(self.ui, "auto_approve", False) is True:
+            return True
+        armed = getattr(self.ui, "_full_access_armed", None)
+        try:
+            return bool(armed()) if callable(armed) else False
+        except Exception:
+            return False
 
     def _evaluate_intent(
         self,
@@ -9057,12 +9128,15 @@ class ChatSession:
                 self._judge_cancel_events.discard(cancel_event)
 
         convo = conversation if conversation is not None else self.messages
+        cfg = self._judge_cfg
+        llm = not self._batch_auto_approved() or bool(cfg and cfg.llm_when_auto_approved)
         heuristic_verdicts = judge.evaluate(
             pending,
             dicts_from_turns(convo),  # snapshot — daemon thread must not see mutations
             callback=_on_verdict,
             cancel_event=cancel_event,
             done_callback=_on_done,
+            llm=llm,
         )
 
         # Attach heuristic verdicts to items for the approval UI
@@ -11947,6 +12021,21 @@ class ChatSession:
                     # context comes from the tool block above it, so a
                     # separate diagnostic info line would just duplicate it.
 
+        # Error streaks: the same tool failing the same way on consecutive
+        # calls with VARYING arguments — the loop shape the identical-sig
+        # detector above cannot see.  The warning rides the failing result.
+        _streak_fired = False
+        for i, (tc_id, output) in enumerate(results):
+            tc = _tc_by_id.get(tc_id)
+            if not tc or not isinstance(output, str):
+                continue
+            name = tc["function"]["name"]
+            failed = bool(self._tool_error_flags.get(tc_id))
+            count = self._error_streak.record(name, error=output if failed else None)
+            if count >= 2 and not output.lstrip().startswith(("{", "[")):
+                _streak_fired = True
+                results[i] = (tc_id, output + error_streak_warning(name, count))
+
         if _repeat_detected:
             # Reset so the model gets a clean slate after the warning.
             # If it repeats again, a new warning fires.
@@ -11963,8 +12052,12 @@ class ChatSession:
         # drain pass as guard findings and is emitted as a system turn after
         # the tool batch.  Cooldown gating in should_nudge keeps this to one
         # nudge per batch even with many failing tools.
+        # Skipped when a streak warning already told the model what to do:
+        # "check your memories" on a known loop sent it into empty memory
+        # searches instead of addressing the error.
         if (
-            self._nudges_enabled("tool_error")
+            not _streak_fired
+            and self._nudges_enabled("tool_error")
             and any(self._tool_error_flags.get(tc_id) for tc_id, _ in results)
             and should_nudge(
                 "tool_error",
@@ -18137,7 +18230,7 @@ class ChatSession:
         stat = ""
         try:
             stat = worktree_stat(self._ws_id)
-            diff = worktree_diff(self._ws_id, max_bytes=60_000)
+            diff = worktree_diff(self._ws_id, max_bytes=_DISPATCH_DIFF_BYTES)
         except WorkspaceError as exc:
             log.debug("dispatch.diff_failed", error=str(exc))
 
@@ -18152,10 +18245,14 @@ class ChatSession:
             parts.append("Status: TIMED OUT")
         else:
             parts.append("Status: ok")
-        if result.final_text:
-            parts.append(f"\n{result.final_text}")
+        parts += _dispatch_evidence(result, unattended=_unattended)
         parts.append(f"\nChanges:\n{stat or '(no file changes)'}")
         if diff.strip():
+            if len(diff) >= _DISPATCH_DIFF_BYTES:
+                diff += (
+                    "\n... [diff truncated — review specific files with read_file, "
+                    "not by re-reading everything]"
+                )
             parts.append(f"\n```diff\n{diff}\n```")
         output = "\n".join(parts)
 
@@ -18875,6 +18972,7 @@ class ChatSession:
             self.messages.clear()
             self._read_files.clear()
             self._repeat_detector.clear()
+            self._error_streak.clear()
             self._last_usage = None
             self._calibrated_msg_count = 0
             self._msg_tokens = []
@@ -18893,6 +18991,7 @@ class ChatSession:
             self.messages.clear()
             self._read_files.clear()
             self._repeat_detector.clear()
+            self._error_streak.clear()
             self._last_usage = None
             self._calibrated_msg_count = 0
             self._msg_tokens = []
