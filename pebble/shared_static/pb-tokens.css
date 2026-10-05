@@ -37,6 +37,11 @@
   --pb-pending: var(--warn);
   --pb-pending-soft: var(--warn-soft);
   --pb-focus: var(--accent);
+  /* An armed (full-access) session: nothing is asking a person.  Its own
+     pair rather than reusing --pb-error so a reskin can make "unattended"
+     look different from "failed" — today both map onto the error red. */
+  --pb-danger: var(--err);
+  --pb-danger-soft: var(--err-soft);
 
   /* Timeline lanes */
   --pb-lane-input: var(--blue);

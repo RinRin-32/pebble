@@ -17574,9 +17574,9 @@ class ChatSession:
         # Persist the binding so shell/file tools resolve to this worktree on
         # every later turn, including after a rehydrate on another node.
         try:
-            cfg = load_workstream_config(self._ws_id) or {}
-            cfg["repo_id"] = row["repo_id"]
-            save_workstream_config(self._ws_id, cfg)
+            # Only the changed key: a whole-row write-back would resurrect any
+            # key changed concurrently (a full-access disarm among them).
+            save_workstream_config(self._ws_id, {"repo_id": row["repo_id"]})
         except Exception:
             log.warning("dispatch.bind_persist_failed", ws_id=self._ws_id, exc_info=True)
 
@@ -17679,8 +17679,8 @@ class ChatSession:
                     f"Would provision: {', '.join(spec.packages)}"
                 )
             elif action == "detach":
-                cfg.pop(cfg_key, None)
-                save_workstream_config(self._ws_id, cfg)
+                # Only the changed key — see the bind_repo persist above.
+                save_workstream_config(self._ws_id, {cfg_key: ""})
                 out = "Detached. Dispatch now uses the base image only."
             elif action == "add":
                 if not attached:
@@ -17710,8 +17710,10 @@ class ChatSession:
                         "bootstrapped from the repo."
                     )
                 nixenv.provision(env)
-                cfg[cfg_key] = env.name
-                save_workstream_config(self._ws_id, cfg)
+                # Only the changed key: provisioning can take minutes, and a
+                # whole-row write-back would undo a full-access disarm made
+                # meanwhile.
+                save_workstream_config(self._ws_id, {cfg_key: env.name})
                 out = (
                     f"Using environment '{env.name}': {', '.join(env.packages) or 'repo flake'}\n"
                     f"dispatch_agent now runs inside it.\n"
@@ -18071,6 +18073,19 @@ class ChatSession:
         except Exception:
             log.debug("dispatch.agent_credential_failed", exc_info=True)
 
+        # An armed workstream runs its dispatched agent unattended too —
+        # otherwise the agent CLI's own permission gate refuses every command
+        # the operator already agreed not to be asked about.  Read per
+        # dispatch (fails closed), like the approval gate reads it per batch.
+        _unattended = False
+        try:
+            from pebble.core.full_access import is_armed
+            from pebble.core.storage import get_storage
+
+            _unattended = is_armed(get_storage(), self._ws_id)
+        except Exception:
+            log.debug("dispatch.full_access_unreadable", exc_info=True)
+
         def _run(model: str) -> AgentResult:
             return run_agent(
                 adapter,
@@ -18083,6 +18098,7 @@ class ChatSession:
                 wrap=env_dir or "",
                 env=_agent_env,
                 mcp_servers=_mcp_servers,
+                unattended=_unattended,
             )
 
         result = _run(item["model"])
@@ -18111,9 +18127,7 @@ class ChatSession:
 
         if result.session_id:
             try:
-                cfg = load_workstream_config(self._ws_id) or {}
-                cfg[cfg_key] = result.session_id
-                save_workstream_config(self._ws_id, cfg)
+                save_workstream_config(self._ws_id, {cfg_key: result.session_id})
             except Exception:
                 log.debug("dispatch.session_persist_failed", exc_info=True)
 

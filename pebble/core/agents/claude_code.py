@@ -52,18 +52,26 @@ class ClaudeCodeAdapter(AgentAdapter):
         model: str = "",
         session_id: str = "",
         agent: str = "",
+        unattended: bool = False,
     ) -> list[str]:
         cmd = ["claude", "-p"]
         # Opt-in only: bare mode cannot read the OAuth login a Claude
         # subscription authenticates with.  See the module docstring.
         if os.environ.get("PEBBLE_CLAUDE_BARE", "").strip() not in ("", "0", "false"):
             cmd.append("--bare")
+        # Headless (-p) runs have nobody to answer a permission prompt, so
+        # under acceptEdits every shell command is refused: the agent writes
+        # code it can never run or test.  An UNATTENDED dispatch (the
+        # workstream is armed for full access — an operator explicitly let it
+        # run without asking) uses Claude Code's auto mode instead, where a
+        # safety classifier clears routine commands and still blocks risky
+        # ones.  Everything else keeps edits-only.
         cmd += [
             "--output-format",
             "stream-json",
             "--verbose",
             "--permission-mode",
-            "acceptEdits",
+            "auto" if unattended else "acceptEdits",
         ]
         if model:
             cmd += ["--model", model]

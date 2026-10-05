@@ -220,12 +220,14 @@ UML diagrams in [`docs/diagrams/`](docs/diagrams/):
 | API reference | [docs/api-reference.md](docs/api-reference.md) |
 | Docker deployment | [docs/docker.md](docs/docker.md) |
 | Intent validation (judge) | [docs/judge.md](docs/judge.md) |
+| Auto-approval reasons, and arming a session for full access | [docs/auto-approve.md](docs/auto-approve.md) |
 | Governance & RBAC | [docs/governance.md](docs/governance.md) |
 | Personas | [docs/personas.md](docs/personas.md) |
 | OIDC SSO | [docs/oidc.md](docs/oidc.md) |
 | TLS / mTLS | [docs/tls.md](docs/tls.md) |
 | Channel integrations | [docs/channels.md](docs/channels.md) |
 | Console dashboard | [docs/console.md](docs/console.md) |
+| Edge backend (skills + vault over HTTP for edge clients) | [docs/edge-backend.md](docs/edge-backend.md) |
 | Eval harness | [docs/eval.md](docs/eval.md) |
 | Tools reference | [docs/tools.md](docs/tools.md) |
 | MCP integration | [docs/mcp-registry.md](docs/mcp-registry.md) |

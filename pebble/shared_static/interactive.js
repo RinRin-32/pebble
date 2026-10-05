@@ -1145,6 +1145,18 @@ class Pane {
     this._timelineHost.hidden = true;
     this._timeline = null;
     this._spans = null;
+    // Full-access bar: the arm/disarm control and, when armed, the danger
+    // banner.  First child of the pane so an armed session cannot scroll it
+    // out of view.  Painted from GET …/full-access on every SSE "connected"
+    // (so a page reload re-reads the stored state instead of dropping it)
+    // and on a slow poll, because arming can happen from another tab, the
+    // console API or an edge client without any event reaching this pane.
+    this._faBar = document.createElement("div");
+    this._faBar.className = "pb-fa-bar";
+    this._faBar.hidden = true;
+    this._faState = null;
+    this._faPoll = null;
+    this.el.appendChild(this._faBar);
     this.el.appendChild(this._viewTabs);
     this.el.appendChild(this.messagesEl);
     this.el.appendChild(this._timelineHost);
@@ -1276,6 +1288,176 @@ class Pane {
       if (this.composer && this.composer.actionsRowEl)
         this.composer.actionsRowEl.classList.toggle("has-mic", !!roles.stt);
     });
+  }
+
+  // --- Full access (docs/auto-approve.md) ---------------------------------
+  // The stored state on the node is the only copy; this pane only mirrors
+  // it.  A failed read paints "unknown" in danger styling rather than
+  // hiding the bar: a session that may be approving its own tool calls must
+  // never look like one that is not.
+
+  _fullAccessUrl() {
+    return (
+      this._base +
+      "/v1/api/workstreams/" +
+      encodeURIComponent(this.wsId) +
+      "/full-access"
+    );
+  }
+
+  _startFullAccessPoll() {
+    if (this._faPoll) return;
+    this._faPoll = setInterval(() => this.refreshFullAccess(), 15000);
+  }
+
+  _stopFullAccessPoll() {
+    if (this._faPoll) {
+      clearInterval(this._faPoll);
+      this._faPoll = null;
+    }
+  }
+
+  refreshFullAccess() {
+    if (!this.wsId) return Promise.resolve();
+    const wsId = this.wsId;
+    return authFetch(this._fullAccessUrl())
+      .then((r) =>
+        r
+          .json()
+          .catch(() => ({}))
+          .then((d) => ({ status: r.status, data: d })),
+      )
+      .then(({ status, data }) => {
+        if (wsId !== this.wsId) return; // pane re-bound mid-flight
+        if (status === 200 && data && data.ok) {
+          this._paintFullAccess(data);
+        } else if (status === 401 || status === 404) {
+          // Not signed in yet / session gone: nothing to show or act on.
+          this._paintFullAccess(null);
+        } else {
+          this._paintFullAccess({ unknown: true, error: data && data.error });
+        }
+      })
+      .catch(() => {
+        if (wsId === this.wsId) this._paintFullAccess({ unknown: true });
+      });
+  }
+
+  setFullAccess(armed) {
+    if (!this.wsId) return;
+    if (armed) {
+      const ok = window.confirm(
+        "Arm FULL ACCESS on this session?\n\n" +
+          "Every tool call it makes from now on runs WITHOUT asking you, " +
+          "including any approval card already waiting. Deny policies still " +
+          "apply and a token-budget override still asks.\n\n" +
+          "This is recorded in the audit log under your name.",
+      );
+      if (!ok) return;
+    }
+    const wsId = this.wsId;
+    authFetch(this._fullAccessUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ armed: !!armed }),
+    })
+      .then((r) => r.json().catch(() => ({})))
+      .then((d) => {
+        if (wsId !== this.wsId) return;
+        if (d && d.ok) {
+          // The POST response carries the new state but not can_arm (that is
+          // per-viewer, from GET); keep the last known value so disarming
+          // does not hide the re-arm button until the next poll.
+          if (d.can_arm === undefined && this._faState) {
+            d.can_arm = !!this._faState.can_arm;
+          }
+          this._paintFullAccess(d);
+          showToast(
+            armed
+              ? "Full access armed — tool calls now run without approval"
+              : "Full access disarmed — tool calls ask again",
+          );
+        } else {
+          // A failed DISARM is the dangerous one: say so, and re-read the
+          // stored state so the banner shows what is actually true.
+          showToast(
+            (armed ? "Arming failed: " : "Disarm FAILED: ") +
+              ((d && d.error) || "unknown error"),
+            "error",
+          );
+          this.refreshFullAccess();
+        }
+      })
+      .catch(() => {
+        showToast(
+          armed
+            ? "Arming failed: node unreachable"
+            : "Disarm FAILED: node unreachable — the session may still be armed",
+          "error",
+        );
+        this.refreshFullAccess();
+      });
+  }
+
+  _paintFullAccess(state) {
+    const bar = this._faBar;
+    if (!bar) return;
+    this._faState = state;
+    bar.replaceChildren();
+    if (!state) {
+      bar.hidden = true;
+      bar.removeAttribute("data-state");
+      return;
+    }
+    bar.hidden = false;
+    const text = document.createElement("span");
+    text.className = "pb-fa-text";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pb-fa-btn";
+    if (state.unknown) {
+      bar.dataset.state = "unknown";
+      bar.setAttribute("role", "alert");
+      text.textContent =
+        "⚠ Full-access state could not be read" +
+        (state.error ? " (" + state.error + ")" : "") +
+        " — this session may be approving its own tool calls.";
+      btn.textContent = "Retry";
+      btn.addEventListener("click", () => this.refreshFullAccess());
+    } else if (state.armed) {
+      bar.dataset.state = "armed";
+      bar.setAttribute("role", "alert");
+      text.textContent =
+        "⚠ FULL ACCESS — tool calls in this session run without approval" +
+        (state.changed_by ? ". Armed by " + state.changed_by : "") +
+        (state.changed_at ? " at " + state.changed_at : "") +
+        ". Budget overrides still ask.";
+      btn.textContent = "Disarm";
+      btn.addEventListener("click", () => this.setFullAccess(false));
+    } else if (state.suspended) {
+      bar.dataset.state = "suspended";
+      bar.setAttribute("role", "status");
+      text.textContent =
+        "Full access is armed but SUSPENDED: " +
+        (state.changed_by || "the user who armed it") +
+        " no longer holds the full_access capability, so tool calls ask again.";
+      btn.textContent = "Disarm";
+      btn.addEventListener("click", () => this.setFullAccess(false));
+    } else {
+      bar.dataset.state = "off";
+      bar.setAttribute("role", "status");
+      text.textContent = "Approvals on";
+      btn.textContent = "Arm full access…";
+      btn.addEventListener("click", () => this.setFullAccess(true));
+      // Offer the control only to someone the server would let arm; the
+      // server re-checks regardless, this just avoids a button that 403s.
+      if (!state.can_arm) {
+        bar.hidden = true;
+        return;
+      }
+    }
+    bar.appendChild(text);
+    bar.appendChild(btn);
   }
 
   connectSSE(wsId) {
@@ -2073,6 +2255,8 @@ class Pane {
         this._paintModelChip();
         this.projectName = evt.project_name || "";
         this._paintProjectChip();
+        this.refreshFullAccess();
+        this._startFullAccessPoll();
         if (evt.skip_permissions) {
           const existing = document.querySelector(".skip-permissions-warning");
           if (!existing) {
@@ -4827,6 +5011,7 @@ function createInteractivePane(root, wsId, opts) {
     // reopen a stream for a session we just declared dead.
     pane._historyLoadToken = (pane._historyLoadToken || 0) + 1;
     pane.disconnectSSE();
+    pane._stopFullAccessPoll();
     // Detach the visibility handler and clear the hide-close marker: a dead
     // controller must NOT be resurrected by a tab-visibility change.  Without
     // this, a tab hidden BEFORE the give-up (which set _hiddenDisconnect) would,
@@ -4972,6 +5157,7 @@ function createInteractivePane(root, wsId, opts) {
         recoverTimer = null;
       }
       pane.disconnectSSE();
+      pane._stopFullAccessPoll();
       // The document-level visibilitychange listener holds a strong ref
       // to the pane — leaving it registered would both leak the pane and
       // let a show edge reopen a stream for a destroyed controller.

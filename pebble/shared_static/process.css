@@ -305,3 +305,70 @@
 .pb-todo-item[data-status="blocked"] .pb-todo-dot {
   border-color: var(--pb-error);
 }
+
+/* --- full access ---------------------------------------------------------
+ * The arm/disarm bar at the top of an interactive pane.  "armed" and
+ * "unknown" use the danger pair and a heavy left rule so an unattended
+ * session reads as different at a glance, not only in its wording.
+ */
+.pb-fa-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--pb-hair);
+  color: var(--pb-fg-dim);
+  font: 500 12px/1.4 var(--pb-font-ui);
+}
+.pb-fa-bar[hidden] {
+  display: none;
+}
+.pb-fa-text {
+  flex: 1;
+  min-width: 0;
+}
+.pb-fa-btn {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid var(--pb-hair-strong);
+  border-radius: var(--pb-radius-sm);
+  background: var(--pb-surface-2);
+  color: var(--pb-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.pb-fa-btn:hover {
+  background: var(--pb-hover);
+}
+.pb-fa-btn:focus-visible {
+  outline: 2px solid var(--pb-focus);
+  outline-offset: 1px;
+}
+.pb-fa-bar[data-state="armed"],
+.pb-fa-bar[data-state="unknown"] {
+  border-left: 4px solid var(--pb-danger);
+  background: var(--pb-danger-soft);
+  color: var(--pb-fg-strong);
+  font-weight: 600;
+}
+.pb-fa-bar[data-state="armed"] .pb-fa-btn,
+.pb-fa-bar[data-state="unknown"] .pb-fa-btn {
+  border-color: var(--pb-danger);
+  color: var(--pb-danger);
+  background: var(--pb-surface);
+}
+.pb-fa-bar[data-state="suspended"] {
+  border-left: 4px solid var(--pb-pending);
+  background: var(--pb-pending-soft);
+  color: var(--pb-fg);
+}
+/* The per-call pill for a call full access cleared (conversation.js adds
+   this modifier to .conv-row-auto).  Doubled class so it wins over
+   conversation.css whatever order a page links the two sheets in. */
+.conv-row-auto.conv-row-auto--full-access {
+  padding: 0 5px;
+  border-radius: var(--pb-radius-sm);
+  background: var(--pb-danger-soft);
+  color: var(--pb-danger);
+  font-weight: 600;
+}

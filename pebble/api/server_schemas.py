@@ -357,7 +357,8 @@ class RecentAutoApproval(BaseModel):
             "click), ``policy`` (admin tool-policy ``allow`` rule), "
             "``blanket`` (workstream-level ``auto_approve=True``), "
             "``smart_approval`` (Smart Approvals: high-confidence LLM "
-            "judge ``approve`` verdict), or ``auto_approve_tools`` "
+            "judge ``approve`` verdict), ``full_access`` (an operator "
+            "armed this workstream at runtime), or ``auto_approve_tools`` "
             "(legacy / unknown writer)."
         ),
     )

@@ -73,6 +73,7 @@ def run_agent(
     env: dict[str, str] | None = None,
     wrap: str = "",
     mcp_servers: dict[str, object] | None = None,
+    unattended: bool = False,
 ) -> AgentResult:
     """Dispatch *prompt* to *adapter* inside *cwd* and collect the outcome."""
     result = AgentResult()
@@ -85,7 +86,9 @@ def run_agent(
         result.error = f"working directory does not exist: {cwd}"
         return result
 
-    cmd = adapter.build_command(prompt, cwd=cwd, model=model, session_id=session_id, agent=agent)
+    cmd = adapter.build_command(
+        prompt, cwd=cwd, model=model, session_id=session_id, agent=agent, unattended=unattended
+    )
     mcp_path = ""
     if mcp_servers:
         payload = adapter.mcp_payload(dict(mcp_servers))

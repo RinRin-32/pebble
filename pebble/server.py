@@ -4792,6 +4792,23 @@ def create_app(
         )
     )
     v1_routes.append(Route("/api/tts", text_to_speech, methods=["POST"]))
+    # Full access: arm/disarm/read on a live session.  The interactive pane
+    # calls this through its transport base, so the console reaches it via
+    # the /node/{id} proxy with the user's identity re-minted.  Authority
+    # (scope, capability, ownership) is enforced inside the shared handler;
+    # the node adds its private-project visibility gate in front.
+    from pebble.core.full_access import make_http_handler as _full_access_handler
+
+    def _full_access_ws_access(request: Request, ws_id: str) -> JSONResponse | None:
+        return _interactive_tenant_check(request, ws_id, request.app.state.workstreams)
+
+    v1_routes.append(
+        Route(
+            "/api/workstreams/{ws_id}/full-access",
+            _full_access_handler(surface="node", ws_access=_full_access_ws_access),
+            methods=["GET", "POST"],
+        )
+    )
 
     app = Starlette(
         routes=[

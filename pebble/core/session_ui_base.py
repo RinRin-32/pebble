@@ -381,6 +381,12 @@ class AutoApproveReason:
       ``judge.confidence_threshold``.  Distinct pill so an operator
       can see the judge — not a policy or a prior "Always" click —
       cleared this call.
+    - :attr:`FULL_ACCESS` — an operator ARMED this workstream at runtime
+      (:mod:`pebble.core.full_access`).  Distinct from :attr:`BLANKET`
+      so audit can tell a create-time flag from a deliberate, persisted,
+      revocable arm by a named person.  Like blanket it never clears
+      ``__budget_override__``.  Also applied to a batch already parked
+      on an approval card when the session is armed mid-wait.
     """
 
     SKILL = "skill"
@@ -389,9 +395,10 @@ class AutoApproveReason:
     BLANKET = "blanket"
     AUTO_APPROVE_TOOLS = "auto_approve_tools"
     SMART_APPROVAL = "smart_approval"
+    FULL_ACCESS = "full_access"
 
     ALL: frozenset[str] = frozenset(
-        {SKILL, ALWAYS, POLICY, BLANKET, AUTO_APPROVE_TOOLS, SMART_APPROVAL}
+        {SKILL, ALWAYS, POLICY, BLANKET, AUTO_APPROVE_TOOLS, SMART_APPROVAL, FULL_ACCESS}
     )
 
 
@@ -1516,7 +1523,8 @@ class SessionUIBase:
            allow tags items as auto-approved with ``AutoApproveReason.POLICY``).
         3. Per-tool auto-approve via ``self.auto_approve_tools`` (skill
            ``allowed_tools`` and operator "Approve + Always").
-        4. Budget-override carve-out + blanket ``self.auto_approve``.
+        4. Budget-override carve-out + blanket ``self.auto_approve``, then
+           full access (armed at runtime, read from storage per batch).
            Synthetic ``__budget_override__`` items always prompt.
         5. Activity tagging + ``_broadcast_activity`` so the dashboard
            reflects approval state.
@@ -1525,7 +1533,8 @@ class SessionUIBase:
            feed the node's or console's Prometheus collector).
         7. Register an :class:`ApprovalCycle`, emit its ``approve_request``
            card, and block on the CYCLE's event up to
-           ``_APPROVAL_WAIT_TIMEOUT``.
+           ``_APPROVAL_WAIT_TIMEOUT`` (re-checking full access while parked,
+           see :meth:`_wait_for_decision`).
 
         ``__budget_override__`` is interactive-only today (coord
         workstreams don't have token budgets), but the carve-out check
@@ -1691,6 +1700,21 @@ class SessionUIBase:
         # cannot disarm this gate.
         blanket_active = self.auto_approve and not has_budget_override
 
+        # Full access (an operator armed this workstream at runtime).  Read
+        # from storage HERE, once per batch, rather than cached on the UI:
+        # the stored row is the only copy, so a disarm that has committed is
+        # seen by the very next batch and nothing can keep approving on a
+        # stale in-memory flag.  Same budget-override carve-out as blanket.
+        # Only consulted when something would otherwise prompt and blanket
+        # has not already decided, so a session that never arms pays no
+        # read on its auto-approved paths and blanket stays bit-identical.
+        full_access_active = (
+            bool(pending)
+            and not blanket_active
+            and not has_budget_override
+            and self._full_access_armed()
+        )
+
         # -- Smart Approvals (judge.smart_approvals) -----------------------------
         # Last automatic gate before the human prompt, after the explicit
         # operator-configured ones (policy / "Always" / blanket): wait
@@ -1703,11 +1727,12 @@ class SessionUIBase:
             pending
             and self.smart_approvals_enabled
             and not blanket_active
+            and not full_access_active
             and not has_budget_override
         ):
             pending = self._apply_smart_approvals(pending)
 
-        if not pending or blanket_active:
+        if not pending or blanket_active or full_access_active:
             if blanket_active and pending:
                 # Blanket flag drained the rest of pending — tag so the
                 # dashboard can distinguish from
@@ -1715,6 +1740,10 @@ class SessionUIBase:
                 # clear ``pending`` here: the function returns inside
                 # this block without reading it again.
                 self._tag_auto_approved(pending, AutoApproveReason.BLANKET)
+            elif full_access_active and pending:
+                # Its own reason, never BLANKET: audit must be able to tell
+                # a create-time flag from an operator's runtime arm.
+                self._tag_auto_approved(pending, AutoApproveReason.FULL_ACCESS)
             # Track auto-approved tool activity
             first = items[0] if items else {}
             label = first.get("func_name", "")
@@ -1868,8 +1897,10 @@ class SessionUIBase:
         # empty here) and when the feature is off.
         if self.smart_approvals_enabled:
             self._replay_pending_verdicts(items)
+        drained_by_full_access = False
         try:
-            if not cycle.event.wait(timeout=self._APPROVAL_WAIT_TIMEOUT):
+            decided, drained_by_full_access = self._wait_for_decision(cycle, has_budget_override)
+            if not decided:
                 # Approval timed out (e.g., user disconnected). Deny via
                 # resolve_approval so verdicts and state are updated
                 # consistently — targeted at THIS cycle so a sibling gate
@@ -1890,6 +1921,14 @@ class SessionUIBase:
             self._unregister_approval_cycle(cycle)
         approved, feedback = cycle.result
 
+        if drained_by_full_access:
+            # Armed while this card was showing.  Tag + record like the
+            # pre-prompt drain so the dashboard ring buffer and the
+            # ``tool.auto_approved`` audit row name full access, not a
+            # human, as what cleared these calls.
+            self._tag_auto_approved(pending, AutoApproveReason.FULL_ACCESS)
+            self._record_auto_approves(pending)
+
         if not approved:
             denial_msg = "Denied by user"
             if feedback:
@@ -1899,6 +1938,63 @@ class SessionUIBase:
                 item["denial_msg"] = denial_msg
 
         return approved, feedback
+
+    # ------------------------------------------------------------------
+    # Full access (pebble.core.full_access)
+    # ------------------------------------------------------------------
+
+    #: How often a gate parked on an approval card re-reads the armed state.
+    #: Arming a session whose card is already showing is the case that
+    #: motivated full access; without the poll the card would sit until its
+    #: hour-long timeout and then deny.  One small indexed read per parked
+    #: gate per interval.  Class-level so a test can shorten it.
+    _FULL_ACCESS_POLL_SECONDS: float = 2.0
+
+    def _full_access_armed(self) -> bool:
+        """Whether this workstream is armed right now, read from storage.
+
+        Fails closed: no ``ws_id``, no storage, or any error reads as "not
+        armed", so the batch goes to a person.
+        """
+        if not self.ws_id:
+            return False
+        try:
+            from pebble.core.full_access import is_armed
+            from pebble.core.storage._registry import get_storage
+
+            return is_armed(get_storage(), self.ws_id)
+        except Exception:
+            log.debug("full_access.read_failed ws=%s", self.ws_id, exc_info=True)
+            return False
+
+    def _wait_for_decision(
+        self, cycle: ApprovalCycle, has_budget_override: bool
+    ) -> tuple[bool, bool]:
+        """Block until *cycle* is resolved: ``(decided, drained_by_full_access)``.
+
+        Same total budget as the single ``event.wait`` this replaces.  When
+        full access could clear the batch, the wait is sliced so a session
+        armed while its card is showing is drained within one poll interval
+        rather than left to time out (and be denied) an hour later.  A batch
+        carrying ``__budget_override__`` keeps the plain wait: full access
+        never clears it, so polling would be wasted reads.
+        """
+        timeout = self._APPROVAL_WAIT_TIMEOUT
+        if has_budget_override or not self.ws_id:
+            return cycle.event.wait(timeout=timeout), False
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return cycle.event.is_set(), False
+            if cycle.event.wait(timeout=min(remaining, self._FULL_ACCESS_POLL_SECONDS)):
+                return True, False
+            if not self._full_access_armed():
+                continue
+            # ``None`` means a person (or a cancel sweep) resolved this cycle
+            # first; their decision stands, and the next wait sees the event.
+            if self.resolve_approval(True, None, cycle_id=cycle.cycle_id) is not None:
+                return True, True
 
     # ------------------------------------------------------------------
     # Smart Approvals (judge.smart_approvals)

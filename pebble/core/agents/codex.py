@@ -34,6 +34,7 @@ class CodexAdapter(AgentAdapter):
         model: str = "",
         session_id: str = "",
         agent: str = "",
+        unattended: bool = False,
     ) -> list[str]:
         # cwd is applied by the runner (subprocess cwd=), matching codex's
         # repo-local execution model.

@@ -131,6 +131,165 @@ def _note_summary(note: Any) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Shared operation bodies
+#
+# The MCP tools below and the HTTP edge API (``edge_api``) both call these, so
+# there is one implementation of each vault operation however it is reached.
+# They do NOT check authority: each caller enforces its own per-operation
+# gate before calling in, because the two surfaces carry identity differently
+# (a ContextVar here, ``request.state`` there).  A helper that guessed would
+# be the path-derived-scope bug again in a new place.
+# ---------------------------------------------------------------------------
+
+
+def search_vault(query: str, *, limit: int = 10, repo: str = "") -> dict[str, Any]:
+    from pebble.core.knowledge import search_notes
+
+    n = max(1, min(int(limit or 10), _MAX_RESULTS))
+    hits = search_notes(query, limit=n, repo=repo or "")
+    return {
+        "query": query,
+        "repo": repo or "",
+        "count": len(hits),
+        "results": [{**_note_summary(note), "score": score} for note, score in hits],
+    }
+
+
+def read_vault_note(title: str) -> dict[str, Any]:
+    from pebble.core.knowledge import read_note
+
+    note = read_note(title)
+    if note is None:
+        return {"found": False, "title": title}
+    return {"found": True, **_note_summary(note), "body": note.body}
+
+
+def write_vault_note(
+    *,
+    title: str,
+    body: str,
+    author: str,
+    kind: str = "note",
+    summary: str = "",
+    tags: list[str] | None = None,
+    repo: str = "",
+    append: bool = False,
+    color: str = "",
+) -> dict[str, Any]:
+    """Write or append a note.  *author* is stamped as the note's ``ws_id``."""
+    from pebble.core.knowledge import (
+        KnowledgeError,
+        Note,
+        clean_color,
+        extract_links,
+        write_note,
+    )
+
+    if not (title or "").strip():
+        return {"ok": False, "error": "title is required"}
+    if len(body or "") > _MAX_BODY:
+        return {"ok": False, "error": f"body too long (max {_MAX_BODY} chars)"}
+    note = Note(
+        title=title.strip(),
+        body=body or "",
+        kind=(kind or "note").strip() or "note",
+        summary=(summary or "").strip(),
+        tags=[str(t) for t in (tags or [])],
+        repo_id=(repo or "").strip(),
+        # Attribution: a note should say which hand wrote it.
+        ws_id=author,
+        links=extract_links(body or ""),
+        color=clean_color(color),
+    )
+    try:
+        path = write_note(note, append=bool(append))
+    except KnowledgeError as exc:
+        return {"ok": False, "error": str(exc)}
+    _sync_index()
+    return {
+        "ok": True,
+        "title": note.title,
+        "path": str(path),
+        "appended": bool(append),
+        "links": note.links,
+        # Echo what was stored: an invalid colour is dropped, and silently
+        # ignoring it would leave the caller thinking it took.
+        "color": note.color,
+    }
+
+
+def record_experiment_note(
+    *,
+    title: str,
+    hypothesis: str,
+    command: str,
+    exit_code: int,
+    author: str,
+    output: str = "",
+    duration_seconds: float = 0.0,
+    repo: str = "",
+    commit: str = "",
+) -> dict[str, Any]:
+    """Record an experiment the caller already ran.  Executes nothing."""
+    from pebble.core.knowledge import Note, extract_links, write_note
+
+    if not (title or "").strip():
+        return {"ok": False, "error": "title is required"}
+    verdict = "ok" if exit_code == 0 else f"exit {exit_code}"
+    clipped = (output or "")[:4000]
+    body = (
+        f"## Hypothesis\n\n{hypothesis or '(none stated)'}\n\n"
+        f"## Command\n\n```\n{command}\n```\n\n"
+        f"## Result\n\n{verdict} in {duration_seconds:.2f}s"
+        + (f" at {commit}" if commit else "")
+        + (f"\n\n```\n{clipped}\n```\n" if clipped else "\n")
+    )
+    note = Note(
+        title=title.strip(),
+        body=body,
+        kind="experiment",
+        summary=f"{verdict} in {duration_seconds:.2f}s",
+        repo_id=(repo or "").strip(),
+        ws_id=author,
+        links=extract_links(body),
+    )
+    path = write_note(note)
+    _sync_index()
+    return {"ok": True, "title": note.title, "path": str(path), "verdict": verdict}
+
+
+def skills_hook_payload(storage: Any, *, user_id: str, report_url: str = "") -> dict[str, Any]:
+    """Mint a report token and wrap it in the hook config.  MINTS A CREDENTIAL."""
+    from pebble.core.auth import SKILL_REPORT_PATH
+    from pebble.core.skill_transfer import REPORT_TOKEN_HOURS, hook_config, mint_report_token
+
+    if not user_id:
+        return {"ok": False, "error": "no authenticated user"}
+    url = (report_url or "").strip()
+    if not url:
+        base = (os.environ.get("PEBBLE_PUBLIC_URL") or "").strip().rstrip("/")
+        if not base:
+            # Guessing a hostname would produce a hook that silently
+            # reports nowhere, which looks exactly like a skill nobody
+            # uses — the failure this telemetry exists to prevent.
+            return {
+                "ok": False,
+                "error": (
+                    "pass report_url (the console URL you reach pebble on, e.g. "
+                    "https://host:9443) — set PEBBLE_PUBLIC_URL to make it the default"
+                ),
+            }
+        url = base
+    token = mint_report_token(storage, user_id)
+    return {
+        "ok": True,
+        "settings_json": hook_config(f"{url.rstrip('/')}/v1{SKILL_REPORT_PATH}", token),
+        "expires_hours": REPORT_TOKEN_HOURS,
+        "note": "Merge into .claude/settings.json. Reports invocation only, not outcome.",
+    }
+
+
 def _transport_security() -> Any:
     """DNS-rebinding protection, with the operator's hostnames allowed through.
 
@@ -232,16 +391,7 @@ def build_server() -> Any:
         )
     )
     def kb_search(query: str, limit: int = 10, repo: str = "") -> dict[str, Any]:
-        from pebble.core.knowledge import search_notes
-
-        n = max(1, min(int(limit or 10), _MAX_RESULTS))
-        hits = search_notes(query, limit=n, repo=repo or "")
-        return {
-            "query": query,
-            "repo": repo or "",
-            "count": len(hits),
-            "results": [{**_note_summary(note), "score": score} for note, score in hits],
-        }
+        return search_vault(query, limit=limit, repo=repo)
 
     @mcp.tool(
         description=(
@@ -268,12 +418,7 @@ def build_server() -> Any:
         )
     )
     def kb_read(title: str) -> dict[str, Any]:
-        from pebble.core.knowledge import read_note
-
-        note = read_note(title)
-        if note is None:
-            return {"found": False, "title": title}
-        return {"found": True, **_note_summary(note), "body": note.body}
+        return read_vault_note(title)
 
     @mcp.tool(
         description=(
@@ -302,45 +447,17 @@ def build_server() -> Any:
         denied = _denied("write")
         if denied:
             return denied
-        from pebble.core.knowledge import (
-            KnowledgeError,
-            Note,
-            clean_color,
-            extract_links,
-            write_note,
+        return write_vault_note(
+            title=title,
+            body=body,
+            author=f"mcp:{current_user() or 'unknown'}",
+            kind=kind,
+            summary=summary,
+            tags=tags,
+            repo=repo,
+            append=append,
+            color=color,
         )
-
-        if not (title or "").strip():
-            return {"ok": False, "error": "title is required"}
-        if len(body or "") > _MAX_BODY:
-            return {"ok": False, "error": f"body too long (max {_MAX_BODY} chars)"}
-        note = Note(
-            title=title.strip(),
-            body=body or "",
-            kind=(kind or "note").strip() or "note",
-            summary=(summary or "").strip(),
-            tags=[str(t) for t in (tags or [])],
-            repo_id=(repo or "").strip(),
-            # Attribution: a note should say which hand wrote it.
-            ws_id=f"mcp:{current_user() or 'unknown'}",
-            links=extract_links(body or ""),
-            color=clean_color(color),
-        )
-        try:
-            path = write_note(note, append=bool(append))
-        except KnowledgeError as exc:
-            return {"ok": False, "error": str(exc)}
-        _sync_index()
-        return {
-            "ok": True,
-            "title": note.title,
-            "path": str(path),
-            "appended": bool(append),
-            "links": note.links,
-            # Echo what was stored: an invalid colour is dropped, and silently
-            # ignoring it would leave the caller thinking it took.
-            "color": note.color,
-        }
 
     @mcp.tool(
         description=(
@@ -365,31 +482,17 @@ def build_server() -> Any:
         denied = _denied("write")
         if denied:
             return denied
-        from pebble.core.knowledge import Note, extract_links, write_note
-
-        if not (title or "").strip():
-            return {"ok": False, "error": "title is required"}
-        verdict = "ok" if exit_code == 0 else f"exit {exit_code}"
-        clipped = (output or "")[:4000]
-        body = (
-            f"## Hypothesis\n\n{hypothesis or '(none stated)'}\n\n"
-            f"## Command\n\n```\n{command}\n```\n\n"
-            f"## Result\n\n{verdict} in {duration_seconds:.2f}s"
-            + (f" at {commit}" if commit else "")
-            + (f"\n\n```\n{clipped}\n```\n" if clipped else "\n")
+        return record_experiment_note(
+            title=title,
+            hypothesis=hypothesis,
+            command=command,
+            exit_code=exit_code,
+            author=f"mcp:{current_user() or 'unknown'}",
+            output=output,
+            duration_seconds=duration_seconds,
+            repo=repo,
+            commit=commit,
         )
-        note = Note(
-            title=title.strip(),
-            body=body,
-            kind="experiment",
-            summary=f"{verdict} in {duration_seconds:.2f}s",
-            repo_id=(repo or "").strip(),
-            ws_id=f"mcp:{current_user() or 'unknown'}",
-            links=extract_links(body),
-        )
-        path = write_note(note)
-        _sync_index()
-        return {"ok": True, "title": note.title, "path": str(path), "verdict": verdict}
 
     @mcp.tool(
         description=(
@@ -730,37 +833,10 @@ def build_server() -> Any:
         denied = _denied("write")
         if denied:
             return denied
-        from pebble.core.auth import SKILL_REPORT_PATH
-        from pebble.core.skill_transfer import REPORT_TOKEN_HOURS, hook_config, mint_report_token
-
         storage, _config = _storage_and_config()
         if storage is None:
             return {"ok": False, "error": "storage unavailable"}
-        user = current_user()
-        if not user:
-            return {"ok": False, "error": "no authenticated user"}
-        url = (report_url or "").strip()
-        if not url:
-            base = (os.environ.get("PEBBLE_PUBLIC_URL") or "").strip().rstrip("/")
-            if not base:
-                # Guessing a hostname would produce a hook that silently
-                # reports nowhere, which looks exactly like a skill nobody
-                # uses — the failure this telemetry exists to prevent.
-                return {
-                    "ok": False,
-                    "error": (
-                        "pass report_url (the console URL you reach pebble on, e.g. "
-                        "https://host:9443) — set PEBBLE_PUBLIC_URL to make it the default"
-                    ),
-                }
-            url = base
-        token = mint_report_token(storage, user)
-        return {
-            "ok": True,
-            "settings_json": hook_config(f"{url.rstrip('/')}/v1{SKILL_REPORT_PATH}", token),
-            "expires_hours": REPORT_TOKEN_HOURS,
-            "note": "Merge into .claude/settings.json. Reports invocation only, not outcome.",
-        }
+        return skills_hook_payload(storage, user_id=current_user(), report_url=report_url)
 
     @mcp.tool(
         description=(

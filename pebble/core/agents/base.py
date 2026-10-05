@@ -104,6 +104,7 @@ class AgentAdapter(ABC):
         model: str = "",
         session_id: str = "",
         agent: str = "",
+        unattended: bool = False,
     ) -> list[str]:
         """Argv for a headless run in *cwd*.  Never a shell string."""
 

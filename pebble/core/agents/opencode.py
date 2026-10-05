@@ -38,6 +38,7 @@ class OpenCodeAdapter(AgentAdapter):
         model: str = "",
         session_id: str = "",
         agent: str = "",
+        unattended: bool = False,
     ) -> list[str]:
         cmd = ["opencode", "run", "--format", "json", "--dir", cwd]
         if model:
