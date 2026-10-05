@@ -24,9 +24,13 @@ they are the frontier of what still needs research.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
+import signal
 import subprocess
+import tempfile
 import time
 import unicodedata
 from dataclasses import dataclass, field
@@ -300,6 +304,15 @@ def commit_of(worktree: str | Path) -> str:
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
 
+def _kill_group(proc: subprocess.Popen[bytes]) -> None:
+    """SIGKILL *proc*'s whole process group (it was started as a session
+    leader), then reap it.  Tolerates a group that is already gone."""
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(Exception):
+        proc.wait(timeout=5)
+
+
 def run_experiment(
     command: str,
     *,
@@ -328,28 +341,39 @@ def run_experiment(
         argv = wrap_command(argv, wrap)
     start = time.monotonic()
     timed_out = False
-    try:
-        proc = subprocess.run(  # noqa: S603 - argv list; command is operator/agent supplied
-            argv,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=timeout,
-            check=False,
-        )
-        code, out = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        code = 124
-        out = (
-            (exc.stdout or b"").decode("utf-8", "replace")
-            if isinstance(exc.stdout, bytes)
-            else (exc.stdout or "")
-        )
-        out += f"\n[timed out after {timeout}s]"
-    except OSError as exc:
-        code, out = 127, f"failed to run: {exc}"
+    # Output goes to a temp FILE, not a pipe, and the command gets its own
+    # process group.  With pipes, ``subprocess.run`` waits for EOF — and a
+    # command that starts something in the background (a stub server for an
+    # integration check, ``cmd &``) hands that child the pipe, so the
+    # experiment blocked for the full timeout after the command itself had
+    # finished, then killed only ``bash`` and orphaned the child.  Now the
+    # experiment ends when the command does, and the whole group is killed
+    # either way: an experiment is a measurement, not a way to leave daemons
+    # running on the node.
+    with tempfile.TemporaryFile() as buf:
+        try:
+            proc = subprocess.Popen(  # noqa: S603 - argv list; command is operator/agent supplied
+                argv,
+                cwd=str(cwd),
+                stdin=subprocess.DEVNULL,
+                stdout=buf,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            code, out = 127, f"failed to run: {exc}"
+        else:
+            try:
+                code = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                code = 124
+            finally:
+                _kill_group(proc)
+            buf.seek(0)
+            out = buf.read().decode("utf-8", "replace")
+            if timed_out:
+                out += f"\n[timed out after {timeout}s]"
     duration = round(time.monotonic() - start, 2)
     # Captured output becomes a PERMANENT note. A command that echoes a token,
     # a connection string, or an Authorization header would otherwise write that

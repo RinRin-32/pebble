@@ -484,3 +484,53 @@ class TestMcpPlumbing:
 
         run_agent(_NoMcp([OC_TEXT]), "go", cwd=str(tmp_path))
         assert calls == []
+
+
+class TestAgentModelRejection:
+    """``_is_agent_model_rejection`` gates the dispatch retry on the agent's own
+    default model when ``agents.coder_model_alias`` names one the CLI lacks."""
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            # Claude Code, verbatim from a dispatch that burned two runs.
+            "There's an issue with the selected model (deepseek-v4-or). It may not "
+            "exist or you may not have access to it. Run --model to pick a different model.",
+            "\"opus-5.5\" isn't described by this version's model catalog; update Claude Code",
+            "Error: model_not_found: unknown model 'foo/bar'",
+        ],
+    )
+    def test_model_rejections_match(self, error: str) -> None:
+        from pebble.core.session import _is_agent_model_rejection
+
+        assert _is_agent_model_rejection(error)
+
+    @pytest.mark.parametrize(
+        "error",
+        ["claude exited 1: file not found", "rate limited, retry later", "timed out", ""],
+    )
+    def test_other_failures_do_not_match(self, error: str) -> None:
+        from pebble.core.session import _is_agent_model_rejection
+
+        assert not _is_agent_model_rejection(error)
+
+
+class TestDeriveExperimentTitle:
+    def test_prefers_hypothesis_first_line(self) -> None:
+        from pebble.core.session import _derive_experiment_title
+
+        assert (
+            _derive_experiment_title("pytest passes on [[sediment]]\nmore", "pytest -q")
+            == "pytest passes on sediment"
+        )
+
+    def test_falls_back_to_command_and_trims(self) -> None:
+        from pebble.core.session import _derive_experiment_title
+
+        title = _derive_experiment_title("", "cd /w && " + "x" * 100)
+        assert title.startswith("cd /w &&") and title.endswith("...") and len(title) <= 60
+
+    def test_empty_stays_empty_so_validation_still_fires(self) -> None:
+        from pebble.core.session import _derive_experiment_title
+
+        assert _derive_experiment_title("", "") == ""

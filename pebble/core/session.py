@@ -21,6 +21,7 @@ import json
 import mimetypes
 import os
 import queue
+import random
 import re
 import shlex
 import shutil
@@ -1138,24 +1139,97 @@ def _is_ctx_overflow(exc: BaseException) -> bool:
     The phrases are deliberately overflow-specific and cover the core providers
     (OpenAI/vLLM "maximum context length"; Anthropic "exceed context limit,
     decrease input length"; Google/Gemini "exceeds the maximum number of tokens
-    allowed").
+    allowed"; llama.cpp "exceeds the available context size").  A structured
+    error body (llama.cpp ``exceed_context_size_error``, OpenAI
+    ``context_length_exceeded``) is also trusted.
     """
     if type(exc).__name__ in _BACKEND_KNOWN_EXC_NAMES:
         return False
     text = str(exc).lower()
-    return any(
+    return (
+        any(
+            s in text
+            for s in (
+                "context length",
+                "maximum context",
+                "context window",
+                "context limit",
+                "prompt is too long",
+                "input is too long",
+                "reduce the length of the input",
+                "maximum number of tokens",
+                # llama.cpp server: a prompt too big for one slot (HTTP 400,
+                # type exceed_context_size_error).  NOT its mid-decode "Context
+                # size has been exceeded." — see _is_kv_pool_exhausted.
+                "available context size",
+                "larger than the max context size",
+                "exceed_context_size",
+                # LM Studio's own (sic) wording; TGI's validation error.
+                "when context the overflows",
+                "`inputs` tokens + `max_new_tokens`",
+            )
+        )
+        or _error_body_field(exc, "type") == "exceed_context_size_error"
+        or (_error_body_field(exc, "code") == "context_length_exceeded")
+    )
+
+
+def _error_body_field(exc: BaseException, key: str) -> Any:
+    """Read *key* from an SDK exception's parsed error body, tolerating both the
+    flat ``{"type": ...}`` shape and the OpenAI ``{"error": {...}}`` envelope."""
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return None
+    inner = body.get("error")
+    if isinstance(inner, dict) and key in inner:
+        return inner[key]
+    return body.get(key)
+
+
+def _is_kv_pool_exhausted(exc: BaseException) -> bool:
+    """True when the inference server ran out of KV cache mid-decode.
+
+    llama.cpp's auto ``--parallel`` runs several slots over ONE unified KV
+    pool, each allowed to grow to the full ``-c``; concurrent requests (the
+    main loop plus a judge or sub-agent on the same server) can oversubscribe
+    it.  The server then fails every in-flight slot with a ``server_error``
+    whose message is ``Context size has been exceeded.`` — on an open stream
+    the OpenAI SDK raises it as a bare ``APIError``.  Unlike a context-window
+    overflow this is capacity contention: the same prompt usually succeeds
+    once the other requests finish, so callers back off and retry rather than
+    compact.
+    """
+    if type(exc).__name__ in _BACKEND_KNOWN_EXC_NAMES:
+        return False
+    return "context size has been exceeded" in str(exc).lower()
+
+
+def _is_agent_model_rejection(error: str) -> bool:
+    """True when a coding-agent CLI refused to start because of its --model."""
+    text = error.lower()
+    return "model" in text and any(
         s in text
         for s in (
-            "context length",
-            "maximum context",
-            "context window",
-            "context limit",
-            "prompt is too long",
-            "input is too long",
-            "reduce the length of the input",
-            "maximum number of tokens",
+            "issue with the selected model",
+            "may not exist",
+            "not found",
+            "unknown model",
+            "invalid model",
+            "model_not_found",
+            "isn't described by this version's model catalog",
         )
     )
+
+
+def _derive_experiment_title(hypothesis: str, command: str) -> str:
+    """A note title for a ``kb experiment`` called without one: the hypothesis's
+    first line, else the command's, trimmed to a readable wikilink."""
+    for source in (hypothesis, command):
+        line = next((ln.strip() for ln in source.splitlines() if ln.strip()), "")
+        line = re.sub(r"[\[\]|#^]", "", line).strip(" .:")
+        if line:
+            return line if len(line) <= 60 else line[:57].rstrip() + "..."
+    return ""
 
 
 def _coerce_event_id(value: Any) -> int | None:
@@ -2004,6 +2078,7 @@ class ChatSession:
             output_guard_llm=cs.get("judge.output_guard_llm"),
             output_guard_model=cs.get("judge.output_guard_model"),
             output_guard_llm_timeout=cs.get("judge.output_guard_llm_timeout"),
+            max_concurrent_per_backend=cs.get("judge.max_concurrent_per_backend"),
             redact_secrets=cs.get("judge.redact_secrets"),
             cancel_on_approval=cs.get("judge.cancel_on_approval"),
         )
@@ -5217,6 +5292,10 @@ class ChatSession:
     # Retryable error names are now provided by LLMProvider.retryable_error_names.
     _MAX_RETRIES = 3
     _RETRY_BASE_DELAY = 1.0  # seconds
+    # Main-loop mid-stream / capacity-contention recovery (see _request_turn).
+    _STREAM_RETRIES = 4
+    _STREAM_RETRY_BASE_DELAY = 4.0  # seconds; ~4, 8, 16, 32 with jitter
+    _KV_RETRIES_BEFORE_COMPACT = 2  # KV-pool exhaustion this persistent → compact once
 
     # Chunked-compaction tuning (see _summarize_blocks / _summary_input_budget_chars).
     _SUMMARY_SAFETY_MARGIN = 0.05  # fraction of context_window held back
@@ -5317,6 +5396,115 @@ class ChatSession:
                 fb_tracker.record_failure()
             self.ui.on_info(f"[Fallback {alias} also failed: {fb_err}]")
             return None
+
+    def _request_turn(
+        self, msgs: list[dict[str, Any]], my_generation: int
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Issue one main-loop model turn and drain it, recovering from failures.
+
+        Returns ``(assistant_msg, msgs)`` — ``msgs`` is the wire list actually
+        sent, which differs from the input after an overflow compaction (the
+        caller calibrates the token table against it).
+
+        Recovery ladder:
+
+        * **Context overflow** (request-time OR mid-stream): compact once and
+          retry.  A structured llama.cpp overflow carries the server's real
+          ``n_ctx``, which also tightens ``context_window`` so the pre-send
+          check catches the next one before the server does.
+        * **KV pool exhausted** (llama.cpp ``Context size has been exceeded.``,
+          raised mid-stream as a bare ``APIError``): capacity contention with
+          other requests on the same server — back off and retry.  If it keeps
+          recurring this session may itself be the pressure, so it compacts
+          once after ``_KV_RETRIES_BEFORE_COMPACT`` attempts.
+        * **Mid-stream transport death** (a retryable class raised while
+          draining, after ``create_streaming`` already returned): back off and
+          re-issue.  Request-time failures already got ``_try_stream``'s
+          retries and the fallback chain, so they are NOT retried again here.
+
+        Before this existed only request-time overflows were handled; a KV pool
+        filling mid-decode killed the workstream with ``state=error``.
+        """
+        compacted = False
+        retries = 0
+        while True:
+            stream: Iterator[StreamChunk] | None = None
+            try:
+                stream = self._create_stream_with_retry(msgs)
+                return self._stream_response(stream, my_generation), msgs
+            except Exception as err:
+                if self._generation != my_generation:
+                    raise
+                kv_full = _is_kv_pool_exhausted(err)
+                overflow = _is_ctx_overflow(err)
+                if not compacted and (
+                    overflow or (kv_full and retries >= self._KV_RETRIES_BEFORE_COMPACT)
+                ):
+                    compacted = True
+                    self._calibrate_window_from_error(err)
+                    log.warning(
+                        "Context overflow detected (%s), compacting and retrying",
+                        type(err).__name__,
+                    )
+                    self.ui.on_info("\n[Context overflow — auto-compacting and retrying]")
+                    # Stop thinking indicator before compact (which has
+                    # its own thinking start/stop) to avoid nested spinners.
+                    self.ui.on_thinking_stop()
+                    try:
+                        # my_generation: without it a stale send that hits
+                        # overflow here could compact-and-swap the LIVE
+                        # generation's history after a force-cancel started
+                        # a newer one — the same race every other compaction
+                        # site already guards.
+                        self._compact_messages(auto=True, my_generation=my_generation)
+                    except Exception:
+                        log.warning("Compaction after overflow failed", exc_info=True)
+                        raise err from None
+                    msgs = self._prepare_wire_messages(self._full_messages())
+                    self.ui.on_turn_start()
+                    self.ui.on_thinking_start()
+                    continue
+                transient = kv_full or (
+                    not overflow
+                    and stream is not None
+                    and type(err).__name__ in self._provider.retryable_error_names
+                )
+                if not transient or retries >= self._STREAM_RETRIES:
+                    raise
+                retries += 1
+                delay = self._STREAM_RETRY_BASE_DELAY * (2 ** (retries - 1))
+                delay *= 0.5 + random.random()
+                log.warning(
+                    "session.stream_retry",
+                    error_type=type(err).__name__,
+                    kv_pool_exhausted=kv_full,
+                    attempt=retries,
+                    retry_in=round(delay, 1),
+                )
+                reason = "model server out of KV cache" if kv_full else type(err).__name__
+                self.ui.on_info(
+                    f"\n[Model stream interrupted ({reason}) — retrying in {delay:.0f}s]"
+                )
+                self.ui.on_thinking_stop()
+                self._backoff_or_cancelled(delay, my_generation)
+                self.ui.on_turn_start()
+                self.ui.on_thinking_start()
+
+    def _calibrate_window_from_error(self, exc: BaseException) -> None:
+        """Shrink ``context_window`` to the server's real limit when the error
+        reports it (llama.cpp's ``exceed_context_size_error`` body carries
+        ``n_ctx``) — the configured or ``n_ctx_train``-derived window can be
+        larger than what a ``--parallel`` slot actually gets."""
+        n_ctx = _error_body_field(exc, "n_ctx")
+        if (
+            isinstance(n_ctx, int)
+            and not isinstance(n_ctx, bool)
+            and 0 < n_ctx < self.context_window
+        ):
+            log.warning(
+                "session.context_window_calibrated", configured=self.context_window, server=n_ctx
+            )
+            self.context_window = n_ctx
 
     def _stop_retrying(self, exc: BaseException, attempt: int, provider: LLMProvider) -> bool:
         """Terminal-retry predicate shared by every API retry loop (stream, summary,
@@ -6095,39 +6283,7 @@ class ChatSession:
                     self._step_started_at_ms = int(time.time() * 1000)
                     self._step_t0 = time.monotonic()
                     self._step_first_token_t = None
-                    try:
-                        stream = self._create_stream_with_retry(msgs)
-                    except Exception as ctx_err:
-                        # Context overflow recovery: if the API rejects the
-                        # request due to exceeding the context window, compact
-                        # the conversation and retry once.
-                        if not _is_ctx_overflow(ctx_err):
-                            raise
-                        log.warning(
-                            "Context overflow detected (%s), compacting and retrying",
-                            type(ctx_err).__name__,
-                        )
-                        self.ui.on_info("\n[Context overflow — auto-compacting and retrying]")
-                        # Stop thinking indicator before compact (which has
-                        # its own thinking start/stop) to avoid nested spinners.
-                        self.ui.on_thinking_stop()
-                        try:
-                            # my_generation: without it a stale send that hits
-                            # overflow here could compact-and-swap the LIVE
-                            # generation's history after a force-cancel started
-                            # a newer one — the same race every other compaction
-                            # site already guards.
-                            self._compact_messages(auto=True, my_generation=my_generation)
-                            msgs = self._prepare_wire_messages(self._full_messages())
-                            self.ui.on_thinking_start()
-                            stream = self._create_stream_with_retry(msgs)
-                        except Exception:
-                            log.warning(
-                                "Compact-and-retry failed, raising original error",
-                                exc_info=True,
-                            )
-                            raise ctx_err from None
-                    assistant_msg = self._stream_response(stream, my_generation)
+                    assistant_msg, msgs = self._request_turn(msgs, my_generation)
                 finally:
                     # Only clear if this generation is still active —
                     # an orphaned thread must not clobber a newer stream.
@@ -17084,6 +17240,13 @@ class ChatSession:
                 "error": f"Error: action must be one of {', '.join(sorted(valid))}",
             }
         title = (args.get("title") or "").strip()
+        if action == "experiment" and not title:
+            # Models routinely omit the title on experiments (the schema used
+            # to list it as required only for read/write/append/links) and then
+            # burn a turn on the rejection.  Name the note after what it tests.
+            title = _derive_experiment_title(
+                str(args.get("hypothesis") or ""), str(args.get("command") or "")
+            )
         query = (args.get("query") or "").strip()
         label = title or query or "(vault)"
         tags = args.get("tags")
@@ -17800,7 +17963,13 @@ class ChatSession:
         """Run an external coding agent inside this workstream's worktree."""
         self._check_cancelled()
         call_id = item["call_id"]
-        from pebble.core.agents import DEFAULT_TIMEOUT, available_agents, get_adapter, run_agent
+        from pebble.core.agents import (
+            DEFAULT_TIMEOUT,
+            AgentResult,
+            available_agents,
+            get_adapter,
+            run_agent,
+        )
         from pebble.core.workspace import (
             WorkspaceError,
             worktree_diff,
@@ -17826,9 +17995,11 @@ class ChatSession:
         name = item["agent"] or ((cs.get("agents.default") if cs else None) or "")
         # The coder role: which MODEL the agent CLI runs, distinct from which
         # CLI it is.  An explicit model on the call still wins.
+        model_defaulted = False
         if not item.get("model") and cs:
             try:
                 item["model"] = (cs.get("agents.coder_model_alias") or "").strip()
+                model_defaulted = bool(item["model"])
             except Exception:
                 log.debug("dispatch.coder_alias_unreadable", exc_info=True)
         # The agent CLIs want a provider/model string, not a pebble alias, so
@@ -17900,18 +18071,43 @@ class ChatSession:
         except Exception:
             log.debug("dispatch.agent_credential_failed", exc_info=True)
 
-        result = run_agent(
-            adapter,
-            item["task"],
-            cwd=cwd,
-            model=item["model"],
-            session_id=session_id,
-            timeout=timeout,
-            on_event=_on_event,
-            wrap=env_dir or "",
-            env=_agent_env,
-            mcp_servers=_mcp_servers,
-        )
+        def _run(model: str) -> AgentResult:
+            return run_agent(
+                adapter,
+                item["task"],
+                cwd=cwd,
+                model=model,
+                session_id=session_id,
+                timeout=timeout,
+                on_event=_on_event,
+                wrap=env_dir or "",
+                env=_agent_env,
+                mcp_servers=_mcp_servers,
+            )
+
+        result = _run(item["model"])
+        # The operator's coder default is one string for every agent CLI, so
+        # it can name a model this particular CLI doesn't know (an opencode
+        # model handed to claude).  When the DEFAULT — never an explicit
+        # model — is rejected before the agent did anything, rerun once on
+        # the CLI's own default instead of burning the dispatch.
+        if (
+            model_defaulted
+            and result.error
+            and result.tool_calls == 0
+            and _is_agent_model_rejection(result.error)
+        ):
+            log.warning(
+                "dispatch.default_model_rejected",
+                agent=adapter.name,
+                model=item["model"],
+            )
+            self.ui.on_info(
+                f"[{adapter.name} rejected default model {item['model']!r} "
+                "(agents.coder_model_alias); retrying with the agent's own default]"
+            )
+            item["model"] = ""
+            result = _run("")
 
         if result.session_id:
             try:

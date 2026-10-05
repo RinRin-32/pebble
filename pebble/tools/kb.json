@@ -20,7 +20,7 @@
       },
       "title": {
         "type": "string",
-        "description": "Note title \u2014 the wikilink identity. Required for read/write/append/links.",
+        "description": "Note title \u2014 the wikilink identity. Required for read/write/append/links; for experiment it is derived from the hypothesis when omitted.",
         "default": ""
       },
       "content": {
