@@ -285,12 +285,23 @@ def _wait_tcp_ready(port: int, timeout: float) -> bool:
     return _poll_until(lambda: _tcp_accepts(port), timeout)
 
 
-def _wait_session_live(mgr: MCPClientManager, name: str, timeout: float) -> bool:
-    """Poll until static server *name* has a live session (live tests)."""
+def _wait_session_live(
+    mgr: MCPClientManager, name: str, timeout: float, *, replacing: Any = None
+) -> bool:
+    """Poll until static server *name* has a live session (live tests).
+
+    Pass the session that was live before a server restart as *replacing*:
+    until the health loop notices the dead server, that stale session is still
+    attached and would satisfy a plain "has a session" check.
+    """
 
     def _live() -> bool:
         state = mgr._static_servers.get(name)
-        return state is not None and state.session is not None
+        return (
+            state is not None
+            and state.session is not None
+            and (replacing is None or state.session is not replacing)
+        )
 
     return _poll_until(_live, timeout)
 

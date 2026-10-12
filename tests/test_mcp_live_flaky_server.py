@@ -134,11 +134,14 @@ class TestFlakyServerNoSpin:
             assert _wait_session_live(mgr, "flaky", 8.0), "initial connect failed"
 
             for _cycle in range(3):
+                dead_session = mgr._static_servers["flaky"].session
                 proc.send_signal(signal.SIGKILL)
                 proc.wait()
                 time.sleep(0.6)  # dead window: health loop sees the corpse
                 proc = _spawn_server()
-                assert _wait_session_live(mgr, "flaky", 10.0), (
+                # A loaded runner can outlast the dead window before the health
+                # loop evicts the old session — wait for a NEW one, not any one.
+                assert _wait_session_live(mgr, "flaky", 10.0, replacing=dead_session), (
                     f"no reconnect after flap cycle {_cycle}"
                 )
 
