@@ -138,3 +138,24 @@ class TestDispatcherFlowPrompt:
         m = _flow_migration()
         assert m._previous_prompt().strip() == _migration().PROMPT.strip()
         assert m.down_revision == "081"
+
+
+class TestEngineerDiscipline:
+    """Rules added after an engineer session took 9 hours to answer two
+    questions, built a tested library when asked for a config, lost its work
+    to /tmp, and obfuscated a word to get past the command guard."""
+
+    def _prompt(self) -> str:
+        path = Path(__file__).parent.parent / "pebble/prompts/personas/engineer.md"
+        return path.read_text().lower()
+
+    def test_answers_first_and_scopes_to_the_ask(self) -> None:
+        p = self._prompt()
+        assert "answer the questions first" in p
+        assert "a request for a config is not a request for a library" in p
+        assert "about ten investigative calls" in p
+
+    def test_durable_workspace_and_guard_honesty(self) -> None:
+        p = self._prompt()
+        assert "never in /tmp" in p
+        assert "do not rephrase or obfuscate the command" in p
