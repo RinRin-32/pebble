@@ -481,9 +481,14 @@ def test_close_is_time_bounded_with_pipe_holding_escapee(registry, tmp_path):
 def test_exited_records_are_pruned_at_cap():
     reg = BackgroundShellRegistry(max_exited_records=2)
     try:
-        shells = [reg.spawn(f"echo job-{i}") for i in range(3)]
-        for s in shells:
+        # Eviction follows EXIT order; spawned back-to-back, the three echoes
+        # can finish in any order on a loaded runner. Finish each before the
+        # next starts so spawn order is exit order.
+        shells = []
+        for i in range(3):
+            s = reg.spawn(f"echo job-{i}")
             assert _wait_status(s, "completed")
+            shells.append(s)
         # Eviction happens on each exit; poll until the oldest is gone
         # (waiter threads race, prune runs per-exit).
         assert _wait_until(lambda: not reg.has(shells[0].shell_id))
