@@ -34,15 +34,25 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 from pebble.core.agents.base import COST_TOTAL, AgentAdapter, AgentEvent
+
+#: "opus-5.5", "Opus 5.5", "sonnet5" — a family plus a version, as people
+#: (and models recalling a preference) write it.  The CLI's catalog rejects
+#: those spellings but resolves the bare family alias to its current model.
+_FAMILY_SHORTHAND = re.compile(r"(?i)^(opus|sonnet|haiku|fable)[\s_-]*\d+(?:[.-]\d+)?$")
 
 
 class ClaudeCodeAdapter(AgentAdapter):
     name = "claude"
     binary = "claude"
     cost_mode = COST_TOTAL
+
+    def normalize_model(self, model: str) -> str:
+        m = _FAMILY_SHORTHAND.match(model.strip())
+        return m.group(1).lower() if m else model
 
     def build_command(
         self,

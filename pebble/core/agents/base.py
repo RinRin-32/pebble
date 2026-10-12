@@ -130,6 +130,11 @@ class AgentAdapter(ABC):
     def parse_line(self, line: str) -> list[AgentEvent]:
         """Normalize one stdout line.  Unparsable lines yield ``[]``."""
 
+    def normalize_model(self, model: str) -> str:
+        """Map a human spelling of a model onto one this CLI accepts.
+        Default: unchanged."""
+        return model
+
     def env_overrides(self) -> dict[str, str]:
         """Extra environment for the child process (credentials, flags)."""
         return {}

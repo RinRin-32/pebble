@@ -664,3 +664,23 @@ class TestDispatchEvidence:
         text = "\n".join(_dispatch_evidence(res, unattended=True))
         assert len(text) < _DISPATCH_ANSWER_CHARS + 200
         assert "none observed" in text
+
+
+class TestModelNormalization:
+    @pytest.mark.parametrize(
+        "given,expected",
+        [
+            ("opus-5.5", "opus"),
+            ("Opus 5.5", "opus"),
+            ("sonnet5", "sonnet"),
+            ("fable-5-1", "fable"),
+            ("opus", "opus"),
+            ("claude-opus-5-5", "claude-opus-5-5"),  # a real model id stays as-is
+            ("opencode-go/glm-5.3-flash", "opencode-go/glm-5.3-flash"),
+        ],
+    )
+    def test_claude_family_shorthand(self, given: str, expected: str) -> None:
+        assert get_adapter("claude").normalize_model(given) == expected  # type: ignore[union-attr]
+
+    def test_other_adapters_leave_models_alone(self) -> None:
+        assert get_adapter("opencode").normalize_model("opus-5.5") == "opus-5.5"  # type: ignore[union-attr]

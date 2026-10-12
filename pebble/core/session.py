@@ -18111,6 +18111,11 @@ class ChatSession:
             # Prefer whatever this node actually has, in a stable order.
             name = next((n for n in ("claude", "opencode", "codex") if n in installed), "")
         adapter = get_adapter(name) if name else None
+        if adapter is not None and item.get("model"):
+            normalized = adapter.normalize_model(item["model"])
+            if normalized != item["model"]:
+                log.info("dispatch.model_normalized", given=item["model"], used=normalized)
+                item["model"] = normalized
         if adapter is None:
             msg = (
                 f"Error: no coding agent available. Installed on this node: "
@@ -18195,25 +18200,30 @@ class ChatSession:
             )
 
         result = _run(item["model"])
-        # The operator's coder default is one string for every agent CLI, so
-        # it can name a model this particular CLI doesn't know (an opencode
-        # model handed to claude).  When the DEFAULT — never an explicit
-        # model — is rejected before the agent did anything, rerun once on
-        # the CLI's own default instead of burning the dispatch.
+        # A model string the CLI rejects before doing anything — the
+        # operator's default naming another CLI's model, or a model asked for
+        # by a spelling the CLI's catalog doesn't know — reruns once on the
+        # CLI's own default rather than burning the dispatch (a session once
+        # lost two dispatches to "opus-5.5").  The substitution is reported in
+        # the result so an explicit choice is never silently overridden.
+        rejected_model = ""
         if (
-            model_defaulted
+            item["model"]
             and result.error
             and result.tool_calls == 0
             and _is_agent_model_rejection(result.error)
         ):
+            rejected_model = item["model"]
+            origin = "agents.coder_model_alias" if model_defaulted else "requested"
             log.warning(
-                "dispatch.default_model_rejected",
+                "dispatch.model_rejected",
                 agent=adapter.name,
-                model=item["model"],
+                model=rejected_model,
+                origin=origin,
             )
             self.ui.on_info(
-                f"[{adapter.name} rejected default model {item['model']!r} "
-                "(agents.coder_model_alias); retrying with the agent's own default]"
+                f"[{adapter.name} rejected {origin} model {rejected_model!r}; "
+                "retrying with the agent's own default]"
             )
             item["model"] = ""
             result = _run("")
@@ -18245,6 +18255,11 @@ class ChatSession:
             parts.append("Status: TIMED OUT")
         else:
             parts.append("Status: ok")
+        if rejected_model:
+            parts.append(
+                f"Note: {adapter.name} rejected model {rejected_model!r}; this run used the "
+                "agent's own default. Don't pass that model string again."
+            )
         parts += _dispatch_evidence(result, unattended=_unattended)
         parts.append(f"\nChanges:\n{stat or '(no file changes)'}")
         if diff.strip():
